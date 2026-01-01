@@ -1,7 +1,6 @@
 package core
 
 import (
-	"bufio"
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
@@ -11,6 +10,7 @@ import (
 	"runtime"
 	"sync"
 
+	"github.com/Nehonix-Team/xfpm-go/internal/utils"
 	"github.com/google/uuid"
 	"github.com/zeebo/blake3"
 )
@@ -66,33 +66,36 @@ func (c *Cas) GetFilePath(hash string) string {
 }
 
 func (c *Cas) StoreStream(reader io.Reader, isExecutable bool) (string, error) {
-	bufReader := bufio.NewReaderSize(reader, 128*1024)
 	smallFileLimit := 64 * 1024
 	buffer := make([]byte, 0, smallFileLimit)
 
-	// Try to read up to smallFileLimit
+	// Try to read up to smallFileLimit directly from reader (no bufio!)
 	tmp := make([]byte, 16384)
+	var err error
 	for len(buffer) < smallFileLimit {
-		n, err := bufReader.Read(tmp)
+		var n int
+		n, err = reader.Read(tmp)
 		if n > 0 {
 			buffer = append(buffer, tmp[:n]...)
 		}
 		if err != nil {
-			if err == io.EOF {
-				break
-			}
-			return "", err
+			break
 		}
 	}
 
+	if err != nil && err != io.EOF {
+		return "", err
+	}
+
+	// Case 1: Small file (fit in memory)
 	if len(buffer) < smallFileLimit {
-		// Memory path
 		h := blake3.New()
 		h.Write(buffer)
 		hashHex := hex.EncodeToString(h.Sum(nil))
 		destPath := c.GetFilePath(hashHex)
 
-		if _, err := os.Stat(destPath); err == nil {
+		// Validate cached file is non-empty (guard against broken prior extractions)
+		if fi, err := os.Stat(destPath); err == nil && fi.Size() == int64(len(buffer)) {
 			c.ensurePermissions(destPath, isExecutable)
 			return hashHex, nil
 		}
@@ -109,7 +112,8 @@ func (c *Cas) StoreStream(reader io.Reader, isExecutable bool) (string, error) {
 		c.ensurePermissions(tempPath, isExecutable)
 
 		if err := os.Rename(tempPath, destPath); err != nil {
-			// Fallback to copy if rename fails (e.g. cross-device)
+			// Ensure destination doesn't exist to avoid truncation if it was a link
+			os.Remove(destPath)
 			if err := c.copyAndCleanup(tempPath, destPath); err != nil {
 				return "", err
 			}
@@ -118,7 +122,7 @@ func (c *Cas) StoreStream(reader io.Reader, isExecutable bool) (string, error) {
 		return hashHex, nil
 	}
 
-	// Streaming path for large files
+	// Case 2: Large file (streaming)
 	tempPath := filepath.Join(c.BasePath, "temp", uuid.New().String())
 	tempFile, err := os.Create(tempPath)
 	if err != nil {
@@ -137,9 +141,9 @@ func (c *Cas) StoreStream(reader io.Reader, isExecutable bool) (string, error) {
 	}
 	hasher.Write(buffer)
 
-	streamingBuffer := make([]byte, 131072)
+	streamingBuffer := make([]byte, 128*1024)
 	for {
-		n, err := bufReader.Read(streamingBuffer)
+		n, err := reader.Read(streamingBuffer)
 		if n > 0 {
 			if _, werr := tempFile.Write(streamingBuffer[:n]); werr != nil {
 				return "", werr
@@ -162,7 +166,8 @@ func (c *Cas) StoreStream(reader io.Reader, isExecutable bool) (string, error) {
 	hashHex := hex.EncodeToString(hasher.Sum(nil))
 	destPath := c.GetFilePath(hashHex)
 
-	if _, err := os.Stat(destPath); err == nil {
+	// Validate cached file integrity before reusing
+	if fi, err := os.Stat(destPath); err == nil && fi.Size() > 0 {
 		c.ensurePermissions(destPath, isExecutable)
 		return hashHex, nil
 	}
@@ -172,9 +177,26 @@ func (c *Cas) StoreStream(reader io.Reader, isExecutable bool) (string, error) {
 	}
 
 	if err := os.Rename(tempPath, destPath); err != nil {
+		// If rename fails (e.g., cross-device link), try copying
+		// Ensure destination doesn't exist to avoid truncation if it was a link
+		os.Remove(destPath)
 		if err := c.copyAndCleanup(tempPath, destPath); err != nil {
-			return "", err
+			return "", fmt.Errorf("failed to rename or copy %s to %s: %w", tempPath, destPath, err)
 		}
+		// Verify copied file size
+		fi_src, _ := os.Stat(tempPath)
+		fi_dst, _ := os.Stat(destPath)
+		if fi_src != nil && fi_dst != nil {
+			if fi_dst.Size() != fi_src.Size() {
+				// This is a critical error, log it prominently
+				utils.Error("[CAS] CRITICAL: Size mismatch after copy! Source: %d, Dest: %d. File: %s", fi_src.Size(), fi_dst.Size(), destPath)
+			}
+		}
+	}
+
+	// Double check final file size
+	if fi, err := os.Stat(destPath); err == nil && fi.Size() == 0 {
+		utils.Error("[CAS] CRITICAL: Final file %s is 0 bytes after rename/copy!", destPath)
 	}
 
 	c.ensurePermissions(destPath, isExecutable)
@@ -199,6 +221,8 @@ func (c *Cas) copyAndCleanup(src, dst string) error {
 	}
 	defer in.Close()
 
+	// Ensure destination doesn't exist to avoid truncation if it was a link to source
+	os.Remove(dst)
 	out, err := os.Create(dst)
 	if err != nil {
 		return err

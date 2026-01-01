@@ -45,9 +45,18 @@ var (
 		Short: "Official XyPriss Fast Package Manager & CLI (Go version)",
 		Long:  `Official XyPriss Fast Package Manager (XFPM). XFPM is a high-performance, cross-platform CLI tool built for the XyPriss ecosystem. Written in Go, it delivers fast dependency resolution, strict package isolation through a virtual store, and a clean terminal interface designed for professional workflows.`,
 		Version: utils.BinVersion,
-		PersistentPreRun: func(cmd *cobra.Command, args []string) {
+		PersistentPreRunE: func(cmd *cobra.Command, args []string) error {
 			utils.SetupUI()
+			
+			cwd, _ := cmd.Flags().GetString("cwd")
+			if cwd != "" {
+				if err := os.Chdir(cwd); err != nil {
+					return fmt.Errorf("failed to change directory to %s: %w", cwd, err)
+				}
+			}
+
 			utils.CheckForUpdates()
+			return nil
 		},
 		Run: func(cmd *cobra.Command, args []string) {
 			utils.PrintBanner()
@@ -63,8 +72,10 @@ func init() {
 	installCmd.Flags().BoolP("save-dev", "D", false, "Save to devDependencies")
 	installCmd.Flags().BoolP("save-optional", "O", false, "Save to optionalDependencies")
 	installCmd.Flags().BoolP("force", "f", false, "Force re-install even if already extracted")
+	installCmd.Flags().Bool("update", false, "Update mode: always fetch fresh metadata from registry")
 	installCmd.Flags().BoolP("global", "g", false, "Install packages globally")
 }
+
 
 var installCmd = &cobra.Command{
 	Use:   "install [packages...]",
@@ -72,13 +83,6 @@ var installCmd = &cobra.Command{
 	Aliases: []string{"i", "add"},
 	RunE: func(cmd *cobra.Command, args []string) error {
 		startTime := time.Now()
-		cwd, _ := cmd.Flags().GetString("cwd")
-		if cwd != "" {
-			if err := os.Chdir(cwd); err != nil {
-				return err
-			}
-		}
-
 		global, _ := cmd.Flags().GetBool("global")
 
 		var projectRoot string
@@ -97,6 +101,7 @@ var installCmd = &cobra.Command{
 		isDev, _ := cmd.Flags().GetBool("save-dev")
 		isOptional, _ := cmd.Flags().GetBool("save-optional")
 		force, _ := cmd.Flags().GetBool("force")
+		update, _ := cmd.Flags().GetBool("update")
 
 		xpmDir := filepath.Join(projectRoot, "node_modules", ".xpm")
 		cas, err := core.NewCas(filepath.Join(xpmDir, "storage"))
@@ -128,22 +133,36 @@ var installCmd = &cobra.Command{
 		if len(args) > 0 {
 			resolver.ForcePackages = make(map[string]bool)
 			for _, p := range args {
-				parts := strings.Split(p, "@")
 				name := p
 				req := "latest"
-				if len(parts) == 2 {
-					name = parts[0]
-					req = parts[1]
-				} else if len(parts) == 3 && strings.HasPrefix(p, "@") {
-					name = "@" + parts[1]
-					req = parts[2]
+				
+				if strings.HasPrefix(p, "@") {
+					// Scoped package: @scope/pkg or @scope/pkg@version
+					atIdx := strings.LastIndex(p, "@")
+					if atIdx > 0 {
+						name = p[:atIdx]
+						req = p[atIdx+1:]
+					}
+				} else {
+					// Normal package: pkg or pkg@version
+					atIdx := strings.Index(p, "@")
+					if atIdx != -1 {
+						name = p[:atIdx]
+						req = p[atIdx+1:]
+					}
 				}
+				
 				rootDeps[name] = req
 				directPkgs[name] = req
 				resolver.ForcePackages[name] = true
+				
+				// In update mode with specific packages, we resolve them fresh
+				if update {
+					resolver.Update = true
+				}
 			}
-		} else if force {
-			// updateCmd sets force=true but if args is empty, it's a global update
+		} else if update {
+			// Global update mode: fetch all fresh
 			resolver.Update = true
 			for k, v := range rootDeps {
 				directPkgs[k] = v

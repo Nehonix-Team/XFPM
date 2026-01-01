@@ -355,7 +355,8 @@ func (r *Resolver) resolvePackage(ctx context.Context, name, req string, isOptio
 
 	meta := pkgInfo.Versions[version]
 	if !r.platform.IsCompatible(&meta) {
-		utils.Log("SKIP", fmt.Sprintf("%s@%s is not compatible with current platform (%s/%s)", realName, version, r.platform.OS, r.platform.Arch))
+		// Silently skipped
+		// utils.Log("SKIP", fmt.Sprintf("%s@%s is not compatible with current platform (%s/%s)", realName, version, r.platform.OS, r.platform.Arch))
 		r.resolved.Delete(versionKey)
 		return nil
 	}
