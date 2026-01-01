@@ -57,6 +57,18 @@ func (i *Installer) Install(ctx context.Context, packages []*ResolvedPackage) er
 
 
 	// 1. Batch extraction
+	// Ensure we only process unique Name@Version pairs to avoid race conditions during extraction/linking
+	uniquePackages := make([]*ResolvedPackage, 0, len(packages))
+	seen := make(map[string]bool)
+	for _, p := range packages {
+		key := p.Name + "@" + p.Version
+		if !seen[key] {
+			seen[key] = true
+			uniquePackages = append(uniquePackages, p)
+		}
+	}
+	packages = uniquePackages
+
 	if err := i.batchEnsureExtracted(ctx, packages); err != nil {
 		i.bar.Stop()
 		return err
@@ -199,8 +211,13 @@ func (i *Installer) ensureExtracted(ctx context.Context, pkg *ResolvedPackage) e
 	pkgVStoreName := strings.ReplaceAll(pkg.Name, "/", "+") + "@" + pkg.Version
 	pkgDir := filepath.Join(i.vstoreRoot, pkgVStoreName, "node_modules", pkg.Name)
 
-	// If project-wide force is on, we force everything in the tree to ensure consistency.
+	// Determine if we should force extraction for this specific package
 	shouldForce := i.Force
+	if !shouldForce && i.ForcePackages != nil {
+		if i.ForcePackages[pkg.Name] {
+			shouldForce = true
+		}
+	}
 
 	if !shouldForce {
 		if _, err := os.Stat(filepath.Join(pkgDir, "package.json")); err == nil {
@@ -208,10 +225,10 @@ func (i *Installer) ensureExtracted(ctx context.Context, pkg *ResolvedPackage) e
 		}
 	} else {
 		// Only remove if it was not already re-extracted in this session
-		// (multiple packages in a tree can point to the same name@version)
 		cacheKey := pkg.Name + "@" + pkg.Version
 		if _, exists := i.changedPackages.Load(cacheKey); !exists {
-			os.RemoveAll(filepath.Dir(pkgDir))
+			// Surgically remove only the package content directory, not the parent
+			os.RemoveAll(pkgDir)
 		}
 	}
 
@@ -259,9 +276,25 @@ func (i *Installer) LinkFilesToDir(destDir string, index map[string]string) erro
 
 		os.MkdirAll(filepath.Dir(destPath), 0755)
 
+		// ALWAYS remove the destination before linking or copying.
+		// If we don't, and destPath is a hardlink to sourcePath, os.Create(destPath)
+		// will truncate the inode and thus empty the source file before we read it!
+		os.Remove(destPath)
+
 		if err := os.Link(sourcePath, destPath); err != nil {
+			// If link fails (cross-device or already exists), fallback to copy
+			// Log the reason for fallback
+			utils.Log("DEBUG", fmt.Sprintf("Failed to link %s to %s: %v. Falling back to copy.", sourcePath, destPath, err))
 			if err := i.copyFile(sourcePath, destPath); err != nil {
 				return err
+			}
+			// Verify copied file size
+			fi_src, _ := os.Stat(sourcePath)
+			fi_dst, _ := os.Stat(destPath)
+			if fi_src != nil && fi_dst != nil {
+				if fi_dst.Size() != fi_src.Size() {
+					utils.Error("[LINK] CRITICAL: Size mismatch after copy! Source: %d, Dest: %d. File: %s", fi_src.Size(), fi_dst.Size(), destPath)
+				}
 			}
 		}
 	}
@@ -430,6 +463,9 @@ func (i *Installer) copyFile(src, dst string) error {
 	}
 	defer in.Close()
 
+	if err := os.Remove(dst); err != nil && !os.IsNotExist(err) {
+		// If we can't remove it, it might still fail later, but we try
+	}
 	out, err := os.Create(dst)
 	if err != nil {
 		return err

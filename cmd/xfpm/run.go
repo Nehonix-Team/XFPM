@@ -11,6 +11,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strings"
 
 	"github.com/Nehonix-Team/xfpm-go/internal/core"
 	"github.com/Nehonix-Team/xfpm-go/internal/utils"
@@ -61,6 +62,7 @@ func init() {
 func executeShell(command, dir string) error {
 	cmd := exec.Command("sh", "-c", command)
 	cmd.Dir = dir
+	cmd.Env = buildRunEnv(dir)
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
 	cmd.Stdin = os.Stdin
@@ -70,8 +72,36 @@ func executeShell(command, dir string) error {
 func executeCommand(name string, args []string, dir string) error {
 	cmd := exec.Command(name, args...)
 	cmd.Dir = dir
+	cmd.Env = buildRunEnv(dir)
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
 	cmd.Stdin = os.Stdin
 	return cmd.Run()
+}
+
+func buildRunEnv(dir string) []string {
+	env := os.Environ()
+	path := os.Getenv("PATH")
+	
+	// Add project node_modules/.bin
+	binPath := filepath.Join(dir, "node_modules", ".bin")
+	if _, err := os.Stat(binPath); err == nil {
+		path = binPath + string(os.PathListSeparator) + path
+	}
+
+	// Add global XPM bin
+	if home, err := os.UserHomeDir(); err == nil {
+		globalBin := filepath.Join(home, ".xpm_global", "bin")
+		if _, err := os.Stat(globalBin); err == nil {
+			path = globalBin + string(os.PathListSeparator) + path
+		}
+	}
+
+	for i, e := range env {
+		if strings.HasPrefix(e, "PATH=") {
+			env[i] = "PATH=" + path
+			return env
+		}
+	}
+	return append(env, "PATH="+path)
 }
