@@ -402,9 +402,13 @@ pub async fn run(packages: Vec<String>, _use_npm: bool, retries: u32, global: bo
              let pkg_dir_real = installer_shared.get_virtual_store_root(name, version).join("node_modules").join(pkg_name_clean);
              
              let virtual_store_name = format!("{}@{}", name.replace('/', "+"), version);
+<<<<<<< HEAD:src/commands/install.rs
              if let Err(e) = installer_shared.link_binaries(&pkg_dir_real, &bin_dir, &virtual_store_name) {
                  multi.println(format!("   {} Error exporting binary for {}: {}", "[ERR]".red().bold(), name, e)).unwrap();
              }
+=======
+             let _ = installer_shared.link_binaries(&pkg_dir_real, &bin_dir, &virtual_store_name);
+>>>>>>> 8b48fe86 (perf(xyp): optimize package installation and extraction performance):tools/xyp/src/commands/install.rs
              bin_pb.inc(1);
              if rand::random::<f32>() < 0.2 { bin_pb.set_message(format!("{:04x}", rand::random::<u16>())); }
         }
@@ -422,7 +426,11 @@ pub async fn run(packages: Vec<String>, _use_npm: bool, retries: u32, global: bo
         let bin_path = target_dir.join("bin");
         crate::utils::shell::ensure_global_path_is_configured(&bin_path);
     }
+<<<<<<< HEAD:src/commands/install.rs
     multi.println("   Powered by Nehonix™ & XyPriss Engine".truecolor(100, 100, 100).italic().to_string()).unwrap();
+=======
+    multi.println(format!("   Powered by Nehonix™ & XyPriss Engine")).unwrap();
+>>>>>>> 8b48fe86 (perf(xyp): optimize package installation and extraction performance):tools/xyp/src/commands/install.rs
     println!();
 
     Ok(())
