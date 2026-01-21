@@ -1,18 +1,18 @@
 {
     "name": "xypriss-cli",
-    "version": "1.1.0",
+    "version": "1.1.1",
     "description": "XFPM - XyPriss Fast Package Manager. Ultra-fast Rust-powered CLI for the XyPriss ecosystem.",
     "main": "index.js",
     "bin": {
-        "xfpm": "./install.js",
-        "xfmp": "./install.js",
-        "xypriss-cli": "./install.js",
-        "xyp": "./install.js",
-        "xypcli": "./install.js"
+        "xfpm": "./index.js",
+        "xfmp": "./index.js",
+        "xypriss-cli": "./index.js",
+        "xyp": "./index.js",
+        "xypcli": "./index.js"
     },
     "scripts": {
         "build": "./scripts/build.sh",
-        "prepublishOnly": "npm run build",
+        "prepublishOnly": "echo 'Publishing...'",
         "postinstall": "node ./install.js",
         "publish:beta": "npm publish --tag beta",
         "publish:latest": "npm publish"
@@ -54,6 +54,7 @@
         "arm64"
     ],
     "files": [
+        "index.js",
         "install.js",
         "README.md",
         "LICENSE"
