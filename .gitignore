@@ -71,19 +71,9 @@ tools/xbuilder/
 tools/xbuilder/
 tools/xypriss-sys/target/*
 tools/xypriss-sys/target/release/*
-<<<<<<< HEAD
 target/*
 release/*
 */target/*
 */release/*
 *zig.*
 zig-bin/*
-=======
-tools/xyp/target/*
-tools/xyp/release/*
-.xpm_storage/*
-.xpm_storage
-tools/xyp/zig-bin/*
-tools/xyp/zig.tar.xz
-tmp/*
->>>>>>> 8b48fe86 (perf(xyp): optimize package installation and extraction performance)
