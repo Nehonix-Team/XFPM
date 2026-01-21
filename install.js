@@ -280,46 +280,7 @@ async function install() {
     }
 }
 
-// If this script is run directly (not as a module)
-if (require.main === module) {
-    // Check if we should run the CLI or install
-    const args = process.argv.slice(2);
+// Installation script for XFPM
 
-    if (args.length === 0) {
-        // No arguments, run installation
-        install();
-    } else {
-        // Arguments provided, try to run the CLI
-        const binaryPath = getBinaryPath();
-
-        if (!isBinaryInstalled()) {
-            log("XFPM engine not found. Initializing neural bridge...");
-            install().then(() => {
-                // After installation, execute the CLI with the provided arguments
-                const { spawn } = require("child_process");
-                const child = spawn(binaryPath, args, {
-                    stdio: "inherit",
-                    shell: true,
-                });
-
-                child.on("exit", (code) => {
-                    process.exit(code);
-                });
-            });
-        } else {
-            // CLI is already installed, execute it directly
-            const { spawn } = require("child_process");
-            const child = spawn(binaryPath, args, {
-                stdio: "inherit",
-                shell: true,
-            });
-
-            child.on("exit", (code) => {
-                process.exit(code);
-            });
-        }
-    }
-}
-
-module.exports = { install, detectPlatform };
+module.exports = { install, detectPlatform, getBinaryPath, isBinaryInstalled };
 
