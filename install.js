@@ -184,8 +184,8 @@ function isBinaryInstalled() {
     }
 
     try {
-        // Try to execute the binary with --version
-        execSync(`"${binaryPath}" --version`, { timeout: 5000 });
+        // Try to execute the binary with --help
+        execSync(`"${binaryPath}" --help`, { timeout: 5000 });
         return true;
     } catch (err) {
         return false;
@@ -266,10 +266,10 @@ async function install() {
 
         // Test the installation
         try {
-            const version = execSync(`"${binaryPath}" --version`, {
+            execSync(`"${binaryPath}" --help`, {
                 encoding: "utf8",
-            }).trim();
-            success(`Installation verified: ${version}`);
+            });
+            success(`Installation verified (engine active)`);
         } catch (err) {
             error("Installation verification failed");
             throw err;
