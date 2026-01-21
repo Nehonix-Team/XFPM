@@ -267,9 +267,13 @@ impl Installer {
             if let Err(_) = fs::hard_link(&source_path, &dest_path) {
                 // If it fails (likely already exists), remove and try again.
                 let _ = fs::remove_file(&dest_path);
+<<<<<<< HEAD:src/core/installer.rs
                 if let Err(e) = fs::hard_link(&source_path, &dest_path) {
                     eprintln!("   {} Failed to link {} to {}: {}", "[ERR]".red(), source_path.display(), dest_path.display(), e);
                 }
+=======
+                let _ = fs::hard_link(&source_path, &dest_path);
+>>>>>>> 8b48fe86 (perf(xyp): optimize package installation and extraction performance):tools/xyp/src/core/installer.rs
             }
         });
 
@@ -349,9 +353,13 @@ impl Installer {
         
         // Link binaries
         let virtual_store_name = format!("{}@{}", name.replace('/', "+"), version);
+<<<<<<< HEAD:src/core/installer.rs
         let nm_root = self.project_root.join("node_modules");
         self.link_binaries(&abs_target, &nm_root.join(".bin"), &virtual_store_name)
             .context("Linking binaries to root bin")?;
+=======
+        self.link_binaries(&abs_target, &root_nm.parent().unwrap().join(".bin"), &virtual_store_name)?;
+>>>>>>> 8b48fe86 (perf(xyp): optimize package installation and extraction performance):tools/xyp/src/core/installer.rs
         
         Ok(())
     }

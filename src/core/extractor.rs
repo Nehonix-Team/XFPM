@@ -29,7 +29,9 @@ impl<'a> StreamingExtractor<'a> {
                 continue;
             }
             
+            // Fast path for path handling
             let path = entry.path()?.to_string_lossy().to_string();
+<<<<<<< HEAD:src/core/extractor.rs
             let is_executable = if let Ok(mode) = entry.header().mode() {
                 (mode & 0o111) != 0
             } else {
@@ -38,6 +40,10 @@ impl<'a> StreamingExtractor<'a> {
             
             // CAS store_stream now uses its own BufReader
             let hash = self.cas.store_stream(&mut entry, is_executable)?;
+=======
+            // CAS store_stream now uses its own BufReader
+            let hash = self.cas.store_stream(&mut entry)?;
+>>>>>>> 8b48fe86 (perf(xyp): optimize package installation and extraction performance):tools/xyp/src/core/extractor.rs
             file_map.insert(path, hash);
         }
 

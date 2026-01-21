@@ -38,7 +38,11 @@ impl Cas {
             .join(final_hash)
     }
 
+<<<<<<< HEAD:src/core/cas.rs
     pub fn store_stream<R: Read>(&self, reader: R, is_executable: bool) -> Result<String> {
+=======
+    pub fn store_stream<R: Read>(&self, reader: R) -> Result<String> {
+>>>>>>> 8b48fe86 (perf(xyp): optimize package installation and extraction performance):tools/xyp/src/core/cas.rs
         let mut reader = std::io::BufReader::with_capacity(128 * 1024, reader);
         // Optimized for small files (common in JS/TS packages)
         let mut buffer = Vec::with_capacity(64 * 1024);
@@ -60,12 +64,15 @@ impl Cas {
             let dest_path = self.get_file_path(hash_hex.as_str());
             
             if dest_path.exists() {
+<<<<<<< HEAD:src/core/cas.rs
                 if is_executable {
                     #[cfg(unix)] {
                         use std::os::unix::fs::PermissionsExt;
                         let _ = fs::set_permissions(&dest_path, fs::Permissions::from_mode(0o555));
                     }
                 }
+=======
+>>>>>>> 8b48fe86 (perf(xyp): optimize package installation and extraction performance):tools/xyp/src/core/cas.rs
                 return Ok(hash_hex.to_string());
             }
             
