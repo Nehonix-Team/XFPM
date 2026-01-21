@@ -14,8 +14,9 @@ const path = require("path");
 const os = require("os");
 const { execSync } = require("child_process");
 
-// Nehonix SDK download URLs
-const SDK_BASE_URL = "https://dll.nehonix.com/dl/mds/xypriss/bin/xfpm";
+// XFPM Distribution configuration
+const REPO = "Nehonix-Team/XFMP";
+const SDK_BASE_URL = `https://github.com/${REPO}/releases/latest/download`;
 
 // Colors for output
 const colors = {
