@@ -1,0 +1,554 @@
+use crate::core::resolver::{PackageJson, Resolver, ResolvedPackage, Platform};
+use crate::core::installer::Installer;
+use std::path::Path;
+use std::sync::Arc;
+use futures_util::stream::{FuturesUnordered, StreamExt};
+use indicatif::{ProgressBar, ProgressStyle, MultiProgress};
+use colored::Colorize;
+use semver::Version;
+use std::collections::HashMap;
+
+pub async fn run(packages: Vec<String>, _use_npm: bool, retries: u32, global: bool) -> anyhow::Result<()> {
+    let start_time = std::time::Instant::now();
+    let multi = MultiProgress::new();
+    
+    // Initial Setup Visual
+    let setup_pb = multi.add(ProgressBar::new_spinner());
+    setup_pb.set_style(ProgressStyle::default_spinner().template("{spinner:.cyan} {msg}").unwrap());
+    setup_pb.set_message("Starting XyPriss engine...");
+    setup_pb.enable_steady_tick(std::time::Duration::from_millis(80));
+
+    let current_dir = std::env::current_dir()?;
+    let cas_path = if global { 
+        let home = std::env::var("HOME").unwrap_or_else(|_| "/tmp".to_string());
+        Path::new(&home).join(".xpm_global").join(".xpm_storage") 
+    } else { 
+        let new_path = current_dir.join("node_modules").join(".xpm").join("storage");
+        migrate_legacy_storage(&current_dir, &new_path);
+        new_path
+    };
+
+    let mut registry_client = crate::core::registry::RegistryClient::new(None, retries);
+    registry_client.set_cache_dir(cas_path.clone());
+    let registry = Arc::new(registry_client);
+    
+    let target_dir = if global {
+        let home = std::env::var("HOME").unwrap_or_else(|_| "/tmp".to_string());
+        let global_path = Path::new(&home).join(".xpm_global");
+        if !global_path.exists() { std::fs::create_dir_all(&global_path)?; }
+        global_path
+    } else {
+        current_dir.clone()
+    };
+ 
+    let mut installer = Installer::new(&cas_path, &target_dir, Arc::clone(&registry))?;
+    installer.set_multi(multi.clone());
+    let installer_shared = Arc::new(installer);
+
+    let mut resolver = Resolver::new(Arc::clone(&registry));
+    resolver.set_multi(multi.clone());
+    resolver.set_cas(installer_shared.get_cas());
+    resolver.set_concurrency(64);
+
+    setup_pb.finish_and_clear();
+    
+    // Ensure node_modules exists for the installer to detect it as a project
+    if !global {
+        let _ = std::fs::create_dir_all(target_dir.join("node_modules").join(".xpm"));
+    }
+
+    let _ = multi.println(format!("{} Full installation initiated...", "[>>]".cyan().bold()));
+    let _ = multi.println(format!("{} Scanning neural gateway...", "[*]".dimmed()));
+
+    let mut updates_to_save = HashMap::new();
+    let mut skipped_packages: Vec<(String, String, String)> = Vec::new();
+    let mut installed_summary = Vec::new();
+
+    if packages.is_empty() {
+        // --- CASE: Full Project Installation ---
+        let pkg_json_path = target_dir.join("package.json");
+        if !global && !pkg_json_path.exists() {
+             anyhow::bail!("No package.json found in {}.", target_dir.display());
+        }
+
+        let pkg = PackageJson::from_file(pkg_json_path.to_str().unwrap())?;
+        let root_deps = pkg.all_dependencies();
+        
+        let _ = multi.println(format!("   {} Project: {} v{}", "-->".green().bold(), pkg.name.bold(), pkg.version.cyan()));
+        
+        // Ultra-fast parallel dependency analysis with progress bar
+        let total_deps = root_deps.len() as u64;
+        let analyze_pb = multi.add(ProgressBar::new(total_deps));
+        analyze_pb.set_style(ProgressStyle::default_bar()
+            .template("{spinner:.cyan} {msg} [{bar:40.cyan/blue}] {pos}/{len}")
+            .unwrap()
+            .progress_chars("#>-"));
+        analyze_pb.set_message(format!("{} Analyzing dependencies", "[*]".cyan()));
+        analyze_pb.enable_steady_tick(std::time::Duration::from_millis(80));
+        
+        // Parallel analysis with FuturesUnordered
+        let mut analysis_tasks = FuturesUnordered::new();
+        let mut deps_to_resolve: HashMap<String, String> = HashMap::new();
+
+        
+        for (name, req) in &root_deps {
+            let name_c = name.clone();
+            let req_c = req.clone();
+            let registry_c = Arc::clone(&registry); // Use `registry` not `registry_shared`
+            let target_dir_c = target_dir.to_path_buf();
+            let pb_c = analyze_pb.clone();
+
+            analysis_tasks.push(tokio::spawn(async move {
+                let mut target_req = req_c.clone();
+                
+                // Fast path: check if installed and satisfies
+                if let Some(local_ver) = get_installed_version(&target_dir_c, &name_c) {
+                    let satisfied = if req_c == "latest" || req_c == "*" {
+                        true 
+                    } else if let Ok(required_range) = semver::VersionReq::parse(&req_c) {
+                        if let Ok(current_ver) = semver::Version::parse(&local_ver) {
+                            required_range.matches(&current_ver)
+                        } else { false }
+                    } else { local_ver == req_c };
+
+                    if satisfied {
+                        pb_c.inc(1);
+                        return (name_c, local_ver, true);
+                    }
+                }
+
+                // If not satisfied or not latest, fetch actual latest from registry
+                if req_c == "latest" || req_c == "*" {
+                    if let Ok(pkg_meta) = registry_c.fetch_package(&name_c).await {
+                        if let Some(real_max) = find_real_latest(&pkg_meta) {
+                            target_req = real_max;
+                        }
+                    }
+                }
+                
+                pb_c.inc(1);
+                (name_c, target_req, false)
+            }));
+            
+            if analysis_tasks.len() >= 100 {
+                if let Some(res) = analysis_tasks.next().await {
+                    if let Ok((name, ver, skip)) = res {
+                        if skip {
+                            skipped_packages.push((name, ver, "already installed".to_string()));
+                        } else {
+                            deps_to_resolve.insert(name, ver);
+                        }
+                    }
+                }
+            }
+        }
+        
+        while let Some(res) = analysis_tasks.next().await {
+            if let Ok((name, ver, skip)) = res {
+                if skip {
+                    skipped_packages.push((name, ver, "already installed".to_string()));
+                } else {
+                    deps_to_resolve.insert(name, ver);
+                }
+            }
+        }
+        
+        analyze_pb.finish_and_clear(); 
+
+        // If specific packages were requested on CLI, they take priority
+        for pkg_req in &packages {
+             let (name, ver) = if pkg_req.contains('@') && !pkg_req.starts_with('@') {
+                let parts: Vec<&str> = pkg_req.splitn(2, '@').collect();
+                (parts[0].to_string(), parts[1].to_string())
+            } else if pkg_req.starts_with('@') && pkg_req.split('@').count() > 2 {
+                let parts: Vec<&str> = pkg_req.rsplitn(2, '@').collect();
+                (parts[1].to_string(), parts[0].to_string())
+            } else {
+                (pkg_req.clone(), "latest".to_string())
+            };
+            deps_to_resolve.insert(name, ver);
+        }
+
+        if deps_to_resolve.is_empty() {
+            multi.println(format!("   {} All dependencies are already up to date.", "*".green().bold())).unwrap();
+        } else {
+            // PIPELINE: Setup eager extraction channel
+            let (eager_tx, mut eager_rx) = tokio::sync::mpsc::channel::<ResolvedPackage>(4096);
+            resolver.set_eager_tx(eager_tx);
+
+            let installer_eager = Arc::clone(&installer_shared);
+            let multi_eager = multi.clone();
+            let eager_handle = tokio::spawn(async move {
+                let mut tasks = FuturesUnordered::new();
+                while let Some(pkg) = eager_rx.recv().await {
+                    let inst = Arc::clone(&installer_eager);
+                    let mpb = multi_eager.clone();
+                    tasks.push(tokio::spawn(async move {
+                        let res = inst.ensure_extracted(&pkg).await;
+                        if let Err(ref e) = res {
+                            eprintln!("[ERROR] {} failed: {}", pkg.name, e);
+                        } else if pkg.metadata.dist.unpacked_size > 5 * 1024 * 1024 {
+                             let _ = mpb.println(format!("   {} Pipeline: Eagerly unpacked heavy package {}", "+".yellow().bold(), pkg.name));
+                        }
+                        res
+                    }));
+                    if tasks.len() >= 100 { if let Some(res) = tasks.next().await { res??; } }
+                }
+                while let Some(res) = tasks.next().await { res??; }
+                Ok::<(), anyhow::Error>(())
+            });
+
+            let mut resolved_tree = resolver.resolve_tree(&deps_to_resolve).await?;
+            multi.println(format!("{} Graph stable. Neural sequence unlocked.", "[OK]".green().bold())).unwrap();
+            resolved_tree.sort_by(|a, b| b.metadata.dist.unpacked_size.cmp(&a.metadata.dist.unpacked_size));
+            let resolved_tree_arc = Arc::new(resolved_tree);
+            resolver.clear_eager_tx(); // Crucial: close the eager channel to unblock eager_handle
+ 
+            multi.println(format!("\n{} Finalizing storage and artifacts...", "[*]".magenta().bold())).unwrap();
+            let total_pkgs = resolved_tree_arc.len() as u64;
+            let main_pb = multi.add(ProgressBar::new(total_pkgs));
+            main_pb.set_style(ProgressStyle::default_bar()
+                .template("{spinner:.green} [MATRIX_CORE] Unpacking: [{bar:40.green/black}] {pos}/{len} 0x{msg}")
+                .unwrap().progress_chars("10"));
+            main_pb.set_message("8f2a");
+            main_pb.enable_steady_tick(std::time::Duration::from_millis(50));
+
+            let (tx_ready, mut rx_ready) = tokio::sync::mpsc::channel::<ResolvedPackage>(4096);
+            let platform = Platform::current();
+            let mut extraction_handles = FuturesUnordered::new();
+            
+            for pkg in resolved_tree_arc.iter() {
+                if !platform.is_compatible(&pkg.metadata) {
+                    main_pb.inc(1);
+                    continue;
+                }
+                
+                let inst = Arc::clone(&installer_shared);
+                let pkg_c = pkg.clone();
+                let mpb = main_pb.clone();
+                let tx = tx_ready.clone();
+                
+                // Spawn EVERYTHING at once. Tokio will schedule them efficiently.
+                extraction_handles.push(tokio::spawn(async move {
+                    let res = inst.ensure_extracted(&pkg_c).await;
+                    if let Err(ref e) = res {
+                        eprintln!("[ERROR] {} failed: {}", pkg_c.name, e);
+                    } else {
+                        let _ = tx.send(pkg_c).await;
+                        mpb.inc(1);
+                        if rand::random::<f32>() < 0.1 {
+                            mpb.set_message(format!("{:04x}", rand::random::<u16>()));
+                        }
+                    }
+                    res
+                }));
+            }
+            drop(tx_ready); // Important to close sender
+            
+            let installer_linking = Arc::clone(&installer_shared);
+            let final_linking = tokio::spawn(async move {
+                 let mut tasks = FuturesUnordered::new();
+                 while let Some(pkg) = rx_ready.recv().await {
+                     let inst = Arc::clone(&installer_linking);
+                     tasks.push(tokio::spawn(async move { inst.link_package_deps(&pkg).await }));
+                     if tasks.len() >= 32 { if let Some(res) = tasks.next().await { res??; } }
+                 }
+                 while let Some(res) = tasks.next().await { res??; }
+                 Ok::<(), anyhow::Error>(())
+            });
+
+            while let Some(res) = extraction_handles.next().await {
+                res??;
+            }
+            main_pb.finish_and_clear();
+            multi.println(format!("{} Storage synchronized. All artifacts cached.", "[OK]".green().bold())).unwrap();
+
+            let xpm_internal = current_dir.join("node_modules").join(".xpm");
+            if !xpm_internal.exists() { let _ = std::fs::create_dir_all(&xpm_internal); }
+
+            multi.println(format!("{} Optimizing layout and shims...", "[>>]".bold().blue())).unwrap();
+            let link_pb = multi.add(ProgressBar::new(deps_to_resolve.len() as u64));
+            link_pb.set_style(ProgressStyle::default_bar()
+                .template("{spinner:.cyan} [LN-KERNEL] Linking: [{bar:40.cyan/blue}] {pos}/{len} 0x{msg}")
+                .unwrap().progress_chars("10-"));
+            link_pb.set_message("8f2a");
+            link_pb.enable_steady_tick(std::time::Duration::from_millis(60));
+
+            for (name, req) in &deps_to_resolve {
+                if let Some(version) = resolver.find_compatible_version(name, req) {
+                    installer_shared.link_to_root(name, &version)?;
+                    installed_summary.push((name.clone(), version));
+                    link_pb.inc(1);
+                    if rand::random::<f32>() < 0.1 { link_pb.set_message(format!("{:04x}", rand::random::<u16>())); }
+                }
+            }
+            link_pb.finish_and_clear();
+            multi.println(format!("{} Runtime layout synchronized.", "[OK]".cyan().bold())).unwrap();
+            
+            // 2. Shamefully hoist everything else (compatibility mode)
+            // This ensures phantom dependencies like 'safe-buffer' are found
+            use rayon::prelude::*;
+            resolved_tree_arc.par_iter().for_each(|pkg| {
+                let root_nm = current_dir.join("node_modules").join(&pkg.name);
+                if !root_nm.exists() {
+                     if let Err(e) = installer_shared.link_to_root(&pkg.name, &pkg.version) {
+                         eprintln!("Warning: Failed to hoist {}: {}", pkg.name, e);
+                     }
+                }
+            });
+
+            if packages.is_empty() && !global {
+                let pkg_json_path = target_dir.join("package.json");
+                let mut updates = HashMap::new();
+                for (name, req) in &root_deps {
+                    if let Some(version) = resolver.find_compatible_version(name, req) {
+                        updates.insert(name.clone(), version);
+                    }
+                }
+                let _ = crate::core::installer::Installer::update_package_json(&pkg_json_path, updates);
+            }
+            final_linking.await??;
+            eager_handle.await??;
+        }
+    } else {
+        // --- CASE: Manual Installation ---
+        let mut deps_to_resolve = HashMap::new();
+        
+        for name in &packages {
+            deps_to_resolve.insert(name.clone(), "latest".to_string());
+        }
+
+        let resolved_tree = resolver.resolve_tree(&deps_to_resolve).await?;
+        multi.println(format!("{} Graph stable. Neural sequence unlocked.", "[OK]".green().bold())).unwrap();
+        
+        multi.println(format!("\n{} Injecting packets into content-addressable core...", "[>>]".green().bold())).unwrap();
+        
+        multi.println(format!("\n{} Unpacking and linking packages...", "[*]".magenta().bold())).unwrap();
+        
+        // 1. Bulk Unpacking (Download + Extract)
+        installer_shared.batch_ensure_extracted(&resolved_tree).await?;
+        
+        // 2. Parallel Linking (Dependencies)
+        let link_pb = multi.add(ProgressBar::new(resolved_tree.len() as u64));
+        link_pb.set_style(ProgressStyle::default_bar()
+            .template("{spinner:.cyan} [LN-KERNEL] Hard-linking: [{bar:40.cyan/blue}] {pos}/{len} 0x{msg}")
+            .unwrap().progress_chars("10-"));
+        link_pb.set_message("8f2a");
+        link_pb.enable_steady_tick(std::time::Duration::from_millis(60));
+
+        let mut link_tasks = FuturesUnordered::new();
+        for pkg in &resolved_tree {
+            let inst = Arc::clone(&installer_shared);
+            let pkg_c = pkg.clone();
+            let lpb = link_pb.clone();
+            link_tasks.push(tokio::spawn(async move {
+                let res = inst.link_package_deps(&pkg_c).await;
+                lpb.inc(1);
+                if rand::random::<f32>() < 0.05 { lpb.set_message(format!("{:04x}", rand::random::<u16>())); }
+                res
+            }));
+        }
+        
+        // Await all linking tasks
+        while let Some(res) = link_tasks.next().await {
+            res??;
+        }
+        link_pb.finish_and_clear();
+        multi.println(format!("{} Virtual store synchronized.", "[OK]".cyan().bold())).unwrap();
+        
+        // 3. Final Root Linking & Save
+        multi.println(format!("{} Finalizing workspace...", "[>>]".bold().blue())).unwrap();
+        
+        let final_pb = multi.add(ProgressBar::new(deps_to_resolve.len() as u64));
+        final_pb.set_style(ProgressStyle::default_bar()
+            .template("{spinner:.blue} [FINALIZER] Syncing root: [{bar:40.blue/black}] {pos}/{len} 0x{msg}")
+            .unwrap().progress_chars("10"));
+        final_pb.set_message("8f2a");
+        final_pb.enable_steady_tick(std::time::Duration::from_millis(60));
+
+        for (name, _) in &deps_to_resolve {
+             if let Some(version) = resolver.find_compatible_version(name, "*") {
+                 installer_shared.link_to_root(name, &version)?;
+                 updates_to_save.insert(name.clone(), version.clone());
+                 installed_summary.push((name.clone(), version));
+                 final_pb.inc(1);
+                 if rand::random::<f32>() < 0.1 { final_pb.set_message(format!("{:04x}", rand::random::<u16>())); }
+             }
+        }
+        final_pb.finish_and_clear();
+        multi.println(format!("{} Deployment successful.", "[OK]".blue().bold())).unwrap();
+    }
+    
+    for (name, version, reason) in skipped_packages {
+        let _ = multi.println(format!("   {} {} v{} ({})", "v".green(), name.bold(), version.cyan(), reason.dimmed()));
+    }
+    for (name, version) in &installed_summary {
+         multi.println(format!("   {} {} v{}", "+".bold().green(), name.bold(), version.cyan())).unwrap();
+    }
+
+    if global && !installed_summary.is_empty() {
+        let bin_dir = target_dir.join("bin");
+        if !bin_dir.exists() { std::fs::create_dir_all(&bin_dir)?; }
+        
+        let bin_pb = multi.add(ProgressBar::new(installed_summary.len() as u64));
+        bin_pb.set_style(ProgressStyle::default_spinner()
+            .template("{spinner:.cyan} [BIN-SHIM] Exporting binary artifacts... 0x{msg}")
+            .unwrap());
+        bin_pb.enable_steady_tick(std::time::Duration::from_millis(60));
+        bin_pb.set_message("8f2a");
+
+        for (name, version) in &installed_summary {
+             let pkg_name_clean = name.split('@').next().unwrap_or(name);
+             let pkg_dir_real = installer_shared.get_virtual_store_root(name, version).join("node_modules").join(pkg_name_clean);
+             
+             let virtual_store_name = format!("{}@{}", name.replace('/', "+"), version);
+             if let Err(e) = installer_shared.link_binaries(&pkg_dir_real, &bin_dir, &virtual_store_name) {
+                 multi.println(format!("   {} Error exporting binary for {}: {}", "[ERR]".red().bold(), name, e)).unwrap();
+             }
+             bin_pb.inc(1);
+             if rand::random::<f32>() < 0.2 { bin_pb.set_message(format!("{:04x}", rand::random::<u16>())); }
+        }
+        bin_pb.finish_and_clear();
+        multi.println(format!("{} Global binaries exported to: {}", "[OK]".cyan().bold(), bin_dir.display())).unwrap();
+    }
+
+    if !global && !updates_to_save.is_empty() {
+        update_package_json_batch(&target_dir, &updates_to_save).ok();
+    }
+
+    let elapsed = start_time.elapsed();
+    multi.println(format!("\n{} XyPriss Installation complete in {:.2}s", "[OK]".green().bold(), elapsed.as_secs_f64())).unwrap();
+    if global {
+        let bin_path = target_dir.join("bin");
+        crate::utils::shell::ensure_global_path_is_configured(&bin_path);
+    }
+    multi.println("   Powered by Nehonix™ & XyPriss Engine".truecolor(100, 100, 100).italic().to_string()).unwrap();
+    println!();
+
+    Ok(())
+}
+
+fn migrate_legacy_storage(current_dir: &Path, new_path: &Path) {
+    let legacy_path = current_dir.join(".xpm_storage");
+    if legacy_path.exists() {
+         // Create parent if needed
+         if let Some(p) = new_path.parent() { 
+             let _ = std::fs::create_dir_all(p); 
+         }
+         
+         // Try to rename (fast move)
+         if !new_path.exists() {
+             if let Ok(_) = std::fs::rename(&legacy_path, &new_path) {
+                // success
+             } else {
+                 // Rename failed, try copy-delete or just ignore?
+                 // For cache, we can just delete old one to be safe/clean
+                  let _ = std::fs::remove_dir_all(&legacy_path);
+             }
+         } else {
+             // If new path also exists, we just nuke the old one to stop watcher errors
+             let _ = std::fs::remove_dir_all(&legacy_path);
+         }
+         
+         if legacy_path.exists() {
+            eprintln!("Warning: Failed to remove legacy .xpm_storage. Please remove it manually.");
+         }
+    }
+}
+
+fn find_real_latest(meta: &crate::core::registry::RegistryPackage) -> Option<String> {
+    let mut versions: Vec<Version> = meta.versions.keys()
+        .filter_map(|v| Version::parse(v).ok())
+        .filter(|v| v.pre.is_empty())
+        .collect();
+    versions.sort();
+    versions.last().map(|v| v.to_string())
+}
+
+fn update_package_json_batch(root: &Path, updates: &HashMap<String, String>) -> anyhow::Result<()> {
+    let pkg_path = root.join("package.json");
+    if !pkg_path.exists() { return Ok(()); } 
+    let content = std::fs::read_to_string(&pkg_path)?;
+    let mut json: serde_json::Value = serde_json::from_str(&content)?;
+
+    if let Some(obj) = json.as_object_mut() {
+        for (name, version) in updates {
+            let version_req = format!("^{}", version);
+            let mut updated = false;
+            if let Some(dev_deps) = obj.get_mut("devDependencies").and_then(|v| v.as_object_mut()) {
+                if dev_deps.contains_key(name) {
+                    dev_deps.insert(name.clone(), serde_json::Value::String(version_req.clone()));
+                    updated = true;
+                }
+            }
+            if !updated {
+                if !obj.contains_key("dependencies") { obj.insert("dependencies".to_string(), serde_json::json!({})); }
+                if let Some(deps) = obj.get_mut("dependencies").and_then(|v| v.as_object_mut()) {
+                    deps.insert(name.clone(), serde_json::Value::String(version_req));
+                }
+            }
+        }
+    }
+    let new_content = serde_json::to_string_pretty(&json)?;
+    std::fs::write(pkg_path, new_content)?;
+    Ok(())
+}
+
+fn link_global_binaries(global_root: &Path, pkg_name: &str, _version: &str) -> anyhow::Result<()> {
+    let pkg_path = global_root.join("node_modules").join(pkg_name);
+    let pkg_json_path = pkg_path.join("package.json");
+    if !pkg_json_path.exists() { return Ok(()); }
+    let content = std::fs::read_to_string(&pkg_json_path)?;
+    let json: serde_json::Value = serde_json::from_str(&content)?;
+    let bin_dir = global_root.join("bin");
+    if !bin_dir.exists() { std::fs::create_dir_all(&bin_dir)?; }
+    if let Some(bin_field) = json.get("bin") {
+        if let Some(bin_map) = bin_field.as_object() {
+            for (bin_cmd, bin_rel_path_val) in bin_map {
+                if let Some(bin_rel_path) = bin_rel_path_val.as_str() {
+                     create_global_symlink(&bin_dir, &pkg_path, bin_cmd, bin_rel_path)?;
+                }
+            }
+        } else if let Some(bin_path_str) = bin_field.as_str() {
+             let bin_cmd = pkg_name.split('/').last().unwrap_or(pkg_name);
+             create_global_symlink(&bin_dir, &pkg_path, bin_cmd, bin_path_str)?;
+        }
+    }
+    Ok(())
+}
+
+fn create_global_symlink(bin_dir: &Path, pkg_path: &Path, bin_name: &str, rel_path: &str) -> anyhow::Result<()> {
+    let target = pkg_path.join(rel_path);
+    let link_path = bin_dir.join(bin_name);
+    if link_path.exists() { std::fs::remove_file(&link_path).ok(); }
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        if let Ok(_meta) = std::fs::metadata(&target) {
+            let perms = std::fs::Permissions::from_mode(0o755);
+            std::fs::set_permissions(&target, perms).ok();
+        }
+        std::os::unix::fs::symlink(&target, &link_path)?;
+    }
+    Ok(())
+}
+
+fn get_installed_version(root: &Path, name: &str) -> Option<String> {
+    let pkg_path = root.join("node_modules").join(name).join("package.json");
+    if pkg_path.exists() {
+        if let Ok(content) = std::fs::read_to_string(pkg_path) {
+            if let Ok(v) = serde_json::from_str::<serde_json::Value>(&content) {
+                return v.get("version").and_then(|v| v.as_str()).map(|s| s.to_string());
+            }
+        }
+    }
+    None
+}
+
+fn parse_package_arg(arg: &str) -> (String, String) {
+    let last_at = arg.rfind('@');
+    match last_at {
+        Some(idx) if idx > 0 => (arg[..idx].to_string(), arg[idx+1..].to_string()),
+        _ => (arg.to_string(), "latest".to_string())
+    }
+}
