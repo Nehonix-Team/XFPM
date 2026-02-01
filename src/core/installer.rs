@@ -9,7 +9,7 @@ use indicatif::{MultiProgress, ProgressBar};
 use rayon::prelude::*;
 use std::collections::HashMap;
 use std::sync::Arc;
-use dashmap::DashSet;
+use dashmap::{DashSet, DashMap};
 use tokio_util::io::{StreamReader, SyncIoBridge};
 
 pub struct Installer {
@@ -57,6 +57,15 @@ impl Installer {
         Arc::new(self.cas.clone())
     }
 
+    pub fn is_package_extracted(&self, name: &str, version: &str) -> bool {
+        let cache_key = format!("{}@{}", name, version);
+        if self.extracted_cache.contains(&cache_key) {
+            return true;
+        }
+        let virtual_store_root = self.get_virtual_store_root(name, version);
+        virtual_store_root.join("node_modules").join(name).join("package.json").exists()
+    }
+
     pub fn get_virtual_store_root(&self, name: &str, version: &str) -> PathBuf {
         let virtual_store_name = format!("{}@{}", name.replace('/', "+"), version);
         
@@ -69,7 +78,7 @@ impl Installer {
         }
     }
 
-    pub async fn batch_ensure_extracted(&self, packages: &[crate::core::resolver::ResolvedPackage]) -> Result<()> {
+    pub async fn batch_ensure_extracted(&self, packages: &[Arc<crate::core::resolver::ResolvedPackage>]) -> Result<()> {
         use futures_util::stream::{self, StreamExt};
         
         let pb = {
@@ -199,17 +208,18 @@ impl Installer {
         Ok(())
     }
 
-    pub async fn link_package_deps(&self, pkg: &crate::core::resolver::ResolvedPackage) -> Result<()> {
+    pub async fn link_package_deps(&self, pkg: &crate::core::resolver::ResolvedPackage, resolved_map: &DashMap<String, Arc<crate::core::resolver::ResolvedPackage>>) -> Result<()> {
         let name = &pkg.name;
         let version = &pkg.version;
         let virtual_store_root = self.get_virtual_store_root(name, version);
         let deps_nm = virtual_store_root.join("node_modules");
+        let bin_dir = deps_nm.join(".bin");
 
         for (dep_name, dep_version) in pkg.resolved_dependencies.iter() {
             let target_link = deps_nm.join(dep_name);
             
             if let Some(parent) = target_link.parent() {
-                fs::create_dir_all(parent)?;
+                if !parent.exists() { let _ = fs::create_dir_all(parent); }
             }
             
             if target_link.exists() || target_link.is_symlink() {
@@ -220,19 +230,15 @@ impl Installer {
                 .join("node_modules")
                 .join(dep_name);
             
-            if !dep_abs_target.exists() {
-                 continue; 
-            }
-            
             #[cfg(unix)]
-            {
-                std::os::unix::fs::symlink(&dep_abs_target, &target_link)
-                    .map_err(|e| anyhow::anyhow!("Failed to link {} to {}: {}", dep_name, target_link.display(), e))?;
-            }
-            
+            let _ = std::os::unix::fs::symlink(&dep_abs_target, &target_link);
             #[cfg(windows)]
-            {
-                std::os::windows::fs::symlink_dir(&dep_abs_target, &target_link)?;
+            let _ = std::os::windows::fs::symlink_dir(&dep_abs_target, &target_link);
+
+            // LINK BINARIES of dependencies so they are in PATH for post-install
+            if let Some(dep_pkg) = resolved_map.get(&format!("{}@{}", dep_name, dep_version)) {
+                let virtual_store_name = format!("{}@{}", dep_name.replace('/', "+"), dep_version);
+                let _ = self.link_binaries_with_meta(&dep_abs_target, &bin_dir, &virtual_store_name, dep_pkg.metadata.bin.as_ref());
             }
         }
         
@@ -358,11 +364,30 @@ impl Installer {
         Ok(())
     }
 
+    pub fn has_postinstall_scripts(&self, pkg: &crate::core::resolver::ResolvedPackage) -> bool {
+        if let Some(scripts) = pkg.metadata.scripts.as_ref() {
+            if let Some(obj) = scripts.as_object() {
+                return obj.contains_key("preinstall") || obj.contains_key("install") || obj.contains_key("postinstall");
+            }
+        }
+        false
+    }
+
     pub async fn run_postinstall_for_pkg(&self, pkg: &crate::core::resolver::ResolvedPackage) -> Result<()> {
+        if !self.has_postinstall_scripts(pkg) {
+            return Ok(());
+        }
+        
         let name = &pkg.name;
         let version = &pkg.version;
         let virtual_store_root = self.get_virtual_store_root(name, version);
         let pkg_path = virtual_store_root.join("node_modules").join(name);
+        
+        // Ensure the directory exists before running scripts
+        if !pkg_path.exists() {
+            return Err(anyhow::anyhow!("Package path missing for postinstall: {}", pkg_path.display()));
+        }
+
         Self::run_postinstall_static(&pkg_path, name, version).await
     }
 
@@ -504,9 +529,29 @@ impl Installer {
         let content = fs::read_to_string(path)?;
         let mut v: serde_json::Value = serde_json::from_str(&content)?;
         
-        if let Some(deps) = v.get_mut("dependencies").and_then(|d| d.as_object_mut()) {
+        let sections = ["dependencies", "devDependencies", "optionalDependencies", "peerDependencies"];
+
+        if let Some(obj) = v.as_object_mut() {
             for (name, version) in updates {
-                deps.insert(name, serde_json::Value::String(version));
+                let mut found = false;
+                for section in sections {
+                    if let Some(deps) = obj.get_mut(section).and_then(|d| d.as_object_mut()) {
+                        if deps.contains_key(&name) {
+                            deps.insert(name.clone(), serde_json::Value::String(version.clone()));
+                            found = true;
+                            break;
+                        }
+                    }
+                }
+
+                if !found {
+                    if !obj.contains_key("dependencies") {
+                        obj.insert("dependencies".to_string(), serde_json::Value::Object(serde_json::Map::new()));
+                    }
+                    if let Some(deps) = obj.get_mut("dependencies").and_then(|d| d.as_object_mut()) {
+                        deps.insert(name, serde_json::Value::String(version));
+                    }
+                }
             }
         }
         
