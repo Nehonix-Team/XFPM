@@ -14,12 +14,16 @@ impl<'a> StreamingExtractor<'a> {
     }
 
     /// Extracts a .tgz stream into the CAS and returns a map of filenames to their hashes
-    /// Optimized with larger buffers and parallel processing
+    /// Uses flate2 with pure Rust backend for maximum portability
     pub fn extract<R: Read>(&self, reader: R) -> Result<std::collections::HashMap<String, String>> {
-        let buf_reader = std::io::BufReader::with_capacity(1024 * 1024, reader);
+        use std::io::BufReader;
+        
+        // Large buffer for optimal decompression speed
+        let buf_reader = BufReader::with_capacity(4 * 1024 * 1024, reader); // 4MB buffer
+        
+        // GzDecoder with pure Rust backend
         let gz = GzDecoder::new(buf_reader);
         let mut archive = Archive::new(gz);
-        
         let mut file_map = std::collections::HashMap::with_capacity(512);
         
         for entry in archive.entries()? {
@@ -30,13 +34,11 @@ impl<'a> StreamingExtractor<'a> {
             }
             
             let path = entry.path()?.to_string_lossy().to_string();
-            let is_executable = if let Ok(mode) = entry.header().mode() {
-                (mode & 0o111) != 0
-            } else {
-                false
-            };
+            let is_executable = entry.header().mode().ok()
+                .map(|mode| (mode & 0o111) != 0)
+                .unwrap_or(false);
             
-            // CAS store_stream now uses its own BufReader
+            // Store in CAS
             let hash = self.cas.store_stream(&mut entry, is_executable)?;
             file_map.insert(path, hash);
         }
@@ -50,10 +52,12 @@ impl<'a> StreamingExtractor<'a> {
         R: Read,
         F: FnMut(&str, &str), // (path, hash) callback for eager processing
     {
-        let buf_reader = std::io::BufReader::with_capacity(512 * 1024, reader);
+        use std::io::BufReader;
+        
+        let buf_reader = BufReader::with_capacity(4 * 1024 * 1024, reader);
         let gz = GzDecoder::new(buf_reader);
         let mut archive = Archive::new(gz);
-        let mut file_map = std::collections::HashMap::with_capacity(256);
+        let mut file_map = std::collections::HashMap::with_capacity(512);
 
         for entry in archive.entries()? {
             let mut entry = entry?;
@@ -63,11 +67,10 @@ impl<'a> StreamingExtractor<'a> {
             }
 
             let path = entry.path()?.to_string_lossy().to_string();
-            let is_executable = if let Ok(mode) = entry.header().mode() {
-                (mode & 0o111) != 0
-            } else {
-                false
-            };
+            let is_executable = entry.header().mode()
+                .ok()
+                .map(|mode| (mode & 0o111) != 0)
+                .unwrap_or(false);
 
             let hash = self.cas.store_stream(&mut entry, is_executable)?;
             
