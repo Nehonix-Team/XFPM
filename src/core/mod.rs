@@ -5,3 +5,5 @@ pub mod extractor;
 pub mod installer;
 pub mod config;
 pub mod script_runner;
+pub mod manifest;
+pub mod variables;

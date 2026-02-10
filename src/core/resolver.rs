@@ -39,6 +39,8 @@ pub struct PackageJson {
     pub peer_dependencies: HashMap<String, String>,
     #[serde(default)]
     pub pnpm: Option<PnpmConfig>,
+    #[serde(default)]
+    pub xfpm: Option<crate::core::manifest::XfpmPackageConfig>,
 }
 
 impl PackageJson {
@@ -83,6 +85,7 @@ pub struct Resolver {
     catalogs: HashMap<String, HashMap<String, String>>, // Pnpm catalogs: catalog_name -> (pkg_name -> version)
     overrides: HashMap<String, String>, // Forced versions from root package.json
     update: bool,
+    pub variable_resolver: crate::core::variables::VariableResolver,
 }
 
 #[derive(Clone, Debug)]
@@ -189,6 +192,7 @@ impl Resolver {
             catalogs: HashMap::new(),
             overrides: HashMap::new(),
             update: false,
+            variable_resolver: crate::core::variables::VariableResolver::new(),
         }
     }
 
@@ -212,7 +216,24 @@ impl Resolver {
         *self.eager_tx.lock() = None;
     }
 
+    pub fn set_variables(&mut self, vars: HashMap<String, String>) {
+        let mut resolver = crate::core::variables::VariableResolver::with_context(vars);
+        resolver.inject_env();
+        self.variable_resolver = resolver;
+    }
+
     pub fn load_catalogs(&mut self, start_path: &Path) {
+        // 1. Try loading XFPM Manifest first
+        if let Ok(Some(manifest)) = crate::core::manifest::XfpmManifest::load_from_dir(start_path) {
+             let mut log = format!("[DEBUG] Found XFPM Manifest, loading catalogs\n");
+             for (name, catalog) in manifest.catalogs {
+                 log.push_str(&format!("  -> Catalog '{}' loaded with {} entries\n", name, catalog.len()));
+                 self.catalogs.insert(name, catalog);
+             }
+             let _ = fs::write("xfpm-debug.log", log);
+             // If we found an xfpm.yaml, we can still try to load pnpm catalogs as fallback
+        }
+
         let mut curr = Some(start_path);
         let mut workspace_yaml = None;
 
@@ -227,10 +248,7 @@ impl Resolver {
 
         let workspace_yaml = match workspace_yaml {
             Some(y) => y,
-            None => {
-                let _ = fs::write("xfpm-debug.log", format!("[DEBUG] No pnpm-workspace.yaml found starting from {:?}", start_path));
-                return;
-            }
+            None => return,
         };
 
         if let Ok(content) = fs::read_to_string(&workspace_yaml) {
@@ -295,19 +313,37 @@ impl Resolver {
 
     fn parse_alias(&self, name: &str, req_str: &str) -> (String, String) {
         let mut current_name = name.to_string();
-        let mut current_req = req_str.to_string();
+        let mut current_req = self.variable_resolver.resolve(req_str);
 
         // 1. Apply overrides if any (Top-level only for now)
         if let Some(overridden) = self.overrides.get(&current_name) {
             current_req = overridden.clone();
         }
 
-        // 2. Resolve catalogs recursively
+        // 2. Resolve XFPM Native Syntax (@ for catalogs, $ for variables)
+        
+        // Handle @: shorthand for catalogs
+        if current_req == "@" {
+            if let Some(catalog) = self.catalogs.get("default") {
+                if let Some(version) = catalog.get(&current_name) {
+                    current_req = self.variable_resolver.resolve(version);
+                }
+            }
+        } else if current_req.starts_with('@') {
+            let catalog_name = &current_req[1..];
+            if let Some(catalog) = self.catalogs.get(catalog_name) {
+                if let Some(version) = catalog.get(&current_name) {
+                    current_req = self.variable_resolver.resolve(version);
+                }
+            }
+        }
+
+        // 3. Resolve catalogs recursively (Legacy Pnpm compatibility)
         while current_req.starts_with("catalog:") {
             let catalog_name = if current_req == "catalog:" { "default" } else { &current_req[8..] };
             if let Some(catalog) = self.catalogs.get(catalog_name) {
                 if let Some(version) = catalog.get(&current_name) {
-                    current_req = version.clone();
+                    current_req = self.variable_resolver.resolve(version);
                 } else {
                     break; // Catalog found but entry missing, stop resolving catalog
                 }

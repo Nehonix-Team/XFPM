@@ -68,7 +68,7 @@ pub async fn run(
         current_dir.clone()
     };
  
-    // 1. Determine Dependencies to Resolve & Pnpm Config
+    let mut root_vars = HashMap::new();
     let mut deps_to_resolve = HashMap::new();
     let mut root_overrides = HashMap::new();
     let mut only_built = Vec::new();
@@ -89,8 +89,17 @@ pub async fn run(
                 only_built = pnpm.only_built_dependencies;
                 patched_deps = pnpm.patched_dependencies;
             }
+            if let Some(xfpm) = pkg_json.xfpm {
+                root_vars.extend(xfpm.vars);
+            }
             let _ = multi.println(format!("   {} Project: {} v{}", "-->".green().bold(), pkg_json.name.bold(), pkg_json.version.cyan()));
         }
+    }
+
+    // Load xfpm.yaml if exists (recursive search)
+    let workspace_root = crate::core::manifest::XfpmManifest::find_root(&target_dir).unwrap_or(target_dir.clone());
+    if let Ok(Some(manifest)) = crate::core::manifest::XfpmManifest::load_from_dir(&workspace_root) {
+        root_vars.extend(manifest.globals);
     }
 
     let mut installer = Installer::new(&cas_path, &target_dir, Arc::clone(&registry))?;
@@ -104,6 +113,7 @@ pub async fn run(
     resolver.set_cas(installer_shared.get_cas());
     resolver.set_concurrency(128); 
     resolver.set_update(update);
+    resolver.set_variables(root_vars);
     resolver.load_catalogs(&target_dir);
     resolver.set_overrides(root_overrides);
     let resolver_shared = Arc::new(resolver);
