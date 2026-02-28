@@ -1,0 +1,1 @@
+go build -o xfpm ./cmd/xfpm && echo "Builded"
