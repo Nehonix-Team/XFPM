@@ -129,7 +129,7 @@ func PrintFooter(duration time.Duration) {
 	)
 	pterm.Printf("  %s %s\n", 
 		DimColor.Sprint("Powered by"), 
-		pterm.FgLightBlue.Sprint("Nehonix™ & XyPriss Engine"),
+		pterm.FgLightBlue.Sprint("Nehonix"),
 	)
 }
 
