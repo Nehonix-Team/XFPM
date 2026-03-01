@@ -40,12 +40,11 @@ import (
 )
 
 var (
-	version = "0.1.0-go"
 	rootCmd = &cobra.Command{
 		Use:   "xfpm",
 		Short: "Official XyPriss Fast Package Manager & CLI (Go version)",
-		Long:  `Official XyPriss Fast Package Manager & CLI rewritten in Go for cross-platform support.`,
-		Version: version,
+		Long:  `Official XyPriss Fast Package Manager (XFPM). XFPM is a high-performance, cross-platform CLI tool built for the XyPriss ecosystem. Written in Go, it delivers fast dependency resolution, strict package isolation through a virtual store, and a clean terminal interface designed for professional workflows.`,
+		Version: utils.BinVersion,
 		PersistentPreRun: func(cmd *cobra.Command, args []string) {
 			utils.SetupUI()
 			utils.CheckForUpdates()

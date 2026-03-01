@@ -1,6 +1,6 @@
 {
   "name": "xypriss-cli",
-  "version": "1.1.42",
+  "version": "1.1.43",
   "description": "Official XyPriss Fast Package Manager (XFPM). XFPM is a high-performance, cross-platform CLI tool built for the XyPriss ecosystem. Written in Go, it delivers fast dependency resolution, strict package isolation through a virtual store, and a clean terminal interface designed for professional workflows. ",
   "repository": {
     "type": "git",
