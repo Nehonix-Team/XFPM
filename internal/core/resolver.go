@@ -73,11 +73,23 @@ func (p Platform) matchesArch(pkgCPU StringOrStringArray) bool {
 		return true
 	}
 	for _, cpu := range pkgCPU {
-		if strings.HasPrefix(cpu, "!") {
-			if cpu[1:] != p.Arch {
+		isNegated := strings.HasPrefix(cpu, "!")
+		targetCPU := cpu
+		if isNegated {
+			targetCPU = cpu[1:]
+		}
+
+		match := (targetCPU == p.Arch) || 
+		         (targetCPU == "x64" && p.Arch == "x86_64") || 
+		         (targetCPU == "x86_64" && p.Arch == "x64") ||
+		         (targetCPU == "arm64" && p.Arch == "aarch64") ||
+		         (targetCPU == "aarch64" && p.Arch == "arm64")
+
+		if isNegated {
+			if !match {
 				return true
 			}
-		} else if cpu == p.Arch {
+		} else if match {
 			return true
 		}
 	}
@@ -105,14 +117,26 @@ func (p Platform) matchesLibc(pkgName string, pkgLibc StringOrStringArray) bool 
 func (p Platform) IsCompatible(meta *VersionMetadata) bool {
 	name := strings.ToLower(meta.Name)
 
-	if !p.matchesOS(meta.OS) || !p.matchesArch(meta.CPU) || !p.matchesLibc(name, meta.Libc) {
+	// OS and CPU are the primary filters. If they don't match, the package is rejected.
+	if !p.matchesOS(meta.OS) || !p.matchesArch(meta.CPU) {
 		return false
 	}
 
+	// Libc is more of a heuristic in many packages
+	if !p.matchesLibc(name, meta.Libc) {
+		return false
+	}
+
+	// Name-based safety filters for Linux
 	if p.OS == "linux" {
-		if strings.Contains(name, "android") || strings.Contains(name, "darwin") || strings.Contains(name, "win32") {
-			return false
+		// Only filter by name if the package DOES NOT specify OS or CPU (generic packages)
+		// because if it specify them and they match (checked above), we should trust it.
+		if len(meta.OS) == 0 && len(meta.CPU) == 0 {
+			if strings.Contains(name, "android") || strings.Contains(name, "darwin") || strings.Contains(name, "win32") {
+				return false
+			}
 		}
+
 		if p.Libc == "glibc" && strings.Contains(name, "-musl") {
 			return false
 		}
@@ -331,8 +355,7 @@ func (r *Resolver) resolvePackage(ctx context.Context, name, req string, isOptio
 
 	meta := pkgInfo.Versions[version]
 	if !r.platform.IsCompatible(&meta) {
-		// Always skip silently — platform constraints are advisory (mirrors Rust behavior).
-		// A darwin-only package should never cause a fatal error on Linux.
+		utils.Log("SKIP", fmt.Sprintf("%s@%s is not compatible with current platform (%s/%s)", realName, version, r.platform.OS, r.platform.Arch))
 		r.resolved.Delete(versionKey)
 		return nil
 	}

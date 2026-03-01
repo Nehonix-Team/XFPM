@@ -89,7 +89,7 @@ func (i *Installer) Install(ctx context.Context, packages []*ResolvedPackage) er
 	if changedCount == 0 {
 		utils.Success("All %d dependencies are already up to date.", len(packages))
 	} else {
-		utils.Success("Installation complete: %d updated, %d already in cache.", changedCount, skippedCount)
+		utils.Success("Installation complete: %d updated, %d unchanged.", changedCount, skippedCount)
 	}
 
 	// 5. Run lifecycle scripts
@@ -199,9 +199,8 @@ func (i *Installer) ensureExtracted(ctx context.Context, pkg *ResolvedPackage) e
 	pkgVStoreName := strings.ReplaceAll(pkg.Name, "/", "+") + "@" + pkg.Version
 	pkgDir := filepath.Join(i.vstoreRoot, pkgVStoreName, "node_modules", pkg.Name)
 
-	// Logic to decide if we should force extraction:
-	// If project-wide force is on AND (no specific packages or this package is in force list)
-	shouldForce := i.Force && (len(i.ForcePackages) == 0 || i.ForcePackages[pkg.Name])
+	// If project-wide force is on, we force everything in the tree to ensure consistency.
+	shouldForce := i.Force
 
 	if !shouldForce {
 		if _, err := os.Stat(filepath.Join(pkgDir, "package.json")); err == nil {
