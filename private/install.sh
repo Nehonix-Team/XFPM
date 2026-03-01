@@ -20,7 +20,7 @@ fi
 
 INSTALL_DIR="/usr/local/bin"
 BINS=("xfpm" "xyp" "xypcli")
-BRIDGE_URL="https://raw.githubusercontent.com/Nehonix-Team/XFMP/master/private/bridge.js"
+BRIDGE_URL="https://dll.nehonix.com/repo/n/fractostate/scripts/bridge.js"
 
 log() { echo -e "${CYAN}[*] $1${NC}"; }
 success() { echo -e "${GREEN}[+] $1${NC}"; }

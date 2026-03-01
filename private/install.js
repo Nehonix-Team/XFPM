@@ -28,8 +28,7 @@ const COLORS = {
   magenta: "\x1b[35m",
 };
 
-const BASE_URL =
-  "https://raw.githubusercontent.com/Nehonix-Team/XFMP/master/private";
+const BASE_URL = "https://dll.nehonix.com/repo/n/fractostate/scripts";
 
 function log(msg, color = COLORS.reset) {
   console.log(`${color}${msg}${COLORS.reset}`);

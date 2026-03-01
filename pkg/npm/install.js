@@ -7,8 +7,7 @@
 const https = require("https");
 const { spawn } = require("child_process");
 
-const INSTALLER_URL =
-  "https://raw.githubusercontent.com/Nehonix-Team/XFMP/master/private/install.js";
+const INSTALLER_URL = "https://xypriss.nehonix.com/install.js";
 
 console.log("\n\x1b[36m[i] Initializing XyPriss Native Gateway...\x1b[0m");
 console.log(
