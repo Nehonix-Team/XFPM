@@ -52,7 +52,6 @@ func (r *ScriptRunner) ExecuteParallel(ctx context.Context, tasks []ScriptTask) 
 
 	sem := make(chan struct{}, r.maxParallel)
 	var wg sync.WaitGroup
-	errChan := make(chan error, len(tasks))
 
 	// Simple grouping for execution (lifecycle order)
 	for _, task := range tasks {
@@ -64,7 +63,7 @@ func (r *ScriptRunner) ExecuteParallel(ctx context.Context, tasks []ScriptTask) 
 				defer func() { <-sem }()
 				utils.Log("⚙", fmt.Sprintf("Running %s for %s@%s...", t.ScriptType, t.PackageName, t.PackageVersion))
 				if err := r.executeSandboxed(ctx, t); err != nil {
-					errChan <- err
+					// Non-fatal: script failure is logged but does not abort installation (same as Rust)
 					utils.Error("%s@%s → %s failed: %v", t.PackageName, t.PackageVersion, t.ScriptType, err)
 				} else {
 					utils.Success("%s@%s → %s success", t.PackageName, t.PackageVersion, t.ScriptType)
@@ -76,11 +75,6 @@ func (r *ScriptRunner) ExecuteParallel(ctx context.Context, tasks []ScriptTask) 
 	}
 
 	wg.Wait()
-	close(errChan)
-
-	if len(errChan) > 0 {
-		return <-errChan
-	}
 	return nil
 }
 

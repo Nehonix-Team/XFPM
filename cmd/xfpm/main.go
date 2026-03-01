@@ -1,9 +1,32 @@
+/***************************************************************************
+ * XFPM (XyPriss Fast Package Manager)
+ *
+ * @author Nehonix
+ * @license Nehonix OSL (NOSL)
+ *
+ * Copyright (c) 2025 Nehonix. All rights reserved.
+ *
+ * This License governs the use, modification, and distribution of software
+ * provided by NEHONIX under its open source projects.
+ * NEHONIX is committed to fostering collaborative innovation while strictly
+ * protecting its intellectual property rights.
+ * Violation of any term of this License will result in immediate termination of all granted rights
+ * and may subject the violator to legal action.
+ *
+ * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED,
+ * INCLUDING BUT NOT LIMITED TO WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE,
+ * AND NON-INFRINGEMENT.
+ * IN NO EVENT SHALL NEHONIX BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY,
+ * OR CONSEQUENTIAL DAMAGES ARISING FROM THE USE OR INABILITY TO USE THE SOFTWARE,
+ * EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGES.
+ *
+ ***************************************************************************** */
+
 package main
 
 import (
 	"context"
 	"fmt"
-	"math/rand"
 	"os"
 	"path/filepath"
 	"strings"
@@ -35,10 +58,12 @@ var (
 
 func init() {
 	rootCmd.AddCommand(installCmd)
+	rootCmd.AddCommand(updateCmd)
 	rootCmd.PersistentFlags().StringP("cwd", "C", "", "Change work directory")
 	installCmd.Flags().BoolP("save-dev", "D", false, "Save to devDependencies")
 	installCmd.Flags().BoolP("save-optional", "O", false, "Save to optionalDependencies")
 	installCmd.Flags().BoolP("force", "f", false, "Force re-install even if already extracted")
+	installCmd.Flags().BoolP("global", "g", false, "Install packages globally")
 }
 
 var installCmd = &cobra.Command{
@@ -54,9 +79,19 @@ var installCmd = &cobra.Command{
 			}
 		}
 
-		projectRoot, err := os.Getwd()
-		if err != nil {
-			return err
+		global, _ := cmd.Flags().GetBool("global")
+
+		var projectRoot string
+		var err error
+		if global {
+			home, _ := os.UserHomeDir()
+			projectRoot = filepath.Join(home, ".xpm_global")
+			os.MkdirAll(projectRoot, 0755)
+		} else {
+			projectRoot, err = os.Getwd()
+			if err != nil {
+				return err
+			}
 		}
 
 		isDev, _ := cmd.Flags().GetBool("save-dev")
@@ -73,18 +108,25 @@ var installCmd = &cobra.Command{
 		registry.SetCacheDir(filepath.Join(xpmDir, "cache"))
 
 		resolver := core.NewResolver(registry, cas)
-		
+
 		utils.Matrix("Analysing project roots...")
 
 		rootDeps := make(map[string]string)
+		directPkgs := make(map[string]string)
 		pkgJsonPath := filepath.Join(projectRoot, "package.json")
 		var pkg *core.PackageJson
 
 		if _, err := os.Stat(pkgJsonPath); err == nil {
 			pkg, _ = core.LoadPackageJson(pkgJsonPath)
+			if pkg != nil {
+				for name, req := range pkg.AllDependencies() {
+					rootDeps[name] = req
+				}
+			}
 		}
 
 		if len(args) > 0 {
+			resolver.ForcePackages = make(map[string]bool)
 			for _, p := range args {
 				parts := strings.Split(p, "@")
 				name := p
@@ -97,10 +139,22 @@ var installCmd = &cobra.Command{
 					req = parts[2]
 				}
 				rootDeps[name] = req
+				directPkgs[name] = req
+				resolver.ForcePackages[name] = true
 			}
-		} else if pkg != nil {
-			rootDeps = pkg.AllDependencies()
+		} else if force {
+			// updateCmd sets force=true but if args is empty, it's a global update
+			resolver.Update = true
+			for k, v := range rootDeps {
+				directPkgs[k] = v
+			}
 		} else {
+			for k, v := range rootDeps {
+				directPkgs[k] = v
+			}
+		}
+
+		if len(rootDeps) == 0 {
 			return fmt.Errorf("no package.json found and no packages specified")
 		}
 
@@ -112,9 +166,6 @@ var installCmd = &cobra.Command{
 		lastResolving := ""
 
 		resolver.SetOnProgress(func(name string) {
-			if rand.Float32() < 0.1 {
-				pterm.Printf("   %s %-30s %s\n", utils.GreenColor.Sprint("├─"), name, utils.DimColor.Sprint("resolving..."))
-			}
 			mu.Lock()
 			lastResolving = name
 			mu.Unlock()
@@ -139,7 +190,7 @@ var installCmd = &cobra.Command{
 			}
 		}()
 		
-		resolved, err := resolver.ResolveTree(context.Background(), rootDeps)
+		resolved, rootVersions, err := resolver.ResolveTree(context.Background(), rootDeps)
 		close(stopSpinner)
 		s.Stop()
 
@@ -151,12 +202,15 @@ var installCmd = &cobra.Command{
 
 		installer := core.NewInstaller(cas, registry, projectRoot)
 		installer.Force = force
+		installer.ForcePackages = resolver.ForcePackages
+		installer.IsGlobal = global
+		installer.DirectDeps = rootVersions
 		if err := installer.Install(context.Background(), resolved); err != nil {
 			return err
 		}
-		// Update package.json if new packages were added
-		if len(args) > 0 && pkg != nil {
-			for name := range rootDeps {
+		// Update package.json
+		if pkg != nil && len(directPkgs) > 0 {
+			for name := range directPkgs {
 				// Find actual version in resolved
 				version := "latest"
 				for _, r := range resolved {
@@ -166,24 +220,61 @@ var installCmd = &cobra.Command{
 					}
 				}
 
-				if isDev {
-					if pkg.DevDependencies == nil {
-						pkg.DevDependencies = make(map[string]string)
+				// If len(args) == 0, we don't move packages between sections.
+				// We just find where it exists and update it there.
+				if len(args) == 0 {
+					if _, ok := pkg.Dependencies[name]; ok {
+						pkg.Dependencies[name] = version
+					} else if _, ok := pkg.DevDependencies[name]; ok {
+						pkg.DevDependencies[name] = version
+					} else if _, ok := pkg.OptionalDependencies[name]; ok {
+						pkg.OptionalDependencies[name] = version
+					} else if _, ok := pkg.PeerDependencies[name]; ok {
+						pkg.PeerDependencies[name] = version
 					}
-					pkg.DevDependencies[name] = version
-				} else if isOptional {
-					if pkg.OptionalDependencies == nil {
-						pkg.OptionalDependencies = make(map[string]string)
-					}
-					pkg.OptionalDependencies[name] = version
 				} else {
-					if pkg.Dependencies == nil {
-						pkg.Dependencies = make(map[string]string)
+					// Specific package provided via command line: Remove from everywhere first
+					delete(pkg.Dependencies, name)
+					delete(pkg.DevDependencies, name)
+					delete(pkg.OptionalDependencies, name)
+					delete(pkg.PeerDependencies, name)
+
+					if isDev {
+						if pkg.DevDependencies == nil {
+							pkg.DevDependencies = make(map[string]string)
+						}
+						pkg.DevDependencies[name] = version
+					} else if isOptional {
+						if pkg.OptionalDependencies == nil {
+							pkg.OptionalDependencies = make(map[string]string)
+						}
+						pkg.OptionalDependencies[name] = version
+					} else {
+						if pkg.Dependencies == nil {
+							pkg.Dependencies = make(map[string]string)
+						}
+						pkg.Dependencies[name] = version
 					}
-					pkg.Dependencies[name] = version
 				}
 			}
 			pkg.Save(pkgJsonPath)
+		}
+
+		if len(args) == 1 {
+			pkgName := args[0]
+			if strings.HasPrefix(pkgName, "@") {
+				parts := strings.Split(pkgName, "@")
+				if len(parts) > 1 {
+					pkgName = "@" + parts[1]
+				}
+			} else {
+				pkgName = strings.Split(pkgName, "@")[0]
+			}
+			
+			if v, ok := rootVersions[pkgName]; ok {
+				pterm.Println()
+				utils.Premium("Success", fmt.Sprintf("%s@%s installed successfully", pkgName, v))
+			}
 		}
 
 		utils.PrintFooter(time.Since(startTime))

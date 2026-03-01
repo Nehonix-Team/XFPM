@@ -87,21 +87,26 @@ var initCmd = &cobra.Command{
 
 		utils.Success("Project setup complete. Initializing dependencies...")
 
-		// Check for bun
+		// Check for bun — install via our own global installer, not npm
 		if _, err := exec.LookPath("bun"); err != nil {
-			utils.Warn("Bun not found globally. Installing it now (requires npm)...")
-			bunCmd := exec.Command("npm", "install", "-g", "bun")
-			bunCmd.Stdout = os.Stdout
-			bunCmd.Stderr = os.Stderr
-			bunCmd.Run()
+			utils.Warn("Bun not found globally. Installing it via xfpm...")
+			bunInstall := exec.Command(os.Args[0], "install", "-g", "bun")
+			bunInstall.Stdout = os.Stdout
+			bunInstall.Stderr = os.Stderr
+			if err := bunInstall.Run(); err != nil {
+				utils.Warn("Could not install bun automatically: %v", err)
+			} else {
+				utils.Success("Bun installed globally.")
+			}
 		}
 
-		installCmd := exec.Command(os.Args[0], "install", "--force")
-		installCmd.Dir = targetDir
-		installCmd.Stdout = os.Stdout
-		installCmd.Stderr = os.Stderr
-		
-		if err := installCmd.Run(); err != nil {
+		// Run full install via our own installer
+		selfInstall := exec.Command(os.Args[0], "install", "--force")
+		selfInstall.Dir = targetDir
+		selfInstall.Stdout = os.Stdout
+		selfInstall.Stderr = os.Stderr
+
+		if err := selfInstall.Run(); err != nil {
 			utils.Error("Failed to auto-install dependencies: %v", err)
 		} else {
 			utils.Success("Dependencies installed successfully.")
@@ -110,7 +115,7 @@ var initCmd = &cobra.Command{
 		fmt.Println()
 		utils.Premium("Ready", "Neural bridge active")
 		utils.Log("→", fmt.Sprintf("cd %s", name))
-		utils.Log("→", "npm run dev")
+		utils.Log("→", "xfpm run dev")
 		fmt.Println()
 
 		return nil
