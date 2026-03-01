@@ -48,6 +48,7 @@ var (
 		Version: version,
 		PersistentPreRun: func(cmd *cobra.Command, args []string) {
 			utils.SetupUI()
+			utils.CheckForUpdates()
 		},
 		Run: func(cmd *cobra.Command, args []string) {
 			utils.PrintBanner()
