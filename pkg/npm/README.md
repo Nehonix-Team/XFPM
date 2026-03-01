@@ -37,4 +37,3 @@ By using the global installation with administrative rights, you ensure that XyP
 ---
 
 **Powered by Nehonix**
-village
