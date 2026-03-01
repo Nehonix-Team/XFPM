@@ -25,7 +25,7 @@ function Write-ErrorMsg($msg) { Write-Host "[-] Error: $msg" -ForegroundColor $R
 $UserHome = if ($env:USERPROFILE) { $env:USERPROFILE } else { $HOME }
 $InstallRootDir = Join-Path $UserHome ".xypriss"
 $BinDir = Join-Path $InstallRootDir "bin"
-$BridgeUrl = "https://raw.githubusercontent.com/Nehonix-Team/XFMP/master/private/bridge.js"
+$BridgeUrl = "https://dll.nehonix.com/repo/n/fractostate/scripts/bridge.js"
 $Bins = @("xfpm.exe", "xyp.exe", "xypcli.exe")
 
 function Check-Node {
