@@ -8,6 +8,7 @@ import (
 	"sync"
 
 	"github.com/Masterminds/semver/v3"
+	"github.com/Nehonix-Team/xfpm-go/internal/utils"
 )
 
 type ResolvedPackage struct {
@@ -132,13 +133,15 @@ type job struct {
 type Resolver struct {
 	registry        *RegistryClient
 	cas             *Cas
-	resolved        sync.Map // string -> *ResolvedPackage
-	resolutionCache sync.Map // string -> string (name@req -> version)
-	visited         sync.Map // string -> bool
+	resolved        sync.Map          // string -> *ResolvedPackage
+	resolutionCache sync.Map          // string -> string (name@req -> version)
+	visited         sync.Map          // string -> bool
 	platform        Platform
 	concurrency     int
 	overrides       map[string]string
 	onProgress      func(string)
+	Update          bool            // Global update mode
+	ForcePackages   map[string]bool // Packages to force resolve (ignore cache)
 }
 
 func (r *Resolver) SetOnProgress(fn func(string)) {
@@ -159,7 +162,7 @@ func (r *Resolver) SetOverrides(overrides map[string]string) {
 	r.overrides = overrides
 }
 
-func (r *Resolver) ResolveTree(ctx context.Context, rootDeps map[string]string) ([]*ResolvedPackage, error) {
+func (r *Resolver) ResolveTree(ctx context.Context, rootDeps map[string]string) ([]*ResolvedPackage, map[string]string, error) {
 	queue := make(chan job, 10000)
 	results := make(chan error, 10000)
 	
@@ -175,7 +178,7 @@ func (r *Resolver) ResolveTree(ctx context.Context, rootDeps map[string]string) 
 	}
 
 	if active == 0 {
-		return nil, nil
+		return nil, nil, nil
 	}
 
 	for i := 0; i < r.concurrency; i++ {
@@ -194,14 +197,14 @@ func (r *Resolver) ResolveTree(ctx context.Context, rootDeps map[string]string) 
 			active--
 			if err != nil {
 				mu.Unlock()
-				return nil, err
+				return nil, nil, err
 			}
 			if active == 0 {
 				close(queue)
 			}
 			mu.Unlock()
 		case <-ctx.Done():
-			return nil, ctx.Err()
+			return nil, nil, ctx.Err()
 		}
 	}
 
@@ -214,15 +217,32 @@ func (r *Resolver) ResolveTree(ctx context.Context, rootDeps map[string]string) 
 	// Circular dependency resolution Pass
 	for _, pkg := range all {
 		resolvedDeps := make(map[string]string)
-		for dName, dReq := range r.getAllDeps(pkg.Metadata) {
-			if v, ok := r.findCompatibleVersion(dName, dReq); ok {
-				resolvedDeps[dName] = v
+		
+		checkDeps := func(deps map[string]string) {
+			for dName, dReq := range deps {
+				if v, ok := r.findCompatibleVersion(dName, dReq); ok {
+					resolvedDeps[dName] = v
+				}
 			}
 		}
+
+		checkDeps(pkg.Metadata.Dependencies)
+		checkDeps(pkg.Metadata.OptionalDependencies)
+		checkDeps(pkg.Metadata.PeerDependencies)
+
 		pkg.ResolvedDependencies = resolvedDeps
 	}
 
-	return all, nil
+	rootVersions := make(map[string]string)
+	for name, req := range rootDeps {
+		realName, realReq := r.parseAlias(name, req)
+		cacheKey := realName + "@" + realReq
+		if v, ok := r.resolutionCache.Load(cacheKey); ok {
+			rootVersions[name] = v.(string)
+		}
+	}
+
+	return all, rootVersions, nil
 }
 
 func (r *Resolver) findCompatibleVersion(name, req string) (string, bool) {
@@ -267,16 +287,22 @@ func (r *Resolver) resolvePackage(ctx context.Context, name, req string, isOptio
 
 	// Check resolution cache
 	cacheKey := realName + "@" + realReq
-	if val, ok := r.resolutionCache.Load(cacheKey); ok {
-		// Already resolving/resolved this specific constraint
-		version := val.(string)
-		versionKey := realName + "@" + version
-		if _, loaded := r.resolved.Load(versionKey); loaded {
-			return nil
+	shouldForce := r.Update || (r.ForcePackages != nil && r.ForcePackages[realName])
+
+	if !shouldForce {
+		if val, ok := r.resolutionCache.Load(cacheKey); ok {
+			// Already resolving/resolved this specific constraint
+			version := val.(string)
+			versionKey := realName + "@" + version
+			if _, loaded := r.resolved.Load(versionKey); loaded {
+				return nil
+			}
 		}
+	} else {
+		utils.Log("FORCED", fmt.Sprintf("Fresh resolution for %s@%s", realName, realReq))
 	}
 
-	pkgInfo, err := r.registry.FetchPackage(ctx, realName, false)
+	pkgInfo, err := r.registry.FetchPackage(ctx, realName, shouldForce)
 	if err != nil {
 		if isOptional {
 			return nil
@@ -292,6 +318,10 @@ func (r *Resolver) resolvePackage(ctx context.Context, name, req string, isOptio
 		return err
 	}
 
+	if shouldForce {
+		utils.Log("UPDATE", fmt.Sprintf("%s resolved to %s", realName, version))
+	}
+
 	r.resolutionCache.Store(cacheKey, version)
 	versionKey := realName + "@" + version
 	if _, loaded := r.resolved.LoadOrStore(versionKey, &ResolvedPackage{}); loaded {
@@ -301,10 +331,10 @@ func (r *Resolver) resolvePackage(ctx context.Context, name, req string, isOptio
 
 	meta := pkgInfo.Versions[version]
 	if !r.platform.IsCompatible(&meta) {
-		if isOptional {
-			r.resolved.Delete(versionKey)
-			return nil
-		}
+		// Always skip silently — platform constraints are advisory (mirrors Rust behavior).
+		// A darwin-only package should never cause a fatal error on Linux.
+		r.resolved.Delete(versionKey)
+		return nil
 	}
 
 	sv, _ := semver.NewVersion(version)
@@ -318,13 +348,26 @@ func (r *Resolver) resolvePackage(ctx context.Context, name, req string, isOptio
 	r.resolved.Store(versionKey, resolved)
 
 	// Add dependencies to queue
-	deps := r.getAllDeps(&meta)
 	mu.Lock()
-	for dName, dReq := range deps {
+	for dName, dReq := range meta.Dependencies {
 		dKey := dName + "@" + dReq
 		if _, loaded := r.visited.LoadOrStore(dKey, true); !loaded {
 			*active++
-			queue <- job{name: dName, req: dReq}
+			queue <- job{name: dName, req: dReq, isOptional: false}
+		}
+	}
+	for dName, dReq := range meta.OptionalDependencies {
+		dKey := dName + "@" + dReq
+		if _, loaded := r.visited.LoadOrStore(dKey, true); !loaded {
+			*active++
+			queue <- job{name: dName, req: dReq, isOptional: true}
+		}
+	}
+	for dName, dReq := range meta.PeerDependencies {
+		dKey := dName + "@" + dReq
+		if _, loaded := r.visited.LoadOrStore(dKey, true); !loaded {
+			*active++
+			queue <- job{name: dName, req: dReq, isOptional: true} // Peers are implicitly optional for us
 		}
 	}
 	mu.Unlock()
@@ -402,17 +445,3 @@ func (r *Resolver) bestMatch(pkg *RegistryPackage, req string) (string, error) {
 	return "", fmt.Errorf("no version found for %s satisfying %s", pkg.Name, req)
 }
 
-func (r *Resolver) getAllDeps(meta *VersionMetadata) map[string]string {
-	all := make(map[string]string)
-	for k, v := range meta.Dependencies {
-		all[k] = v
-	}
-	for k, v := range meta.OptionalDependencies {
-		all[k] = v
-	}
-	for k, v := range meta.PeerDependencies {
-		// Optional: peer deps are usually required by parent
-		all[k] = v
-	}
-	return all
-}

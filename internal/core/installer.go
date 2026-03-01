@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"math/rand"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -18,16 +17,23 @@ import (
 )
 
 type Installer struct {
-	cas         *Cas
-	registry    *RegistryClient
-	projectRoot string
-	vstoreRoot  string
-	bar         *pterm.ProgressbarPrinter
-	Force       bool
+	cas             *Cas
+	registry        *RegistryClient
+	projectRoot     string
+	vstoreRoot      string
+	bar             *pterm.ProgressbarPrinter
+	Force           bool
+	ForcePackages   map[string]bool   // Specific packages to force extraction (ignore cache)
+	IsGlobal        bool
+	DirectDeps      map[string]string // name -> version req from root package.json
+	changedPackages sync.Map          // tracks packages actually downloaded this session
 }
 
 func NewInstaller(cas *Cas, registry *RegistryClient, projectRoot string) *Installer {
+	// virtual store always lives under projectRoot/node_modules/.xpm/virtual_store
+	// (matches Rust's get_virtual_store_root which joins .xpm_global/node_modules/.xpm/virtual_store)
 	vstoreRoot := filepath.Join(projectRoot, "node_modules", ".xpm", "virtual_store")
+	os.MkdirAll(vstoreRoot, 0755)
 	return &Installer{
 		cas:         cas,
 		registry:    registry,
@@ -72,10 +78,48 @@ func (i *Installer) Install(ctx context.Context, packages []*ResolvedPackage) er
 	}
 
 	i.bar.Stop()
-	utils.Success("Installation phase complete.")
+	changedCount := 0
+	i.changedPackages.Range(func(_, _ interface{}) bool {
+		changedCount++
+		return true
+	})
+
+	skippedCount := len(packages) - changedCount
+
+	if changedCount == 0 {
+		utils.Success("All %d dependencies are already up to date.", len(packages))
+	} else {
+		utils.Success("Installation complete: %d updated, %d already in cache.", changedCount, skippedCount)
+	}
 
 	// 5. Run lifecycle scripts
-	return i.runLifecycleScripts(ctx, packages)
+	if err := i.runLifecycleScripts(ctx, packages); err != nil {
+		return err
+	}
+
+	// 6. Global binary export (mirrors Rust Phase 6)
+	if i.IsGlobal {
+		binDir := filepath.Join(i.projectRoot, "bin")
+		os.MkdirAll(binDir, 0755)
+		vstoreName := ""
+		for _, pkg := range packages {
+			// Only export direct deps
+			if _, isDirect := i.DirectDeps[pkg.Name]; !isDirect {
+				continue
+			}
+			if pkg.Metadata.Bin == nil {
+				continue
+			}
+			vstoreName = strings.ReplaceAll(pkg.Name, "/", "+") + "@" + pkg.Version
+			pkgDir := filepath.Join(i.vstoreRoot, vstoreName, "node_modules", pkg.Name)
+			i.linkBinaries(pkgDir, binDir, pkg.Metadata.Bin)
+		}
+		utils.Info("Global binaries exported to: %s", binDir)
+		// Ensure PATH is configured
+		ensureGlobalPath(binDir)
+	}
+
+	return nil
 }
 
 func (i *Installer) batchEnsureExtracted(ctx context.Context, packages []*ResolvedPackage) error {
@@ -119,9 +163,7 @@ func (i *Installer) batchEnsureExtracted(ctx context.Context, packages []*Resolv
 			select {
 			case sem <- struct{}{}:
 				defer func() { <-sem }()
-				if rand.Float32() < 0.1 {
-					pterm.Printf("   %s %-30s %s\n", utils.GreenColor.Sprint("├─"), p.Name, utils.DimColor.Sprint("extracting..."))
-				}
+				
 				mu.Lock()
 				lastPkg = p.Name
 				mu.Unlock()
@@ -129,7 +171,9 @@ func (i *Installer) batchEnsureExtracted(ctx context.Context, packages []*Resolv
 				if err := i.ensureExtracted(ctx, p); err != nil {
 					errChan <- err
 				}
+				mu.Lock()
 				i.bar.Increment()
+				mu.Unlock()
 			case <-ctx.Done():
 				return
 			}
@@ -143,6 +187,11 @@ func (i *Installer) batchEnsureExtracted(ctx context.Context, packages []*Resolv
 	if len(errChan) > 0 {
 		return <-errChan
 	}
+	
+	i.bar.Current = i.bar.Total
+	i.bar.UpdateTitle("  " + pterm.BgBlue.Sprint(" SUCCESS ") + "  " + utils.GreenColor.Sprint("Installation phase complete.") + "  ")
+	fmt.Println()
+
 	return nil
 }
 
@@ -150,13 +199,24 @@ func (i *Installer) ensureExtracted(ctx context.Context, pkg *ResolvedPackage) e
 	pkgVStoreName := strings.ReplaceAll(pkg.Name, "/", "+") + "@" + pkg.Version
 	pkgDir := filepath.Join(i.vstoreRoot, pkgVStoreName, "node_modules", pkg.Name)
 
-	if !i.Force {
+	// Logic to decide if we should force extraction:
+	// If project-wide force is on AND (no specific packages or this package is in force list)
+	shouldForce := i.Force && (len(i.ForcePackages) == 0 || i.ForcePackages[pkg.Name])
+
+	if !shouldForce {
 		if _, err := os.Stat(filepath.Join(pkgDir, "package.json")); err == nil {
 			return nil
 		}
 	} else {
-		os.RemoveAll(filepath.Dir(pkgDir)) // Remove entire vstore/pkg@version/node_modules
+		// Only remove if it was not already re-extracted in this session
+		// (multiple packages in a tree can point to the same name@version)
+		cacheKey := pkg.Name + "@" + pkg.Version
+		if _, exists := i.changedPackages.Load(cacheKey); !exists {
+			os.RemoveAll(filepath.Dir(pkgDir))
+		}
 	}
+
+	pterm.Printf("   %s %-30s %s\n", utils.GreenColor.Sprint("├─"), pkg.Name+"@"+pkg.Version, utils.DimColor.Sprint("extracting..."))
 
 	// Download and extract
 	stream, err := i.registry.DownloadTarballStream(ctx, pkg.Metadata.Dist.Tarball)
@@ -176,8 +236,14 @@ func (i *Installer) ensureExtracted(ctx context.Context, pkg *ResolvedPackage) e
 		return err
 	}
 
-	// Link files from CAS to virtual store
-	return i.LinkFilesToDir(pkgDir, fileMap)
+	if err := i.LinkFilesToDir(pkgDir, fileMap); err != nil {
+		return err
+	}
+
+	// Mark as changed — scripts will run for this package
+	cacheKey := pkg.Name + "@" + pkg.Version
+	i.changedPackages.Store(cacheKey, true)
+	return nil
 }
 
 func (i *Installer) LinkFilesToDir(destDir string, index map[string]string) error {
@@ -185,8 +251,8 @@ func (i *Installer) LinkFilesToDir(destDir string, index map[string]string) erro
 
 	for relPath, hash := range index {
 		normalized := relPath
-		if strings.HasPrefix(relPath, "package/") {
-			normalized = relPath[len("package/"):]
+		if idx := strings.Index(relPath, "/"); idx != -1 {
+			normalized = relPath[idx+1:]
 		}
 
 		destPath := filepath.Join(destDir, normalized)
@@ -283,7 +349,13 @@ func (i *Installer) linkToRoot(packages []*ResolvedPackage) error {
 	rootBinDir := filepath.Join(i.projectRoot, "node_modules", ".bin")
 	os.MkdirAll(rootBinDir, 0755)
 
-	for _, pkg := range packages {
+	// Build a set of direct dependency names for priority ordering
+	directNames := make(map[string]bool)
+	for name := range i.DirectDeps {
+		directNames[name] = true
+	}
+
+	linkPkg := func(pkg *ResolvedPackage) {
 		rootNM := filepath.Join(i.projectRoot, "node_modules", pkg.Name)
 		os.MkdirAll(filepath.Dir(rootNM), 0755)
 
@@ -291,13 +363,25 @@ func (i *Installer) linkToRoot(packages []*ResolvedPackage) error {
 		absTarget := filepath.Join(i.vstoreRoot, pkgVStoreName, "node_modules", pkg.Name)
 
 		os.Remove(rootNM)
-		if err := os.Symlink(absTarget, rootNM); err != nil {
-			// Handle error
-		}
+		os.Symlink(absTarget, rootNM)
 
-		// Also link binaries to project root .bin
 		if pkg.Metadata.Bin != nil {
 			i.linkBinaries(absTarget, rootBinDir, pkg.Metadata.Bin)
+		}
+	}
+
+	// Pass 1: Link transitive dependencies (lower priority)
+	for _, pkg := range packages {
+		if !directNames[pkg.Name] {
+			linkPkg(pkg)
+		}
+	}
+	// Pass 2: Link direct dependencies last (highest priority — they overwrite transitives)
+	for _, pkg := range packages {
+		if version, ok := i.DirectDeps[pkg.Name]; ok {
+			if pkg.Version == version {
+				linkPkg(pkg)
+			}
 		}
 	}
 	return nil
@@ -310,6 +394,12 @@ func (i *Installer) runLifecycleScripts(ctx context.Context, packages []*Resolve
 	lifecycleOrder := []string{"preinstall", "install", "postinstall"}
 
 	for _, pkg := range packages {
+		// Only run scripts for packages actually downloaded this session (mirrors Rust changed_packages)
+		cacheKey := pkg.Name + "@" + pkg.Version
+		if _, wasChanged := i.changedPackages.Load(cacheKey); !wasChanged {
+			continue
+		}
+
 		pkgVStoreName := strings.ReplaceAll(pkg.Name, "/", "+") + "@" + pkg.Version
 		pkgDir := filepath.Join(i.vstoreRoot, pkgVStoreName, "node_modules", pkg.Name)
 
@@ -351,4 +441,30 @@ func (i *Installer) copyFile(src, dst string) error {
 		return err
 	}
 	return nil
+}
+
+// ensureGlobalPath ensures the global bin dir is in PATH by appending to shell rc files.
+func ensureGlobalPath(binDir string) {
+	exportLine := fmt.Sprintf("\nexport PATH=\"%s:$PATH\"", binDir)
+	home, _ := os.UserHomeDir()
+	rcFiles := []string{
+		filepath.Join(home, ".zshrc"),
+		filepath.Join(home, ".bashrc"),
+		filepath.Join(home, ".profile"),
+	}
+	for _, rc := range rcFiles {
+		data, err := os.ReadFile(rc)
+		if err != nil {
+			continue
+		}
+		if strings.Contains(string(data), binDir) {
+			continue // already configured
+		}
+		f, err := os.OpenFile(rc, os.O_APPEND|os.O_WRONLY, 0644)
+		if err != nil {
+			continue
+		}
+		f.WriteString(exportLine)
+		f.Close()
+	}
 }
