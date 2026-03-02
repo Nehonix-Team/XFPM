@@ -284,7 +284,7 @@ func (i *Installer) LinkFilesToDir(destDir string, index map[string]string) erro
 		if err := os.Link(sourcePath, destPath); err != nil {
 			// If link fails (cross-device or already exists), fallback to copy
 			// Log the reason for fallback
-			utils.Log("DEBUG", fmt.Sprintf("Failed to link %s to %s: %v. Falling back to copy.", sourcePath, destPath, err))
+			// utils.Log("DEBUG", fmt.Sprintf("Failed to link %s to %s: %v. Falling back to copy.", sourcePath, destPath, err))
 			if err := i.copyFile(sourcePath, destPath); err != nil {
 				return err
 			}
