@@ -13,6 +13,7 @@ import (
 	"os"
 	"os/exec"
 	"runtime"
+	"syscall"
 	"time"
 
 	"github.com/pterm/pterm"
@@ -99,8 +100,32 @@ func PerformSelfUpdate() {
 		pterm.Println()
 	} else {
 		pterm.Println()
-		Success("XFPM updated successfully! Please restart your terminal.")
+		Success("XFPM updated successfully! Proceeding with task...")
 		pterm.Println()
-		os.Exit(0)
+		ContinueTask()
+	}
+}
+
+// ContinueTask attempts to re-execute the current command using the updated binary (Unix)
+// or simply returns to allow the current process to continue its task.
+func ContinueTask() {
+	if runtime.GOOS == "windows" {
+		// On Windows, hard to re-exec in-place safely without side effects
+		return
+	}
+
+	binary, err := exec.LookPath(os.Args[0])
+	if err != nil {
+		return 
+	}
+
+	// Ensure the new process doesn't check for updates again immediately
+	os.Setenv("XPM_NO_UPDATE", "1")
+
+	// Replace current process with new binary
+	err = syscall.Exec(binary, os.Args, os.Environ())
+	if err != nil {
+		// Fallback: if re-exec fails, just let the current process finish the task
+		return
 	}
 }
