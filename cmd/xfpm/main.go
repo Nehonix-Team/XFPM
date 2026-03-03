@@ -134,7 +134,7 @@ var installCmd = &cobra.Command{
 			resolver.ForcePackages = make(map[string]bool)
 			for _, p := range args {
 				name := p
-				req := "latest"
+				req := ""
 				
 				if strings.HasPrefix(p, "@") {
 					// Scoped package: @scope/pkg or @scope/pkg@version
@@ -151,15 +151,14 @@ var installCmd = &cobra.Command{
 						req = p[atIdx+1:]
 					}
 				}
+
+				if req == "" {
+					req = "latest"
+				}
 				
 				rootDeps[name] = req
 				directPkgs[name] = req
 				resolver.ForcePackages[name] = true
-				
-				// In update mode with specific packages, we resolve them fresh
-				if update {
-					resolver.Update = true
-				}
 			}
 		} else if update {
 			// Global update mode: fetch all fresh
@@ -230,13 +229,9 @@ var installCmd = &cobra.Command{
 		// Update package.json
 		if pkg != nil && len(directPkgs) > 0 {
 			for name := range directPkgs {
-				// Find actual version in resolved
 				version := "latest"
-				for _, r := range resolved {
-					if r.Name == name {
-						version = "^" + r.Version
-						break
-					}
+				if v, ok := rootVersions[name]; ok {
+					version = "^" + v
 				}
 
 				// If len(args) == 0, we don't move packages between sections.
