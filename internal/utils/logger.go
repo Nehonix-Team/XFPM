@@ -31,7 +31,7 @@ func Info(format string, a ...any) {
 		},
 		MessageStyle: InfoColor,
 	}
-	printer.Printf(format, a...)
+	printer.Println(fmt.Sprintf(format, a...))
 }
 
 func Success(format string, a ...any) {
@@ -42,7 +42,7 @@ func Success(format string, a ...any) {
 		},
 		MessageStyle: SuccessColor,
 	}
-	printer.Printf(format, a...)
+	printer.Println(fmt.Sprintf(format, a...))
 }
 
 func Warn(format string, a ...any) {
@@ -53,7 +53,7 @@ func Warn(format string, a ...any) {
 		},
 		MessageStyle: WarnColor,
 	}
-	printer.Printf(format, a...)
+	printer.Println(fmt.Sprintf(format, a...))
 }
 
 func Error(format string, a ...any) {
@@ -64,7 +64,7 @@ func Error(format string, a ...any) {
 		},
 		MessageStyle: ErrorColor,
 	}
-	printer.Printf(format, a...)
+	printer.Println(fmt.Sprintf(format, a...))
 }
 
 func Log(prefix, msg string) {

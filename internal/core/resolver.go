@@ -3,6 +3,7 @@ package core
 import (
 	"context"
 	"fmt"
+	"path/filepath"
 	"runtime"
 	"strings"
 	"sync"
@@ -17,6 +18,7 @@ type ResolvedPackage struct {
 	SemverVersion        *semver.Version
 	Metadata             *VersionMetadata
 	ResolvedDependencies map[string]string
+	LocalPath            string // If set, this package is installed from a local path
 }
 
 type Platform struct {
@@ -166,6 +168,12 @@ type Resolver struct {
 	onProgress      func(string)
 	Update          bool            // Global update mode
 	ForcePackages   map[string]bool // Packages to force resolve (ignore cache)
+	LocalPackages   map[string]string // Package name -> local absolute path
+}
+
+
+func (r *Resolver) SetLocalPackages(local map[string]string) {
+	r.LocalPackages = local
 }
 
 func (r *Resolver) SetOnProgress(fn func(string)) {
@@ -326,12 +334,37 @@ func (r *Resolver) resolvePackage(ctx context.Context, name, req string, isOptio
 		utils.Log("FORCED", fmt.Sprintf("Fresh resolution for %s@%s", realName, realReq))
 	}
 
-	pkgInfo, err := r.registry.FetchPackage(ctx, realName, shouldForce)
-	if err != nil {
-		if isOptional {
-			return nil
+	var pkgInfo *RegistryPackage
+	var err error
+
+	if path, ok := r.LocalPackages[realName]; ok {
+		// Local package: load from disk
+		pkgJson, lerr := LoadPackageJson(filepath.Join(path, "package.json"))
+		if lerr != nil {
+			return fmt.Errorf("loading local package.json for %s: %w", realName, lerr)
 		}
-		return err
+		pkgInfo = &RegistryPackage{
+			Name:     pkgJson.Name,
+			DistTags: map[string]string{"latest": pkgJson.Version},
+			Versions: map[string]VersionMetadata{
+				pkgJson.Version: {
+					Name:    pkgJson.Name,
+					Version: pkgJson.Version,
+					Dependencies: pkgJson.Dependencies,
+					OptionalDependencies: pkgJson.OptionalDependencies,
+					PeerDependencies: pkgJson.PeerDependencies,
+					// Bin and other fields will be handled by installer if needed
+				},
+			},
+		}
+	} else {
+		pkgInfo, err = r.registry.FetchPackage(ctx, realName, shouldForce)
+		if err != nil {
+			if isOptional {
+				return nil
+			}
+			return err
+		}
 	}
 
 	version, err := r.bestMatch(pkgInfo, realReq)

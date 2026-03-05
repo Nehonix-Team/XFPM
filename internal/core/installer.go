@@ -207,7 +207,73 @@ func (i *Installer) batchEnsureExtracted(ctx context.Context, packages []*Resolv
 	return nil
 }
 
+func (i *Installer) extractLocal(pkg *ResolvedPackage) error {
+	pkgVStoreName := strings.ReplaceAll(pkg.Name, "/", "+") + "@" + pkg.Version
+	pkgDir := filepath.Join(i.vstoreRoot, pkgVStoreName, "node_modules", pkg.Name)
+
+	// Surgically remove only the package content directory
+	os.RemoveAll(pkgDir)
+
+	pterm.Printf("   %s %-30s %s\n", utils.GreenColor.Sprint("├─"), pkg.Name+"@"+pkg.Version, utils.DimColor.Sprint("indexing local path..."))
+
+	fileMap := make(map[string]string)
+	
+	err := filepath.Walk(pkg.LocalPath, func(path string, info os.FileInfo, err error) error {
+		if err != nil {
+			return err
+		}
+		if info.IsDir() {
+			if info.Name() == "node_modules" || info.Name() == ".git" || info.Name() == ".xpm" {
+				return filepath.SkipDir
+			}
+			return nil
+		}
+
+		relPath, err := filepath.Rel(pkg.LocalPath, path)
+		if err != nil {
+			return err
+		}
+
+		file, err := os.Open(path)
+		if err != nil {
+			return err
+		}
+		defer file.Close()
+
+		isExecutable := (info.Mode() & 0111) != 0
+		hash, err := i.cas.StoreStream(file, isExecutable)
+		if err != nil {
+			return err
+		}
+
+		fileMap["package/"+relPath] = hash
+		return nil
+	})
+
+	if err != nil {
+		return err
+	}
+
+	// Store index in CAS
+	if err := i.cas.StoreIndex(pkg.Name, pkg.Version, fileMap); err != nil {
+		return err
+	}
+
+	if err := i.LinkFilesToDir(pkgDir, fileMap); err != nil {
+		return err
+	}
+
+	// Mark as changed
+	cacheKey := pkg.Name + "@" + pkg.Version
+	i.changedPackages.Store(cacheKey, true)
+	return nil
+}
+
 func (i *Installer) ensureExtracted(ctx context.Context, pkg *ResolvedPackage) error {
+	if pkg.LocalPath != "" {
+		return i.extractLocal(pkg)
+	}
+
 	pkgVStoreName := strings.ReplaceAll(pkg.Name, "/", "+") + "@" + pkg.Version
 	pkgDir := filepath.Join(i.vstoreRoot, pkgVStoreName, "node_modules", pkg.Name)
 

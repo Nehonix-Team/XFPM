@@ -74,6 +74,7 @@ func init() {
 	installCmd.Flags().BoolP("force", "f", false, "Force re-install even if already extracted")
 	installCmd.Flags().Bool("update", false, "Update mode: always fetch fresh metadata from registry")
 	installCmd.Flags().BoolP("global", "g", false, "Install packages globally")
+	installCmd.Flags().StringP("path", "P", "", "Install from a local path")
 }
 
 
@@ -84,6 +85,7 @@ var installCmd = &cobra.Command{
 	RunE: func(cmd *cobra.Command, args []string) error {
 		startTime := time.Now()
 		global, _ := cmd.Flags().GetBool("global")
+		localPath, _ := cmd.Flags().GetString("path")
 
 		var projectRoot string
 		var err error
@@ -118,6 +120,10 @@ var installCmd = &cobra.Command{
 
 		rootDeps := make(map[string]string)
 		directPkgs := make(map[string]string)
+		
+		// Map for local packages: name -> absolute path
+		localPackages := make(map[string]string)
+
 		pkgJsonPath := filepath.Join(projectRoot, "package.json")
 		var pkg *core.PackageJson
 
@@ -130,9 +136,45 @@ var installCmd = &cobra.Command{
 			}
 		}
 
+		// Handle --path flag
+		if localPath != "" {
+			absPath, err := filepath.Abs(localPath)
+			if err == nil {
+				localPkg, err := core.LoadPackageJson(filepath.Join(absPath, "package.json"))
+				if err == nil {
+					localPackages[localPkg.Name] = absPath
+					rootDeps[localPkg.Name] = localPkg.Version
+					directPkgs[localPkg.Name] = localPkg.Version
+					if resolver.ForcePackages == nil {
+						resolver.ForcePackages = make(map[string]bool)
+					}
+					resolver.ForcePackages[localPkg.Name] = true
+				}
+			}
+		}
+
 		if len(args) > 0 {
-			resolver.ForcePackages = make(map[string]bool)
+			if resolver.ForcePackages == nil {
+				resolver.ForcePackages = make(map[string]bool)
+			}
 			for _, p := range args {
+				// Check if p is a local path
+				if strings.HasPrefix(p, "./") || strings.HasPrefix(p, "../") || filepath.IsAbs(p) {
+					absPath, err := filepath.Abs(p)
+					if err == nil {
+						if fi, err := os.Stat(absPath); err == nil && fi.IsDir() {
+							localPkg, err := core.LoadPackageJson(filepath.Join(absPath, "package.json"))
+							if err == nil {
+								localPackages[localPkg.Name] = absPath
+								rootDeps[localPkg.Name] = localPkg.Version
+								directPkgs[localPkg.Name] = localPkg.Version
+								resolver.ForcePackages[localPkg.Name] = true
+								continue
+							}
+						}
+					}
+				}
+
 				name := p
 				req := ""
 				
@@ -176,6 +218,8 @@ var installCmd = &cobra.Command{
 			return fmt.Errorf("no package.json found and no packages specified")
 		}
 
+		resolver.SetLocalPackages(localPackages)
+
 		s, _ := pterm.DefaultSpinner.
 			WithRemoveWhenDone(true).
 			WithText("Analysing project tree...").
@@ -214,6 +258,12 @@ var installCmd = &cobra.Command{
 
 		if err != nil {
 			return err
+		}
+
+		for _, p := range resolved {
+			if path, ok := localPackages[p.Name]; ok {
+				p.LocalPath = path
+			}
 		}
 
 		utils.Success("Dependency tree resolved successfully (%d total).", len(resolved))
@@ -298,7 +348,7 @@ var installCmd = &cobra.Command{
 
 func main() {
 	if err := rootCmd.Execute(); err != nil {
-		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+		utils.Error("%v", err)
 		os.Exit(1)
 	}
 }
