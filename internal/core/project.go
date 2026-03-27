@@ -11,6 +11,25 @@ type PackageJson struct {
 	Version              string            `json:"version"`
 	Description          string            `json:"description,omitempty"`
 	Author               any               `json:"author,omitempty"`
+	License              string            `json:"license,omitempty"`
+	Private              *bool             `json:"private,omitempty"`
+	Type                 string            `json:"type,omitempty"`
+	Main                 string            `json:"main,omitempty"`
+	Module               string            `json:"module,omitempty"`
+	Browser              string            `json:"browser,omitempty"`
+	Types                string            `json:"types,omitempty"`
+	Typings              string            `json:"typings,omitempty"`
+	Exports              any               `json:"exports,omitempty"`
+	Files                []string          `json:"files,omitempty"`
+	Bin                  any               `json:"bin,omitempty"`
+	Engines              map[string]string `json:"engines,omitempty"`
+	Repository           any               `json:"repository,omitempty"`
+	Keywords             []string          `json:"keywords,omitempty"`
+	PackageManager       string            `json:"packageManager,omitempty"`
+	Workspaces           []string          `json:"workspaces,omitempty"`
+	Resolutions          map[string]string `json:"resolutions,omitempty"`
+	Overrides            map[string]string `json:"overrides,omitempty"`
+	PublishConfig        any               `json:"publishConfig,omitempty"`
 	Scripts              map[string]string `json:"scripts,omitempty"`
 	Dependencies         map[string]string `json:"dependencies,omitempty"`
 	DevDependencies      map[string]string `json:"devDependencies,omitempty"`
