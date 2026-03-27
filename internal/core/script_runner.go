@@ -85,16 +85,20 @@ func (r *ScriptRunner) executeSandboxed(ctx context.Context, task ScriptTask) er
 	cmd.Dir = task.PackageDir
 	cmd.Env = r.buildEnv(pathVal)
 
-	stdout, _ := cmd.StdoutPipe()
-	stderr, _ := cmd.StderrPipe()
+	pr, pw, _ := os.Pipe()
+	cmd.Stdout = pw
+	cmd.Stderr = pw
 
 	if err := cmd.Start(); err != nil {
+		pw.Close()
+		pr.Close()
 		return fmt.Errorf("failed to spawn script process: %w", err)
 	}
 
+	pw.Close()
+
 	// Stream output
-	go r.streamLines(stdout, "│")
-	go r.streamLines(stderr, "│")
+	go r.streamLines(pr, "│")
 
 	err := cmd.Wait()
 

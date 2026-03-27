@@ -143,10 +143,11 @@ func (i *Installer) batchEnsureExtracted(ctx context.Context, packages []*Resolv
 	var mu sync.Mutex
 	lastPkg := ""
 
-	// Dynamic Matrix Loop
+	// Dynamic UI Update
+	startTime := time.Now()
 	stopMatrix := make(chan struct{})
 	go func() {
-		ticker := time.NewTicker(500 * time.Millisecond)
+		ticker := time.NewTicker(200 * time.Millisecond)
 		defer ticker.Stop()
 		for {
 			select {
@@ -155,10 +156,10 @@ func (i *Installer) batchEnsureExtracted(ctx context.Context, packages []*Resolv
 				pkg := lastPkg
 				mu.Unlock()
 				if pkg != "" {
-					m := utils.RandomMatrixString(5)
+					elapsed := time.Since(startTime).Truncate(time.Millisecond)
 					i.bar.UpdateTitle(fmt.Sprintf("  %s %s %s  ", 
 						pterm.FgCyan.Sprint("[EXTRACTING]"), 
-						utils.MatrixColor.Sprint(m), 
+						utils.AccentColor.Sprint(elapsed.String()), 
 						utils.DimColor.Sprint(pkg),
 					))
 				}
