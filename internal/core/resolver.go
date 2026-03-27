@@ -369,10 +369,20 @@ func (r *Resolver) resolvePackage(ctx context.Context, name, req string, isOptio
 
 	version, err := r.bestMatch(pkgInfo, realReq)
 	if err != nil {
-		if isOptional {
-			return nil
+		if !shouldForce {
+			// Cache miss for this version, maybe newly published? Fetch fresh!
+			pkgInfo, err = r.registry.FetchPackage(ctx, realName, true)
+			if err == nil {
+				version, err = r.bestMatch(pkgInfo, realReq)
+			}
 		}
-		return err
+		
+		if err != nil {
+			if isOptional {
+				return nil
+			}
+			return err
+		}
 	}
 
 	if shouldForce {
@@ -389,7 +399,6 @@ func (r *Resolver) resolvePackage(ctx context.Context, name, req string, isOptio
 	meta := pkgInfo.Versions[version]
 	if !r.platform.IsCompatible(&meta) {
 		// Silently skipped
-		// utils.Log("SKIP", fmt.Sprintf("%s@%s is not compatible with current platform (%s/%s)", realName, version, r.platform.OS, r.platform.Arch))
 		r.resolved.Delete(versionKey)
 		return nil
 	}

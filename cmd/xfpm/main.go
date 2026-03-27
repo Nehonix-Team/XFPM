@@ -234,6 +234,7 @@ var installCmd = &cobra.Command{
 		})
 
 		stopSpinner := make(chan struct{})
+		startTimeMatrix := time.Now()
 		go func() {
 			ticker := time.NewTicker(80 * time.Millisecond)
 			defer ticker.Stop()
@@ -244,7 +245,8 @@ var installCmd = &cobra.Command{
 					name := lastResolving
 					mu.Unlock()
 					if name != "" {
-						s.UpdateText("  " + utils.DimColor.Sprint("Searching: ") + utils.AccentColor.Sprint(name) + " " + utils.MatrixColor.Sprint(utils.RandomMatrixString(5)))
+						elapsed := time.Since(startTimeMatrix).Truncate(time.Millisecond)
+						s.UpdateText("  " + utils.DimColor.Sprint("Searching: ") + utils.AccentColor.Sprint(name) + "  " + utils.DimColor.Sprint(elapsed.String()))
 					}
 				case <-stopSpinner:
 					return
@@ -277,7 +279,7 @@ var installCmd = &cobra.Command{
 			return err
 		}
 		// Update package.json
-		if pkg != nil && len(directPkgs) > 0 {
+		if pkg != nil && len(directPkgs) > 0 && (len(args) > 0 || update) {
 			for name := range directPkgs {
 				version := "latest"
 				if v, ok := rootVersions[name]; ok {
