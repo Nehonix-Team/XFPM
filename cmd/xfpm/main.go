@@ -134,6 +134,13 @@ var installCmd = &cobra.Command{
 					rootDeps[name] = req
 				}
 			}
+		} else if len(args) > 0 {
+			// Initialize a default package.json if it doesn't exist and we are adding packages
+			pkg = &core.PackageJson{
+				Name:         filepath.Base(projectRoot),
+				Version:      "1.0.0",
+				Dependencies: make(map[string]string),
+			}
 		}
 
 		// Handle --path flag
