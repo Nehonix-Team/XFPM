@@ -306,26 +306,44 @@ var installCmd = &cobra.Command{
 						pkg.PeerDependencies[name] = version
 					}
 				} else {
-					// Specific package provided via command line: Remove from everywhere first
+					var targetSection string
+
+					if isDev {
+						targetSection = "dev"
+					} else if isOptional {
+						targetSection = "optional"
+					} else {
+						// determine original section
+						if _, ok := pkg.Dependencies[name]; ok {
+							targetSection = "dep"
+						} else if _, ok := pkg.DevDependencies[name]; ok {
+							targetSection = "dev"
+						} else if _, ok := pkg.OptionalDependencies[name]; ok {
+							targetSection = "optional"
+						} else if _, ok := pkg.PeerDependencies[name]; ok {
+							targetSection = "peer"
+						} else {
+							targetSection = "dep" // default
+						}
+					}
+
 					delete(pkg.Dependencies, name)
 					delete(pkg.DevDependencies, name)
 					delete(pkg.OptionalDependencies, name)
 					delete(pkg.PeerDependencies, name)
 
-					if isDev {
-						if pkg.DevDependencies == nil {
-							pkg.DevDependencies = make(map[string]string)
-						}
+					switch targetSection {
+					case "dev":
+						if pkg.DevDependencies == nil { pkg.DevDependencies = make(map[string]string) }
 						pkg.DevDependencies[name] = version
-					} else if isOptional {
-						if pkg.OptionalDependencies == nil {
-							pkg.OptionalDependencies = make(map[string]string)
-						}
+					case "optional":
+						if pkg.OptionalDependencies == nil { pkg.OptionalDependencies = make(map[string]string) }
 						pkg.OptionalDependencies[name] = version
-					} else {
-						if pkg.Dependencies == nil {
-							pkg.Dependencies = make(map[string]string)
-						}
+					case "peer":
+						if pkg.PeerDependencies == nil { pkg.PeerDependencies = make(map[string]string) }
+						pkg.PeerDependencies[name] = version
+					default:
+						if pkg.Dependencies == nil { pkg.Dependencies = make(map[string]string) }
 						pkg.Dependencies[name] = version
 					}
 				}
