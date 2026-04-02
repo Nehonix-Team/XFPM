@@ -2,7 +2,7 @@
   "name": "XFPM (XyPriss Package Manager)",
   "description": "The ultra-fast package manager for the XyPriss ecosystem.",
   "warning": "CRITICAL: Public modifications to this file are strictly forbidden. Internal Nehonix metadata ONLY.",
-  "latest": "G0.1.60",
+  "latest": "G0.1.61",
   "metadata": {
     "releaseDate": "2026-03-03",
     "channel": "stable"
