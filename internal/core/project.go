@@ -60,6 +60,9 @@ func (p *PackageJson) AllDependencies() map[string]string {
 	for k, v := range p.OptionalDependencies {
 		all[k] = v
 	}
+	for k, v := range p.PeerDependencies {
+		all[k] = v
+	}
 	return all
 }
 

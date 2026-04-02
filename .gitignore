@@ -82,3 +82,6 @@ xyp/private/*
 xyp/private
 tools/xyp/private
 .xpm
+release_note.md
+release-note.md
+releasenote.md
