@@ -169,6 +169,8 @@ type Resolver struct {
 	Update          bool            // Global update mode
 	ForcePackages   map[string]bool // Packages to force resolve (ignore cache)
 	LocalPackages   map[string]string // Package name -> local absolute path
+	Redirects       map[string]string // Package name -> Redirect Target
+	redirectsMu     sync.Mutex
 }
 
 
@@ -187,6 +189,7 @@ func NewResolver(registry *RegistryClient, cas *Cas) *Resolver {
 		platform:    CurrentPlatform(),
 		concurrency: 128,
 		overrides:   make(map[string]string),
+		Redirects:   make(map[string]string),
 	}
 }
 
@@ -268,9 +271,30 @@ func (r *Resolver) ResolveTree(ctx context.Context, rootDeps map[string]string) 
 	rootVersions := make(map[string]string)
 	for name, req := range rootDeps {
 		realName, realReq := r.parseAlias(name, req)
+		
+		r.redirectsMu.Lock()
+		for {
+			if dest, ok := r.Redirects[realName]; ok {
+				realName = dest
+				realReq = "latest"
+			} else {
+				break
+			}
+		}
+		r.redirectsMu.Unlock()
+
 		cacheKey := realName + "@" + realReq
 		if v, ok := r.resolutionCache.Load(cacheKey); ok {
 			rootVersions[name] = v.(string)
+		} else {
+			r.resolved.Range(func(key, val interface{}) bool {
+				pkg := val.(*ResolvedPackage)
+				if pkg.Name == realName {
+					rootVersions[name] = pkg.Version
+					return false
+				}
+				return true
+			})
 		}
 	}
 
@@ -353,6 +377,7 @@ func (r *Resolver) resolvePackage(ctx context.Context, name, req string, isOptio
 					Dependencies: pkgJson.Dependencies,
 					OptionalDependencies: pkgJson.OptionalDependencies,
 					PeerDependencies: pkgJson.PeerDependencies,
+					Xfpm: pkgJson.Xfpm,
 					// Bin and other fields will be handled by installer if needed
 				},
 			},
@@ -397,6 +422,32 @@ func (r *Resolver) resolvePackage(ctx context.Context, name, req string, isOptio
 	}
 
 	meta := pkgInfo.Versions[version]
+
+	if msg, ok := meta.Xfpm["message"]; ok {
+		utils.Warn("Package '%s': %s", realName, msg)
+	}
+
+	if redirect, ok := meta.Xfpm["redirect"]; ok {
+		utils.Warn("Package '%s' redirects to '%s'. Resolving new target...", realName, redirect)
+		
+		r.redirectsMu.Lock()
+		r.Redirects[realName] = redirect
+		r.redirectsMu.Unlock()
+
+		mu.Lock()
+		*active++
+		queue <- job{name: redirect, req: "latest", isOptional: isOptional}
+		
+		if r.overrides == nil {
+			r.overrides = make(map[string]string)
+		}
+		r.overrides[realName] = "npm:" + redirect
+		mu.Unlock()
+
+		r.resolved.Delete(versionKey)
+		return nil
+	}
+
 	if !r.platform.IsCompatible(&meta) {
 		// Silently skipped
 		r.resolved.Delete(versionKey)

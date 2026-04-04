@@ -35,6 +35,7 @@ type PackageJson struct {
 	DevDependencies      map[string]string `json:"devDependencies,omitempty"`
 	OptionalDependencies map[string]string `json:"optionalDependencies,omitempty"`
 	PeerDependencies     map[string]string `json:"peerDependencies,omitempty"`
+	Xfpm                 map[string]string `json:"xfpm,omitempty"`
 }
 
 func LoadPackageJson(path string) (*PackageJson, error) {
