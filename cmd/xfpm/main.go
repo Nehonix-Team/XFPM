@@ -275,6 +275,17 @@ var installCmd = &cobra.Command{
 			}
 		}
 
+		for src, dest := range resolver.Redirects {
+			if rv, ok := rootVersions[src]; ok {
+				rootVersions[dest] = rv
+				delete(rootVersions, src)
+			}
+			if dv, ok := directPkgs[src]; ok {
+				directPkgs[dest] = dv
+				delete(directPkgs, src)
+			}
+		}
+
 		utils.Success("Dependency tree resolved successfully (%d total).", len(resolved))
 
 		installer := core.NewInstaller(cas, registry, projectRoot)

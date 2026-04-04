@@ -49,6 +49,7 @@ type VersionMetadata struct {
 	OS                   StringOrStringArray `json:"os,omitempty"`
 	CPU                  StringOrStringArray `json:"cpu,omitempty"`
 	Libc                 StringOrStringArray `json:"libc,omitempty"`
+	Xfpm                 map[string]string   `json:"xfpm,omitempty"`
 }
 
 type Dist struct {
