@@ -1,5 +1,5 @@
 package utils
 
 var (
-	BinVersion = "G0.1.62"
+	BinVersion = "G0.1.63"
 )

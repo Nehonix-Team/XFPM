@@ -154,6 +154,7 @@ type job struct {
 	name       string
 	req        string
 	isOptional bool
+	isRoot     bool
 }
 
 type Resolver struct {
@@ -207,7 +208,7 @@ func (r *Resolver) ResolveTree(ctx context.Context, rootDeps map[string]string) 
 	for name, req := range rootDeps {
 		key := name + "@" + req
 		if _, loaded := r.visited.LoadOrStore(key, true); !loaded {
-			queue <- job{name: name, req: req}
+			queue <- job{name: name, req: req, isRoot: true}
 			active++
 		}
 	}
@@ -219,7 +220,7 @@ func (r *Resolver) ResolveTree(ctx context.Context, rootDeps map[string]string) 
 	for i := 0; i < r.concurrency; i++ {
 		go func() {
 			for j := range queue {
-				err := r.resolvePackage(ctx, j.name, j.req, j.isOptional, queue, &active, &mu)
+				err := r.resolvePackage(ctx, j.name, j.req, j.isOptional, j.isRoot, queue, &active, &mu)
 				results <- err
 			}
 		}()
@@ -335,7 +336,7 @@ func (r *Resolver) findCompatibleVersion(name, req string) (string, bool) {
 	return "", false
 }
 
-func (r *Resolver) resolvePackage(ctx context.Context, name, req string, isOptional bool, queue chan job, active *int, mu *sync.Mutex) error {
+func (r *Resolver) resolvePackage(ctx context.Context, name, req string, isOptional bool, isRoot bool, queue chan job, active *int, mu *sync.Mutex) error {
 	realName, realReq := r.parseAlias(name, req)
 	if r.onProgress != nil {
 		r.onProgress(realName)
@@ -423,29 +424,44 @@ func (r *Resolver) resolvePackage(ctx context.Context, name, req string, isOptio
 
 	meta := pkgInfo.Versions[version]
 
-	if msg, ok := meta.Xfpm["message"]; ok {
-		utils.Warn("Package '%s': %s", realName, msg)
+	// NPM abbreviated packument strips custom properties like "xfpm"
+	// So if this is a direct dependency (isRoot), we fetch the full version-specific packument (small size: 1-2KB).
+	if isRoot {
+		if _, isLocal := r.LocalPackages[realName]; !isLocal {
+			if fullMeta, err := r.registry.FetchVersionMetadata(ctx, realName, version); err == nil {
+				meta.Xfpm = fullMeta.Xfpm
+			}
+		}
 	}
 
-	if redirect, ok := meta.Xfpm["redirect"]; ok {
-		utils.Warn("Package '%s' redirects to '%s'. Resolving new target...", realName, redirect)
+	if meta.Xfpm != nil && meta.Xfpm.Redirect != nil {
+		redirect := meta.Xfpm.Redirect.Target
+		msg := meta.Xfpm.Redirect.Message
 		
-		r.redirectsMu.Lock()
-		r.Redirects[realName] = redirect
-		r.redirectsMu.Unlock()
-
-		mu.Lock()
-		*active++
-		queue <- job{name: redirect, req: "latest", isOptional: isOptional}
-		
-		if r.overrides == nil {
-			r.overrides = make(map[string]string)
+		if msg != "" {
+			utils.Warn("Package '%s': %s", realName, msg)
 		}
-		r.overrides[realName] = "npm:" + redirect
-		mu.Unlock()
 
-		r.resolved.Delete(versionKey)
-		return nil
+		if redirect != "" {
+			utils.Warn("Package '%s' redirects to '%s'. Resolving new target...", realName, redirect)
+			
+			r.redirectsMu.Lock()
+			r.Redirects[realName] = redirect
+			r.redirectsMu.Unlock()
+
+			mu.Lock()
+			*active++
+			queue <- job{name: redirect, req: "latest", isOptional: isOptional}
+			
+			if r.overrides == nil {
+				r.overrides = make(map[string]string)
+			}
+			r.overrides[realName] = "npm:" + redirect
+			mu.Unlock()
+
+			r.resolved.Delete(versionKey)
+			return nil
+		}
 	}
 
 	if !r.platform.IsCompatible(&meta) {

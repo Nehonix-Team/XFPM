@@ -35,7 +35,16 @@ type PackageJson struct {
 	DevDependencies      map[string]string `json:"devDependencies,omitempty"`
 	OptionalDependencies map[string]string `json:"optionalDependencies,omitempty"`
 	PeerDependencies     map[string]string `json:"peerDependencies,omitempty"`
-	Xfpm                 map[string]string `json:"xfpm,omitempty"`
+	Xfpm                 *XfpmConfig       `json:"xfpm,omitempty"`
+}
+
+type XfpmConfig struct {
+	Redirect *XfpmRedirect `json:"redirect,omitempty"`
+}
+
+type XfpmRedirect struct {
+	Target  string `json:"target"`
+	Message string `json:"message,omitempty"`
 }
 
 func LoadPackageJson(path string) (*PackageJson, error) {
