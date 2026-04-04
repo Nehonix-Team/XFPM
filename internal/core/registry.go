@@ -49,7 +49,7 @@ type VersionMetadata struct {
 	OS                   StringOrStringArray `json:"os,omitempty"`
 	CPU                  StringOrStringArray `json:"cpu,omitempty"`
 	Libc                 StringOrStringArray `json:"libc,omitempty"`
-	Xfpm                 map[string]string   `json:"xfpm,omitempty"`
+	Xfpm                 *XfpmConfig         `json:"xfpm,omitempty"`
 }
 
 type Dist struct {
@@ -144,6 +144,22 @@ func (c *RegistryClient) FetchPackage(ctx context.Context, name string, ignoreCa
 
 	pkg, err = c.fetchPackageNetwork(ctx, name)
 	return pkg, err
+}
+
+func (c *RegistryClient) FetchVersionMetadata(ctx context.Context, name, version string) (*VersionMetadata, error) {
+	url := fmt.Sprintf("%s/%s/%s", c.baseURL, name, version)
+	
+	bytes, err := c.requestWithRetry(ctx, url, true, false) // Not abbreviated!
+	if err != nil {
+		return nil, err
+	}
+
+	var meta VersionMetadata
+	if err := json.Unmarshal(bytes, &meta); err != nil {
+		return nil, fmt.Errorf("parsing version metadata for %s@%s: %w", name, version, err)
+	}
+
+	return &meta, nil
 }
 
 func (c *RegistryClient) fetchPackageNetwork(ctx context.Context, name string) (*RegistryPackage, error) {

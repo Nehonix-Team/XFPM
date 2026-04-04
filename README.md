@@ -111,8 +111,10 @@ Library developers can natively manage package deprecations and redirect seamles
   "name": "old-lib",
   "version": "1.0.0",
   "xfpm": {
-    "redirect": "new-lib",
-    "message": "old-lib is deprecated. Please refer to our new architecture."
+    "redirect": {
+      "target": "new-lib",
+      "message": "old-lib is deprecated. Please refer to our new architecture."
+    }
   }
 }
 ```
