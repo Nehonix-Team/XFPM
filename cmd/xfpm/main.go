@@ -277,6 +277,7 @@ var installCmd = &cobra.Command{
 			}
 		}
 
+		hasRedirects := len(resolver.Redirects) > 0
 		for src, dest := range resolver.Redirects {
 			if rv, ok := rootVersions[src]; ok {
 				rootVersions[dest] = rv
@@ -287,10 +288,23 @@ var installCmd = &cobra.Command{
 				delete(directPkgs, src)
 			}
 			if pkg != nil {
-				delete(pkg.Dependencies, src)
-				delete(pkg.DevDependencies, src)
-				delete(pkg.OptionalDependencies, src)
-				delete(pkg.PeerDependencies, src)
+				if _, ok := pkg.Dependencies[src]; ok {
+					delete(pkg.Dependencies, src)
+					if pkg.Dependencies == nil { pkg.Dependencies = make(map[string]string) }
+					pkg.Dependencies[dest] = "latest"
+				} else if _, ok := pkg.DevDependencies[src]; ok {
+					delete(pkg.DevDependencies, src)
+					if pkg.DevDependencies == nil { pkg.DevDependencies = make(map[string]string) }
+					pkg.DevDependencies[dest] = "latest"
+				} else if _, ok := pkg.OptionalDependencies[src]; ok {
+					delete(pkg.OptionalDependencies, src)
+					if pkg.OptionalDependencies == nil { pkg.OptionalDependencies = make(map[string]string) }
+					pkg.OptionalDependencies[dest] = "latest"
+				} else if _, ok := pkg.PeerDependencies[src]; ok {
+					delete(pkg.PeerDependencies, src)
+					if pkg.PeerDependencies == nil { pkg.PeerDependencies = make(map[string]string) }
+					pkg.PeerDependencies[dest] = "latest"
+				}
 			}
 		}
 
@@ -305,7 +319,7 @@ var installCmd = &cobra.Command{
 			return err
 		}
 		// Update package.json
-		if pkg != nil && len(directPkgs) > 0 && (len(args) > 0 || update) {
+		if pkg != nil && len(directPkgs) > 0 && (len(args) > 0 || update || hasRedirects) {
 			for name := range directPkgs {
 				version := "latest"
 				if v, ok := rootVersions[name]; ok {
