@@ -75,6 +75,8 @@ func init() {
 	installCmd.Flags().Bool("update", false, "Update mode: always fetch fresh metadata from registry")
 	installCmd.Flags().BoolP("global", "g", false, "Install packages globally")
 	installCmd.Flags().StringP("path", "P", "", "Install from a local path")
+
+	updateCmd.Flags().BoolP("global", "g", false, "Update packages globally")
 }
 
 
@@ -283,6 +285,12 @@ var installCmd = &cobra.Command{
 			if dv, ok := directPkgs[src]; ok {
 				directPkgs[dest] = dv
 				delete(directPkgs, src)
+			}
+			if pkg != nil {
+				delete(pkg.Dependencies, src)
+				delete(pkg.DevDependencies, src)
+				delete(pkg.OptionalDependencies, src)
+				delete(pkg.PeerDependencies, src)
 			}
 		}
 
