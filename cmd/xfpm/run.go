@@ -55,8 +55,17 @@ var runCmd = &cobra.Command{
 	},
 }
 
+var devCmd = &cobra.Command{
+	Use:   "dev",
+	Short: "Alias for 'xfpm run dev'",
+	RunE: func(cmd *cobra.Command, args []string) error {
+		return runCmd.RunE(cmd, []string{"dev"})
+	},
+}
+
 func init() {
 	rootCmd.AddCommand(runCmd)
+	rootCmd.AddCommand(devCmd)
 }
 
 func executeShell(command, dir string) error {

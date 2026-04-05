@@ -31,6 +31,9 @@ var updateCmd = &cobra.Command{
 		// Set resolver into Update mode: always fetch fresh metadata from registry,
 		// but still honour the semver constraint already in package.json.
 		installCmd.Flags().Lookup("update").Value.Set("true")
+		if global, _ := cmd.Flags().GetBool("global"); global {
+			installCmd.Flags().Lookup("global").Value.Set("true")
+		}
 		return installCmd.RunE(installCmd, args)
 	},
 }
