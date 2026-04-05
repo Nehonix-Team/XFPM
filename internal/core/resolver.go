@@ -356,7 +356,7 @@ func (r *Resolver) resolvePackage(ctx context.Context, name, req string, isOptio
 			}
 		}
 	} else {
-		utils.Log("FORCED", fmt.Sprintf("Fresh resolution for %s@%s", realName, realReq))
+		// utils.Log("FORCED", fmt.Sprintf("Fresh resolution for %s@%s", realName, realReq))
 	}
 
 	var pkgInfo *RegistryPackage
@@ -412,7 +412,7 @@ func (r *Resolver) resolvePackage(ctx context.Context, name, req string, isOptio
 	}
 
 	if shouldForce {
-		utils.Log("UPDATE", fmt.Sprintf("%s resolved to %s", realName, version))
+		// utils.Log("UPDATE", fmt.Sprintf("%s resolved to %s", realName, version))
 	}
 
 	r.resolutionCache.Store(cacheKey, version)
