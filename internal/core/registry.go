@@ -10,8 +10,11 @@ import (
 	"path/filepath"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 )
+
+var GlobalBytesDownloaded atomic.Uint64
 
 type RegistryPackage struct {
 	Name     string                     `json:"name"`
@@ -287,7 +290,8 @@ func (c *RegistryClient) DownloadTarballStream(ctx context.Context, url string) 
 		if err == nil {
 			if resp.StatusCode == http.StatusOK {
 				c.config.RecordRequest(elapsed, false)
-				return &semaphoreReleasingReader{ReadCloser: resp.Body, sem: c.dataSemaphore}, nil
+				wrapped := &trackingReadCloser{ReadCloser: resp.Body}
+				return &semaphoreReleasingReader{ReadCloser: wrapped, sem: c.dataSemaphore}, nil
 			}
 			resp.Body.Close()
 			lastErr = fmt.Errorf("HTTP %d for URL: %s", resp.StatusCode, url)
@@ -317,4 +321,16 @@ func (r *semaphoreReleasingReader) Close() error {
 		<-r.sem
 	})
 	return err
+}
+
+type trackingReadCloser struct {
+	io.ReadCloser
+}
+
+func (t *trackingReadCloser) Read(p []byte) (n int, err error) {
+	n, err = t.ReadCloser.Read(p)
+	if n > 0 {
+		GlobalBytesDownloaded.Add(uint64(n))
+	}
+	return
 }

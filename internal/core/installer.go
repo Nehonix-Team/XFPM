@@ -149,17 +149,30 @@ func (i *Installer) batchEnsureExtracted(ctx context.Context, packages []*Resolv
 	go func() {
 		ticker := time.NewTicker(200 * time.Millisecond)
 		defer ticker.Stop()
+		var lastBytes uint64 = GlobalBytesDownloaded.Load()
+		
 		for {
 			select {
 			case <-ticker.C:
+				currentBytes := GlobalBytesDownloaded.Load()
+				diff := currentBytes - lastBytes
+				lastBytes = currentBytes
+				
+				speedBytesPerSec := diff * 5 // 200ms * 5 = 1s
+				var speedStr string
+				if speedBytesPerSec > 0 {
+					speedStr = " [" + utils.FormatBytes(speedBytesPerSec) + "/s]"
+				}
+				
 				mu.Lock()
 				pkg := lastPkg
 				mu.Unlock()
 				if pkg != "" {
 					elapsed := time.Since(startTime).Truncate(time.Millisecond)
-					i.bar.UpdateTitle(fmt.Sprintf("  %s %s %s  ", 
+					i.bar.UpdateTitle(fmt.Sprintf("  %s %s%s %s  ", 
 						pterm.FgCyan.Sprint("[EXTRACTING]"), 
 						utils.AccentColor.Sprint(elapsed.String()), 
+						pterm.FgYellow.Sprint(speedStr),
 						utils.DimColor.Sprint(pkg),
 					))
 				}
@@ -218,7 +231,10 @@ func (i *Installer) extractLocal(pkg *ResolvedPackage) error {
 	pterm.Printf("   %s %-30s %s\n", utils.GreenColor.Sprint("├─"), pkg.Name+"@"+pkg.Version, utils.DimColor.Sprint("indexing local path..."))
 
 	fileMap := make(map[string]string)
-	
+	// Load local package.json to check for "files" filter
+	localPkg, _ := LoadPackageJson(filepath.Join(pkg.LocalPath, "package.json"))
+	hasFiles := localPkg != nil && len(localPkg.Files) > 0
+
 	err := filepath.Walk(pkg.LocalPath, func(path string, info os.FileInfo, err error) error {
 		if err != nil {
 			return err
@@ -233,6 +249,35 @@ func (i *Installer) extractLocal(pkg *ResolvedPackage) error {
 		relPath, err := filepath.Rel(pkg.LocalPath, path)
 		if err != nil {
 			return err
+		}
+
+		// Filter files if "files" array is present in package.json
+		if hasFiles {
+			isDefault := false
+			lowerRel := strings.ToLower(relPath)
+			if lowerRel == "package.json" || strings.HasPrefix(lowerRel, "readme") || strings.HasPrefix(lowerRel, "license") || strings.HasPrefix(lowerRel, "changelog") {
+				isDefault = true
+			}
+			if !isDefault {
+				included := false
+				for _, pat := range localPkg.Files {
+					cleanPat := filepath.Clean(pat)
+					if relPath == cleanPat || strings.HasPrefix(relPath, cleanPat+string(os.PathSeparator)) {
+						included = true
+						break
+					}
+				}
+				if !included {
+					if localPkg.Main != "" && relPath == filepath.Clean(localPkg.Main) { included = true } else
+					if localPkg.Module != "" && relPath == filepath.Clean(localPkg.Module) { included = true } else
+					if localPkg.Types != "" && relPath == filepath.Clean(localPkg.Types) { included = true } else
+					if localPkg.Typings != "" && relPath == filepath.Clean(localPkg.Typings) { included = true } else
+					if localPkg.Browser != "" && relPath == filepath.Clean(localPkg.Browser) { included = true }
+				}
+				if !included {
+					return nil // exclude this file
+				}
+			}
 		}
 
 		file, err := os.Open(path)
