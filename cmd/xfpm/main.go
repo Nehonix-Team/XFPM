@@ -71,6 +71,7 @@ func init() {
 	rootCmd.PersistentFlags().StringP("cwd", "C", "", "Change work directory")
 	installCmd.Flags().BoolP("save-dev", "D", false, "Save to devDependencies")
 	installCmd.Flags().BoolP("save-optional", "O", false, "Save to optionalDependencies")
+	installCmd.Flags().BoolP("save-peer", "R", false, "Save to peerDependencies")
 	installCmd.Flags().BoolP("force", "f", false, "Force re-install even if already extracted")
 	installCmd.Flags().Bool("update", false, "Update mode: always fetch fresh metadata from registry")
 	installCmd.Flags().BoolP("global", "g", false, "Install packages globally")
@@ -104,6 +105,7 @@ var installCmd = &cobra.Command{
 
 		isDev, _ := cmd.Flags().GetBool("save-dev")
 		isOptional, _ := cmd.Flags().GetBool("save-optional")
+		isPeer, _ := cmd.Flags().GetBool("save-peer")
 		force, _ := cmd.Flags().GetBool("force")
 		update, _ := cmd.Flags().GetBool("update")
 
@@ -345,6 +347,8 @@ var installCmd = &cobra.Command{
 						targetSection = "dev"
 					} else if isOptional {
 						targetSection = "optional"
+					} else if isPeer {
+						targetSection = "peer"
 					} else {
 						// determine original section
 						if _, ok := pkg.Dependencies[name]; ok {
