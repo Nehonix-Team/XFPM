@@ -56,6 +56,12 @@ func CheckForUpdates() {
 	}
 
 	if data.Latest != "" && data.Latest != BinVersion {
+		// Only show update if the remote version is lexicographically greater (simplistic but works for G0.1.x)
+		// and avoid showing if the local version is already ahead.
+		if data.Latest < BinVersion {
+			return 
+		}
+
 		pterm.Println()
 		Premium("UPDATE", fmt.Sprintf("A new version of XFPM is available: %s (Current: %s)", 
 			pterm.FgGreen.Sprint(data.Latest), 

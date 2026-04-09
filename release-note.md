@@ -1,3 +1,21 @@
+# XFPM - vG0.1.68
+
+## [G0.1.68] - 2026-04-09
+
+### Added
+
+- **Core**: Introduced a **Global Content-Addressable Storage (CAS)** system. Packages are now stored centrally in `~/.xpm/storage`, allowing all projects to share identical physical files and drastically reducing disk space usage.
+- **Core**: Implemented native **Reflink (Copy-on-Write)** support for Linux (XFS, Btrfs, APFS) using `ioctl(FICLONE)`, providing instant, space-efficient file cloning with full isolation.
+- **Migration**: Introduced an intelligent **Legacy Migration System**. XFPM now automatically detects storage from older versions and offers to migrate it to the global store.
+- **CLI**: Added the `xfpm store prune --legacy [path]` command for high-performance recursive cleanup of old project-local storage across the machine.
+- **Documentation**: Added comprehensive architecture documentation for storage optimization in `architecture/storage_optimization.en.md`.
+
+### Improved
+
+- **Core**: Optimized file linking with a tiered strategy (Reflink -> Hardlink -> Copy).
+- **Security**: CAS storage is now strictly **Read-Only** (0444/0555) to protect global store integrity against modification by package scripts.
+- **CLI**: The storage path can now be overridden via the `XFPM_STORAGE` environment variable.
+
 # XFPM - vG0.1.67
 
 ## [G0.1.67] - 2026-04-08

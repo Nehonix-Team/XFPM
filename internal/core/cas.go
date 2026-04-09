@@ -207,9 +207,9 @@ func (c *Cas) ensurePermissions(path string, isExecutable bool) {
 	if runtime.GOOS == "windows" {
 		return
 	}
-	mode := os.FileMode(0644)
+	mode := os.FileMode(0444)
 	if isExecutable {
-		mode = 0755
+		mode = 0555
 	}
 	os.Chmod(path, mode)
 }
