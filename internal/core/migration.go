@@ -13,11 +13,24 @@ func HasLegacyStorage(projectRoot string) bool {
 	return err == nil && fi.IsDir()
 }
 
+// ProgressCallback is called during migration to report progress.
+type ProgressCallback func(current, total int, message string)
+
 // MigrateLegacyStorage moves files from local storage to the global CAS.
-func MigrateLegacyStorage(projectRoot string, cas *Cas) error {
+func MigrateLegacyStorage(projectRoot string, cas *Cas, callback ProgressCallback) error {
 	legacyDir := filepath.Join(projectRoot, "node_modules", ".xpm", "storage")
 	legacyFilesDir := filepath.Join(legacyDir, "files")
 
+	// Count files first for progress reporting
+	var total int
+	filepath.Walk(legacyFilesDir, func(path string, info os.FileInfo, err error) error {
+		if err == nil && !info.IsDir() {
+			total++
+		}
+		return nil
+	})
+
+	var current int
 	// 1. Move files to global CAS
 	err := filepath.Walk(legacyFilesDir, func(path string, info os.FileInfo, err error) error {
 		if err != nil {
@@ -25,6 +38,11 @@ func MigrateLegacyStorage(projectRoot string, cas *Cas) error {
 		}
 		if info.IsDir() {
 			return nil
+		}
+
+		current++
+		if callback != nil {
+			callback(current, total, filepath.Base(path))
 		}
 
 		// Re-store in global CAS

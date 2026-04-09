@@ -148,12 +148,27 @@ var pruneCmd = &cobra.Command{
 		cas, _ := core.NewCas(xpmStore)
 
 		for _, root := range toMigrate {
-			pterm.DefaultSection.Printf("Migrating %s...", root)
-			if err := core.MigrateLegacyStorage(root, cas); err != nil {
+			pterm.DefaultSection.Printf("Migrating %s", root)
+			
+			pb, _ := pterm.DefaultProgressbar.
+				WithTotal(0). // will be set by the first callback call
+				WithTitle("  " + pterm.Gray("->") + " Moving files").
+				Start()
+
+			err := core.MigrateLegacyStorage(root, cas, func(current, total int, message string) {
+				pb.Total = total
+				pb.Add(1)
+				pb.Title = "  " + pterm.Gray("->") + " Migrated: " + pterm.LightCyan(message)
+			})
+
+			pb.Stop()
+
+			if err != nil {
 				utils.Error("Failed to migrate %s: %v", root, err)
 			} else {
-				utils.Success("Migrated and cleaned up %s", root)
+				utils.Success("Completed migration for %s", root)
 			}
+			fmt.Println()
 		}
 
 		return nil
@@ -205,9 +220,19 @@ var installCmd = &cobra.Command{
 			cas, _ := core.NewCas(xpmStore)
 
 			if selected == options[0] {
-				s, _ := pterm.DefaultSpinner.Start("Migrating...")
-				core.MigrateLegacyStorage(projectRoot, cas)
-				s.Success("Project migrated successfully!")
+				pb, _ := pterm.DefaultProgressbar.
+					WithTotal(0).
+					WithTitle("  " + pterm.Gray("->") + " Migrating files").
+					Start()
+
+				core.MigrateLegacyStorage(projectRoot, cas, func(current, total int, message string) {
+					pb.Total = total
+					pb.Add(1)
+					pb.Title = "  " + pterm.Gray("->") + " Migrated: " + pterm.LightCyan(message)
+				})
+
+				pb.Stop()
+				pterm.Success.Println("Project migrated successfully!")
 			} else if selected == options[1] {
 				// Search everything from HOME
 				home, _ := os.UserHomeDir()
@@ -219,8 +244,19 @@ var installCmd = &cobra.Command{
 				if len(roots) > 0 {
 					pterm.Info.Printfln("Found %d legacy projects. Starting mass migration...", len(roots))
 					for _, r := range roots {
-						fmt.Printf("   %s %s\n", pterm.Gray("->"), r)
-						core.MigrateLegacyStorage(r, cas)
+						pterm.DefaultSection.Printf("Migrating %s", r)
+						
+						pb, _ := pterm.DefaultProgressbar.
+							WithTotal(0).
+							WithTitle("  " + pterm.Gray("->") + " Moving files").
+							Start()
+
+						core.MigrateLegacyStorage(r, cas, func(current, total int, message string) {
+							pb.Total = total
+							pb.Add(1)
+							pb.Title = "  " + pterm.Gray("->") + " Migrated: " + pterm.LightCyan(message)
+						})
+						pb.Stop()
 					}
 					pterm.Success.Println("All projects migrated!")
 				} else {
