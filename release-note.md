@@ -1,3 +1,14 @@
+# XFPM - vG0.1.69
+
+## [G0.1.69] - 2026-04-09
+
+### Added
+
+- **Core**: Transitioned to **Global Virtual Store (`~/.xpm/virtual_store`)**. Package layouts are now shared machine-wide, reducing repetitive extraction and linking work.
+- **Deduplication**: Achieved **Ultra-Light node_modules** (measured at < 50KB for standard projects). Project directories now contain only symlinks to the shared global store.
+- **Offline Support**: Implemented **Local-First Resolution**. XFPM now prioritizes locally cached metadata and CAS indices, allowing near-instant installations without network access for already downloaded packages.
+- **Performance**: Improved dependency resolution speed by skipping network roundtrips for known versions.
+
 # XFPM - vG0.1.68
 
 ## [G0.1.68] - 2026-04-09
