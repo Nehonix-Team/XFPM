@@ -1,3 +1,13 @@
+# XFPM - vG0.1.73
+
+## [G0.1.73] - 2026-04-09
+
+### Added
+
+- **"Ancestor Hoisting" Architecture**: Refactored the storage model to place the Virtual Store inside `node_modules/.xpm/vstore`. This ensures that Node/Bun's `realpath` resolution remains within the project boundary, allowing packages to naturally discover "phantom dependencies" in the root `node_modules`.
+- **Zero-Copy Local Purity**: Every package is now reflinked (Copy-on-Write) from the Global CAS into the project-specific store. This provides 100% compatibility with native tools and write-heavy scripts without any extra disk space consumption.
+- **Fixed Bun/Negotiator Bugs**: Resolved the critical issues where global links caused `require()` failures in Bun and other tools using realpath resolution.
+
 # XFPM - vG0.1.72
 
 ## [G0.1.72] - 2026-04-09
