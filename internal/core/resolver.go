@@ -2,7 +2,9 @@ package core
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
+	"os"
 	"path/filepath"
 	"runtime"
 	"strings"
@@ -384,12 +386,33 @@ func (r *Resolver) resolvePackage(ctx context.Context, name, req string, isOptio
 			},
 		}
 	} else {
-		pkgInfo, err = r.registry.FetchPackage(ctx, realName, shouldForce)
-		if err != nil {
-			if isOptional {
-				return nil
+		// Local-First: Check if we have the specific version requested in CAS metadata
+		// This is a fast-path for "offline" or "cached" installs
+		if !shouldForce && !strings.ContainsAny(realReq, "^~*><") && realReq != "latest" && realReq != "" {
+			home, _ := os.UserHomeDir()
+			metaPath := filepath.Join(home, ".xpm", "storage", "metadata", strings.ReplaceAll(realName, "/", "+")+"@"+realReq+".json")
+			if data, err := os.ReadFile(metaPath); err == nil {
+				var meta VersionMetadata
+				if err := json.Unmarshal(data, &meta); err == nil {
+					pkgInfo = &RegistryPackage{
+						Name:     realName,
+						DistTags: map[string]string{"latest": meta.Version},
+						Versions: map[string]VersionMetadata{
+							meta.Version: meta,
+						},
+					}
+				}
 			}
-			return err
+		}
+
+		if pkgInfo == nil {
+			pkgInfo, err = r.registry.FetchPackage(ctx, realName, shouldForce)
+			if err != nil {
+				if isOptional {
+					return nil
+				}
+				return err
+			}
 		}
 	}
 
