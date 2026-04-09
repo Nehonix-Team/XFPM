@@ -151,6 +151,7 @@ func (r *ScriptRunner) buildEnv(pathVal string) []string {
 		"NODE_ENV":                       "production",
 		"CI":                             "true",
 		"npm_config_foreground_scripts":  "true",
+		"NODE_PATH":                      filepath.Join(r.projectRoot, "node_modules"),
 	}
 
 	for _, e := range env {
