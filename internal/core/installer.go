@@ -389,24 +389,46 @@ func (i *Installer) LinkFilesToDir(destDir string, index map[string]string) erro
 		os.MkdirAll(filepath.Dir(destPath), 0755)
 
 		// ALWAYS remove the destination before linking or copying.
-		// If we don't, and destPath is a hardlink to sourcePath, os.Create(destPath)
-		// will truncate the inode and thus empty the source file before we read it!
 		os.Remove(destPath)
 
-		if err := os.Link(sourcePath, destPath); err != nil {
-			// If link fails (cross-device or already exists), fallback to copy
-			// Log the reason for fallback
-			// utils.Log("DEBUG", fmt.Sprintf("Failed to link %s to %s: %v. Falling back to copy.", sourcePath, destPath, err))
-			if err := i.copyFile(sourcePath, destPath); err != nil {
-				return err
+		// 1. Try Reflink (CoW) - Best performance and safety
+		if err := utils.Reflink(sourcePath, destPath); err == nil {
+			// Make the destination writable so post-install scripts can modify it
+			if fi, err := os.Stat(sourcePath); err == nil && (fi.Mode()&0111) != 0 {
+				os.Chmod(destPath, 0755)
+			} else {
+				os.Chmod(destPath, 0644)
 			}
-			// Verify copied file size
-			fi_src, _ := os.Stat(sourcePath)
-			fi_dst, _ := os.Stat(destPath)
-			if fi_src != nil && fi_dst != nil {
-				if fi_dst.Size() != fi_src.Size() {
-					utils.Error("[LINK] CRITICAL: Size mismatch after copy! Source: %d, Dest: %d. File: %s", fi_src.Size(), fi_dst.Size(), destPath)
-				}
+			continue
+		} else {
+			// Cleanup if reflink failed to create/prepare the file
+			os.Remove(destPath)
+		}
+
+		// 2. Try Hardlink - Space efficient but shared inode
+		if err := os.Link(sourcePath, destPath); err == nil {
+			// We keep hardlinks read-only to prevent CAS corruption
+			continue
+		}
+
+		// 3. Last resort: Copy
+		if err := i.copyFile(sourcePath, destPath); err != nil {
+			return err
+		}
+
+		// Make copies writable
+		if fi, err := os.Stat(sourcePath); err == nil && (fi.Mode()&0111) != 0 {
+			os.Chmod(destPath, 0755)
+		} else {
+			os.Chmod(destPath, 0644)
+		}
+
+		// Verify copied file size
+		fi_src, _ := os.Stat(sourcePath)
+		fi_dst, _ := os.Stat(destPath)
+		if fi_src != nil && fi_dst != nil {
+			if fi_dst.Size() != fi_src.Size() {
+				utils.Error("[LINK] CRITICAL: Size mismatch after copy! Source: %d, Dest: %d. File: %s", fi_src.Size(), fi_dst.Size(), destPath)
 			}
 		}
 	}

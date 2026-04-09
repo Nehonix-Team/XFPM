@@ -68,6 +68,9 @@ var (
 func init() {
 	rootCmd.AddCommand(installCmd)
 	rootCmd.AddCommand(updateCmd)
+	rootCmd.AddCommand(storeCmd)
+	storeCmd.AddCommand(pruneCmd)
+
 	rootCmd.PersistentFlags().StringP("cwd", "C", "", "Change work directory")
 	installCmd.Flags().BoolP("save-dev", "D", false, "Save to devDependencies")
 	installCmd.Flags().BoolP("save-optional", "O", false, "Save to optionalDependencies")
@@ -78,8 +81,84 @@ func init() {
 	installCmd.Flags().StringP("path", "P", "", "Install from a local path")
 
 	updateCmd.Flags().BoolP("global", "g", false, "Update packages globally")
+	pruneCmd.Flags().Bool("legacy", false, "Prune legacy storage from older XFPM versions")
 }
 
+var storeCmd = &cobra.Command{
+	Use:   "store",
+	Short: "Manage XFPM shared storage",
+}
+
+var pruneCmd = &cobra.Command{
+	Use:   "prune [path]",
+	Short: "Remove unused or legacy storage entries",
+	RunE: func(cmd *cobra.Command, args []string) error {
+		legacy, _ := cmd.Flags().GetBool("legacy")
+		if !legacy {
+			utils.Info("Standard pruning is not yet implemented. Use --legacy to clean up old XFPM versions.")
+			return nil
+		}
+
+		targetPath := "."
+		if len(args) > 0 {
+			targetPath = args[0]
+		}
+
+		absPath, _ := filepath.Abs(targetPath)
+		utils.Matrix(fmt.Sprintf("Scanning for legacy storage in: %s", absPath))
+
+		s, _ := pterm.DefaultSpinner.Start("Searching...")
+		roots := core.FindLegacyStorages(absPath)
+		s.Stop()
+
+		if len(roots) == 0 {
+			utils.Success("No legacy XFPM storage found.")
+			return nil
+		}
+
+		utils.Info("Found %d projects with legacy storage.", len(roots))
+		
+		// Map for selection
+		var options []string
+		for _, r := range roots {
+			options = append(options, r)
+		}
+		options = append(options, "MIGRATE ALL PROJECTS")
+		options = append(options, "CANCEL")
+
+		selected, _ := pterm.DefaultInteractiveSelect.
+			WithMaxHeight(15).
+			WithOptions(options).
+			WithDefaultText("Select project to migrate").
+			Show()
+
+		if selected == "CANCEL" {
+			return nil
+		}
+
+		var toMigrate []string
+		if selected == "MIGRATE ALL PROJECTS" {
+			toMigrate = roots
+		} else {
+			toMigrate = []string{selected}
+		}
+
+		home, _ := os.UserHomeDir()
+		xpmStore := filepath.Join(home, ".xpm", "storage")
+		cas, _ := core.NewCas(xpmStore)
+
+		for _, root := range toMigrate {
+			pterm.DefaultSection.Printf("Migrating %s...", root)
+			if err := core.MigrateLegacyStorage(root, cas); err != nil {
+				utils.Error("Failed to migrate %s: %v", root, err)
+			} else {
+				utils.Success("Migrated and cleaned up %s", root)
+			}
+		}
+
+		return nil
+	},
+}
 
 var installCmd = &cobra.Command{
 	Use:   "install [packages...]",
@@ -103,18 +182,77 @@ var installCmd = &cobra.Command{
 			}
 		}
 
-		isDev, _ := cmd.Flags().GetBool("save-dev")
-		isOptional, _ := cmd.Flags().GetBool("save-optional")
-		isPeer, _ := cmd.Flags().GetBool("save-peer")
-		force, _ := cmd.Flags().GetBool("force")
-		update, _ := cmd.Flags().GetBool("update")
+		// Legacy storage detection and migration prompt
+		if !global && core.HasLegacyStorage(projectRoot) {
+			pterm.DefaultBox.
+				WithTitle(pterm.LightYellow(" LEGACY STORE DETECTED ")).
+				WithTitleBottomRight().
+				Printfln("This project uses an old version of XFPM storage in node_modules/.xpm/storage.\nThe new version uses a global store (~/.xpm/storage) to save gigabytes of space.\n\nTo clean up all legacy projects, run: %s", pterm.LightCyan("xfpm store prune --legacy"))
 
-		xpmDir := filepath.Join(projectRoot, "node_modules", ".xpm")
-		cas, err := core.NewCas(filepath.Join(xpmDir, "storage"))
+			options := []string{
+				"Migrate this project now (Fast)",
+				"Migrate and search for ALL other legacy projects on my machine",
+				"Skip (I'll run 'xfpm store prune --legacy' later)",
+			}
+			
+			selected, _ := pterm.DefaultInteractiveSelect.
+				WithOptions(options).
+				WithDefaultText("What would you like to do?").
+				Show()
+
+			home, _ := os.UserHomeDir()
+			xpmStore := filepath.Join(home, ".xpm", "storage")
+			cas, _ := core.NewCas(xpmStore)
+
+			if selected == options[0] {
+				s, _ := pterm.DefaultSpinner.Start("Migrating...")
+				core.MigrateLegacyStorage(projectRoot, cas)
+				s.Success("Project migrated successfully!")
+			} else if selected == options[1] {
+				// Search everything from HOME
+				home, _ := os.UserHomeDir()
+				pterm.Info.Printfln("Searching for legacy stores in %s... (this might take a few seconds)", home)
+				s, _ := pterm.DefaultSpinner.Start("Scanning deep...")
+				roots := core.FindLegacyStorages(home)
+				s.Stop()
+				
+				if len(roots) > 0 {
+					pterm.Info.Printfln("Found %d legacy projects. Starting mass migration...", len(roots))
+					for _, r := range roots {
+						fmt.Printf("   %s %s\n", pterm.Gray("->"), r)
+						core.MigrateLegacyStorage(r, cas)
+					}
+					pterm.Success.Println("All projects migrated!")
+				} else {
+					pterm.Info.Println("No other legacy projects found.")
+				}
+			}
+		}
+
+		var (
+			isDev, isOptional, isPeer, force, update bool
+		)
+
+		isDev, _ = cmd.Flags().GetBool("save-dev")
+		isOptional, _ = cmd.Flags().GetBool("save-optional")
+		isPeer, _ = cmd.Flags().GetBool("save-peer")
+		force, _ = cmd.Flags().GetBool("force")
+		update, _ = cmd.Flags().GetBool("update")
+
+		var xpmStore string
+		if envStore := os.Getenv("XFPM_STORAGE"); envStore != "" {
+			xpmStore = envStore
+		} else {
+			home, _ := os.UserHomeDir()
+			xpmStore = filepath.Join(home, ".xpm", "storage")
+		}
+		
+		cas, err := core.NewCas(xpmStore)
 		if err != nil {
 			return err
 		}
 
+		xpmDir := filepath.Join(projectRoot, "node_modules", ".xpm")
 		registry := core.NewRegistryClient("", 3)
 		registry.SetCacheDir(filepath.Join(xpmDir, "cache"))
 

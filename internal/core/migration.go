@@ -1,0 +1,95 @@
+package core
+
+import (
+	"fmt"
+	"os"
+	"path/filepath"
+)
+
+// HasLegacyStorage checks if a project has the old storage format.
+func HasLegacyStorage(projectRoot string) bool {
+	legacyDir := filepath.Join(projectRoot, "node_modules", ".xpm", "storage")
+	fi, err := os.Stat(legacyDir)
+	return err == nil && fi.IsDir()
+}
+
+// MigrateLegacyStorage moves files from local storage to the global CAS.
+func MigrateLegacyStorage(projectRoot string, cas *Cas) error {
+	legacyDir := filepath.Join(projectRoot, "node_modules", ".xpm", "storage")
+	legacyFilesDir := filepath.Join(legacyDir, "files")
+
+	// 1. Move files to global CAS
+	err := filepath.Walk(legacyFilesDir, func(path string, info os.FileInfo, err error) error {
+		if err != nil {
+			return nil // skip errors
+		}
+		if info.IsDir() {
+			return nil
+		}
+
+		// Re-store in global CAS
+		file, err := os.Open(path)
+		if err != nil {
+			return nil
+		}
+		defer file.Close()
+
+		isExecutable := (info.Mode() & 0111) != 0
+		_, err = cas.StoreStream(file, isExecutable)
+		return err
+	})
+
+	if err != nil {
+		return fmt.Errorf("failed to migrate files: %w", err)
+	}
+
+	// 2. Cleanup legacy storage
+	return os.RemoveAll(legacyDir)
+}
+
+// FindLegacyStorages recursively finds legacy XFPM storage directories.
+// optimized for speed.
+func FindLegacyStorages(root string) []string {
+	var found []string
+	
+	// Skip common large non-project directories
+	skipDirs := map[string]bool{
+		".git":         true,
+		".vscode":      true,
+		".idea":        true,
+		"dist":         true,
+		"build":        true,
+		"out":          true,
+		"temp":         true,
+		"tmp":          true,
+		"cache":        true,
+		"node_modules": false, // we want to enter node_modules but not its children
+	}
+
+	filepath.Walk(root, func(path string, info os.FileInfo, err error) error {
+		if err != nil {
+			return filepath.SkipDir
+		}
+		if !info.IsDir() {
+			return nil
+		}
+
+		name := info.Name()
+		if skipDirs[name] {
+			return filepath.SkipDir
+		}
+
+		// If we are in a node_modules, check for .xpm/storage
+		if name == "node_modules" {
+			legacyPath := filepath.Join(path, ".xpm", "storage")
+			if fi, err := os.Stat(legacyPath); err == nil && fi.IsDir() {
+				found = append(found, filepath.Dir(path)) // return project root
+			}
+			return filepath.SkipDir // don't go deeper into node_modules
+		}
+
+		return nil
+	})
+
+	return found
+}
