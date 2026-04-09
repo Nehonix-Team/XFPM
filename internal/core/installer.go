@@ -30,10 +30,11 @@ type Installer struct {
 }
 
 func NewInstaller(cas *Cas, registry *RegistryClient, projectRoot string) *Installer {
-	// virtual store always lives under projectRoot/node_modules/.xpm/virtual_store
-	// (matches Rust's get_virtual_store_root which joins .xpm_global/node_modules/.xpm/virtual_store)
-	vstoreRoot := filepath.Join(projectRoot, "node_modules", ".xpm", "virtual_store")
+	// Global virtual store lives under ~/.xpm/virtual_store
+	home, _ := os.UserHomeDir()
+	vstoreRoot := filepath.Join(home, ".xpm", "virtual_store")
 	os.MkdirAll(vstoreRoot, 0755)
+
 	return &Installer{
 		cas:         cas,
 		registry:    registry,
@@ -333,6 +334,7 @@ func (i *Installer) ensureExtracted(ctx context.Context, pkg *ResolvedPackage) e
 
 	if !shouldForce {
 		if _, err := os.Stat(filepath.Join(pkgDir, "package.json")); err == nil {
+			// Already in Global Virtual Store! Skip everything.
 			return nil
 		}
 	} else {
@@ -445,10 +447,26 @@ func (i *Installer) linkPackageDeps(packages []*ResolvedPackage) error {
 			os.MkdirAll(filepath.Dir(targetLink), 0755)
 
 			depVStoreName := strings.ReplaceAll(depName, "/", "+") + "@" + depVersion
-			depAbsTarget := filepath.Join(i.vstoreRoot, depVStoreName, "node_modules", depName)
+			// Relative link from pkg@version/node_modules/pkg/node_modules/dep 
+			// to ../../dep@version/node_modules/dep
+			
+			// We are at ~/.xpm/virtual_store/pkg@version/node_modules/dep
+			// We want to go to ~/.xpm/virtual_store/dep@version/node_modules/dep
+			// Number of steps up to vstoreRoot: 
+			// depName could be scoped (@scope/pkg). 
+			// If depName is "@auth/jwt", targetLink is .../node_modules/@auth/jwt
+			// Steps up to node_modules: 2 (jwt -> @auth)
+			// Steps up to vstoreRoot: 2 more (node_modules -> pkg@version)
+			
+			steps := strings.Count(depName, "/") + 3
+			relPrefix := ""
+			for j := 0; j < steps; j++ {
+				relPrefix += "../"
+			}
+			relTarget := filepath.Join(relPrefix, depVStoreName, "node_modules", depName)
 
 			os.Remove(targetLink)
-			if err := os.Symlink(depAbsTarget, targetLink); err != nil {
+			if err := os.Symlink(relTarget, targetLink); err != nil {
 				// Continue 
 			}
 		}
@@ -529,9 +547,11 @@ func (i *Installer) linkToRoot(packages []*ResolvedPackage) error {
 		absTarget := filepath.Join(i.vstoreRoot, pkgVStoreName, "node_modules", pkg.Name)
 
 		os.Remove(rootNM)
+		// We use absolute symlinks for project -> global store links for stability
 		os.Symlink(absTarget, rootNM)
 
 		if pkg.Metadata.Bin != nil {
+			// Link binaries from the global store to the project's .bin
 			i.linkBinaries(absTarget, rootBinDir, pkg.Metadata.Bin)
 		}
 	}

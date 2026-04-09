@@ -107,6 +107,10 @@ func NewRegistryClient(baseURL string, retries uint32) *RegistryClient {
 }
 
 func (c *RegistryClient) SetCacheDir(path string) {
+	if path == "" {
+		home, _ := os.UserHomeDir()
+		path = filepath.Join(home, ".xpm", "cache")
+	}
 	c.cacheDir = filepath.Join(path, "metadata")
 	os.MkdirAll(c.cacheDir, 0755)
 }
@@ -150,6 +154,17 @@ func (c *RegistryClient) FetchPackage(ctx context.Context, name string, ignoreCa
 }
 
 func (c *RegistryClient) FetchVersionMetadata(ctx context.Context, name, version string) (*VersionMetadata, error) {
+	// Check persistent metadata cache first (Local-First)
+	home, _ := os.UserHomeDir()
+	metaPath := filepath.Join(home, ".xpm", "storage", "metadata", strings.ReplaceAll(name, "/", "+")+"@"+version+".json")
+	
+	if data, err := os.ReadFile(metaPath); err == nil {
+		var meta VersionMetadata
+		if err := json.Unmarshal(data, &meta); err == nil {
+			return &meta, nil
+		}
+	}
+
 	url := fmt.Sprintf("%s/%s/%s", c.baseURL, name, version)
 	
 	bytes, err := c.requestWithRetry(ctx, url, true, false) // Not abbreviated!
@@ -161,6 +176,10 @@ func (c *RegistryClient) FetchVersionMetadata(ctx context.Context, name, version
 	if err := json.Unmarshal(bytes, &meta); err != nil {
 		return nil, fmt.Errorf("parsing version metadata for %s@%s: %w", name, version, err)
 	}
+
+	// Persist for offline use
+	os.MkdirAll(filepath.Dir(metaPath), 0755)
+	os.WriteFile(metaPath, bytes, 0644)
 
 	return &meta, nil
 }

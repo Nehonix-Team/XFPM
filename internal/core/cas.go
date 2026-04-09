@@ -283,6 +283,12 @@ func (c *Cas) GetIndex(name, version string) (map[string]string, error) {
 	return index, err
 }
 
+func (c *Cas) HasIndex(name, version string) bool {
+	path := filepath.Join(c.BasePath, "indices", fmt.Sprintf("%s@%s.json", c.escapePackageName(name), version))
+	_, err := os.Stat(path)
+	return err == nil
+}
+
 func (c *Cas) escapePackageName(name string) string {
 	// Equivalent to Rust's name.replace("/", "+")
 	res := ""
