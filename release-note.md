@@ -1,3 +1,11 @@
+# XFPM - vG0.1.71
+
+## [G0.1.71] - 2026-04-09
+
+### Changed
+
+- **Core**: Reverted the Virtual Store layout to be **Project-Local (`node_modules/.xpm/virtual_store`)** while maintaining the **Global CAS** for physical files. This restores 100% compatibility with "phantom dependencies" (hoisting) and tools requiring local write-access (like Prisma), while still providing machine-wide disk deduplication via Hardlinks/Reflinks.
+
 # XFPM - vG0.1.70
 
 ## [G0.1.70] - 2026-04-09
