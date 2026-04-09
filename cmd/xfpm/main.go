@@ -187,7 +187,7 @@ var installCmd = &cobra.Command{
 			pterm.DefaultBox.
 				WithTitle(pterm.LightYellow(" LEGACY STORE DETECTED ")).
 				WithTitleBottomRight().
-				Printfln("This project uses an old version of XFPM storage in node_modules/.xpm/storage.\nThe new version uses a global store (~/.xpm/storage) to save gigabytes of space.\n\nTo clean up all legacy projects, run: %s", pterm.LightCyan("xfpm store prune --legacy"))
+				Printfln("This project uses an old version of storage.\nThe new version is now optimized to save gigabytes of space.\n\nTo clean up all legacy projects, run: %s", pterm.LightCyan("xfpm store prune --legacy"))
 
 			options := []string{
 				"Migrate this project now (Fast)",
