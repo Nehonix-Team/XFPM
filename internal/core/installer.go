@@ -456,9 +456,9 @@ func (i *Installer) linkPackageDeps(packages []*ResolvedPackage) error {
 			// depName could be scoped (@scope/pkg). 
 			// If depName is "@auth/jwt", targetLink is .../node_modules/@auth/jwt
 			// Steps up to node_modules: 2 (jwt -> @auth)
-			// Steps up to vstoreRoot: 2 more (node_modules -> pkg@version)
+			// Steps up to vstoreRoot: 1 more (node_modules -> pkg@version)
 			
-			steps := strings.Count(depName, "/") + 3
+			steps := strings.Count(depName, "/") + 2
 			relPrefix := ""
 			for j := 0; j < steps; j++ {
 				relPrefix += "../"

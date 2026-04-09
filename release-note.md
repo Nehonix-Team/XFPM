@@ -1,3 +1,11 @@
+# XFPM - vG0.1.70
+
+## [G0.1.70] - 2026-04-09
+
+### Fixed
+
+- **Core**: Resolved a critical regression where **post-install scripts failed** in the Global Virtual Store (e.g. `zstd-napi`, `bun`). The root cause was an off-by-one error in relative symlink depth calculation, preventing `node` from reaching sibling dependencies.
+
 # XFPM - vG0.1.69
 
 ## [G0.1.69] - 2026-04-09
