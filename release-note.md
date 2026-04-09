@@ -1,3 +1,14 @@
+# XFPM - vG0.1.72
+
+## [G0.1.72] - 2026-04-09
+
+### Added
+
+- **Ultra-Global Hybrid Architecture**: Introduced a new storage model that balances extreme deduplication with 100% project compatibility.
+- **Intelligent Shadowing**: Packages with install scripts or known local-write requirements (like **Prisma**) are automatically "shadowed" into `node_modules/.xpm/shadow` using **Reflinks (CoW)**. This ensures they are writable and project-isolated without consuming extra physical disk space.
+- **NODE_PATH Injection**: Automatically injects `NODE_PATH` into script executions, allowing packages in the Global Virtual Store to resolve "phantom dependencies" located in the project root.
+- **Near-Zero Footprint**: Native packages and standard libraries remain in the Global Virtual Store, making `node_modules` logically and physically ultra-light.
+
 # XFPM - vG0.1.71
 
 ## [G0.1.71] - 2026-04-09
