@@ -1,3 +1,13 @@
+# XFPM - vG0.1.74
+
+## [G0.1.74] - 2026-04-10
+
+### Fixed
+
+- **EACCES Errors Resolved**: Fixed a critical bug where binary permissions were lost during Hardlink or Copy fallbacks. Executable bits are now strictly preserved and applied across all storage operations.
+- **Robust Binary Linking**: Improved the reliability of binary symlinks in `.bin` directories to ensure they always point to the correct project-local or global-local virtual store paths.
+- **Improved Bun Compatibility**: Refined the resolver and linking logic to better handle platform-specific optional dependencies required by Bun's install scripts.
+
 # XFPM - vG0.1.73
 
 ## [G0.1.73] - 2026-04-09
