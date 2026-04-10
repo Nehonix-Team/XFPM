@@ -71,6 +71,11 @@ func (i *Installer) Install(ctx context.Context, packages []*ResolvedPackage) er
 	}
 
 	i.bar.Stop()
+	
+	// UX: Clear screen after installation progress to provide clean slate for scripts
+	fmt.Print("\033[H\033[2J")
+	utils.PrintBanner()
+
 	changedCount := 0
 	i.changedPackages.Range(func(_, _ interface{}) bool {
 		changedCount++
@@ -197,20 +202,17 @@ func (i *Installer) LinkFilesToDir(destDir string, index map[string]string) erro
 		os.MkdirAll(filepath.Dir(destPath), 0755)
 		os.Remove(destPath)
 		
-		// 1. Reflink
 		err := utils.Reflink(sourcePath, destPath)
 		if err == nil {
 			i.applyPermissions(sourcePath, destPath)
 			continue
 		}
 
-		// 2. Hardlink
 		if err := os.Link(sourcePath, destPath); err == nil {
 			i.applyPermissions(sourcePath, destPath)
 			continue
 		}
 
-		// 3. Copy
 		if err := i.copyFile(sourcePath, destPath); err == nil {
 			i.applyPermissions(sourcePath, destPath)
 		}
@@ -332,22 +334,32 @@ func (i *Installer) createBinLink(name, pkgDir, relPath, binDir string) {
 	relTarget, _ := filepath.Rel(binDir, absTarget)
 	if runtime.GOOS != "windows" {
 		os.Symlink(relTarget, dest)
-		// BINARIES IN BIN FOLDER MUST ALWAYS BE EXECUTABLE
-		os.Chmod(absTarget, 0755)
+		// Ensure ALL files in a package's bin folder are executable
+		i.ensureExecutableRecursive(filepath.Dir(absTarget))
 	} else {
 		os.Symlink(relTarget, dest)
 	}
 }
 
+func (i *Installer) ensureExecutableRecursive(path string) {
+	filepath.Walk(path, func(p string, info os.FileInfo, err error) error {
+		if err != nil || info.IsDir() { return nil }
+		os.Chmod(p, 0755)
+		return nil
+	})
+}
+
 func (i *Installer) exportGlobalBinaries(packages []*ResolvedPackage) {
-	binDir := filepath.Join(i.projectRoot, "bin")
-	os.MkdirAll(binDir, 0755)
+	home, _ := os.UserHomeDir()
+	globalBinDir := filepath.Join(home, ".xpm", "bin")
+	os.MkdirAll(globalBinDir, 0755)
+
 	for _, pkg := range packages {
 		if _, isDirect := i.DirectDeps[pkg.Name]; !isDirect { continue }
 		if pkg.Metadata.Bin == nil { continue }
 		pkgVStoreName := strings.ReplaceAll(pkg.Name, "/", "+") + "@" + pkg.Version
 		pkgDir := filepath.Join(i.vstoreRoot, pkgVStoreName, "node_modules", pkg.Name)
-		i.linkBinaries(pkgDir, binDir, pkg.Metadata.Bin)
+		i.linkBinaries(pkgDir, globalBinDir, pkg.Metadata.Bin)
 	}
 }
 
