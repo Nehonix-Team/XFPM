@@ -72,10 +72,6 @@ func (i *Installer) Install(ctx context.Context, packages []*ResolvedPackage) er
 
 	i.bar.Stop()
 	
-	// UX: Clear screen after installation progress to provide clean slate for scripts
-	fmt.Print("\033[H\033[2J")
-	utils.PrintBanner()
-
 	changedCount := 0
 	i.changedPackages.Range(func(_, _ interface{}) bool {
 		changedCount++

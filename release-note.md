@@ -1,3 +1,16 @@
+# XFPM - vG0.1.76
+
+## [G0.1.76] - 2026-04-10
+
+### Changed
+
+- **UI Refinement**: Removed the automatic clearing of the terminal after installation. While intended for cleanliness, it proved disruptive to the visual flow and context. The installer now maintains a natural scrollback.
+
+### Stable Fixes (carried from G0.1.75)
+
+- **Unified Global Architecture**: Global installations remain in `~/.xpm/globals` with binaries in `~/.xpm/bin`.
+- **Exhaustive Permission Management**: Recursive `chmod 755` for binary directories remains active to prevent `EACCES` issues.
+
 # XFPM - vG0.1.75
 
 ## [G0.1.75] - 2026-04-10
