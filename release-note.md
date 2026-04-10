@@ -1,3 +1,17 @@
+# XFPM - vG0.1.79
+
+## [G0.1.79] - 2026-04-10
+
+### Added
+
+- **Premium PATH Management (Cross-Platform)**: XFPM now features a robust, automated environment setup. It intelligently discovers and configures your shell (Bash, Zsh, or Fish on Linux/macOS) and system environment (via PowerShell on Windows) to include `~/.xpm/bin`.
+- **macOS Readiness**: Added specialized support for `.zprofile`, the default login shell for modern macOS.
+
+### Improved
+
+- **Code Modernization**: Optimized `path_manager.go` for clarity and modern Go standards.
+- **Adaptive Binary Linking**: (Carried from G0.1.77) Ensures dynamic binaries (like Bun/Deno) are correctly discovered and linked.
+
 # XFPM - vG0.1.78
 
 ## [G0.1.78] - 2026-04-10
