@@ -84,6 +84,9 @@ func (i *Installer) Install(ctx context.Context, packages []*ResolvedPackage) er
 		utils.Success("Installation complete: %d updated.", changedCount)
 	}
 
+	// ALWAYS run lifecycle scripts BEFORE exporting global binaries
+	// This ensures that tools like 'bun' which download their binaries during postinstall
+	// have the binaries ready for linking.
 	if err := i.runLifecycleScripts(ctx, packages); err != nil {
 		return err
 	}
@@ -315,22 +318,48 @@ func (i *Installer) linkBinaries(pkgDir, binDir string, bin json.RawMessage) err
 	var binMap BinObject
 	var binStr string
 	if err := json.Unmarshal(bin, &binMap); err == nil {
-		for name, relPath := range binMap { i.createBinLink(name, pkgDir, relPath, binDir) }
+		for name, relPath := range binMap { i.adaptiveBinLink(name, pkgDir, relPath, binDir) }
 	} else if err := json.Unmarshal(bin, &binStr); err == nil {
 		name := filepath.Base(pkgDir)
-		i.createBinLink(name, pkgDir, binStr, binDir)
+		i.adaptiveBinLink(name, pkgDir, binStr, binDir)
 	}
 	return nil
 }
 
-func (i *Installer) createBinLink(name, pkgDir, relPath, binDir string) {
+func (i *Installer) adaptiveBinLink(name, pkgDir, relPath, binDir string) {
 	dest := filepath.Join(binDir, name)
 	os.Remove(dest)
-	absTarget := filepath.Join(pkgDir, relPath)
+
+	// CLEAN RELATIVE PATH (Handle .exe suffixes in Unix or nested bins)
+	cleanRel := strings.TrimSuffix(relPath, ".exe")
+	if runtime.GOOS == "windows" && !strings.HasSuffix(cleanRel, ".exe") {
+		cleanRel += ".exe"
+	}
+
+	absTarget := filepath.Join(pkgDir, cleanRel)
+
+	// ADAPTIVE DISCOVERY (If metadata says bin/bun.exe but file is bin/bun)
+	if _, err := os.Stat(absTarget); os.IsNotExist(err) {
+		// Try literally as specified in metadata
+		absTarget = filepath.Join(pkgDir, relPath)
+		if _, err := os.Stat(absTarget); os.IsNotExist(err) {
+			// Search for any executable with the same base name in common bin folders
+			bases := []string{"bin", "dist", "."}
+			for _, b := range bases {
+				target := filepath.Join(pkgDir, b, name)
+				if _, err := os.Stat(target); err == nil {
+					absTarget = target
+					break
+				}
+			}
+		}
+	}
+
 	relTarget, _ := filepath.Rel(binDir, absTarget)
 	if runtime.GOOS != "windows" {
 		os.Symlink(relTarget, dest)
-		// Ensure ALL files in a package's bin folder are executable
+		// Ensure it's executable
+		os.Chmod(absTarget, 0755)
 		i.ensureExecutableRecursive(filepath.Dir(absTarget))
 	} else {
 		os.Symlink(relTarget, dest)
@@ -338,6 +367,7 @@ func (i *Installer) createBinLink(name, pkgDir, relPath, binDir string) {
 }
 
 func (i *Installer) ensureExecutableRecursive(path string) {
+	if _, err := os.Stat(path); err != nil { return }
 	filepath.Walk(path, func(p string, info os.FileInfo, err error) error {
 		if err != nil || info.IsDir() { return nil }
 		os.Chmod(p, 0755)
