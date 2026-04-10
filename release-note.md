@@ -1,3 +1,15 @@
+# XFPM - vG0.1.78
+
+## [G0.1.78] - 2026-04-10
+
+### Added
+
+- **Automatic PATH Management**: XFPM now automatically configures your system environment. During global installations, it detects your active shell (Bash or Zsh) and injects the necessary PATH entries into your profile (`.bashrc`, `.zshrc`, etc.) if they are missing. No manual configuration required!
+
+### Fixed
+
+- **Stable Link Lifecycle**: Refined the global installation hook to ensure PATH discovery happens seamlessly after all binary links are established.
+
 # XFPM - vG0.1.77
 
 ## [G0.1.77] - 2026-04-10

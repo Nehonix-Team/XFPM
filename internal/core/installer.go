@@ -93,6 +93,7 @@ func (i *Installer) Install(ctx context.Context, packages []*ResolvedPackage) er
 
 	if i.IsGlobal {
 		i.exportGlobalBinaries(packages)
+		utils.EnsurePathInShell()
 	}
 
 	return nil
