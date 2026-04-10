@@ -55,20 +55,16 @@ func (i *Installer) Install(ctx context.Context, packages []*ResolvedPackage) er
 
 	uniquePackages := i.getUniquePackages(packages)
 
-	// Step 1: Ensure all packages are reflinked to node_modules/.xpm/vstore
 	if err := i.batchEnsureExtracted(ctx, uniquePackages, i.vstoreRoot); err != nil {
 		i.bar.Stop()
 		return err
 	}
 
-	// Step 2: Link internal dependencies within each package's vstore path
-	// This uses relative symlinks for 100% portability and realpath health.
 	if err := i.linkPackageDeps(packages, i.vstoreRoot); err != nil {
 		i.bar.Stop()
 		return err
 	}
 
-	// Step 3: Link direct dependencies and binaries to node_modules root
 	if err := i.linkToRoot(packages); err != nil {
 		i.bar.Stop()
 		return err
@@ -87,7 +83,6 @@ func (i *Installer) Install(ctx context.Context, packages []*ResolvedPackage) er
 		utils.Success("Installation complete: %d updated.", changedCount)
 	}
 
-	// Step 4: Run lifecycle scripts
 	if err := i.runLifecycleScripts(ctx, packages); err != nil {
 		return err
 	}
@@ -202,16 +197,36 @@ func (i *Installer) LinkFilesToDir(destDir string, index map[string]string) erro
 		os.MkdirAll(filepath.Dir(destPath), 0755)
 		os.Remove(destPath)
 		
-		// ALWAYS try Reflink first (0 space cost)
-		if err := utils.Reflink(sourcePath, destPath); err == nil {
-			if fi, err := os.Stat(sourcePath); err == nil && (fi.Mode()&0111) != 0 { os.Chmod(destPath, 0755) } else { os.Chmod(destPath, 0644) }
+		// 1. Reflink
+		err := utils.Reflink(sourcePath, destPath)
+		if err == nil {
+			i.applyPermissions(sourcePath, destPath)
 			continue
 		}
-		// Fallback to Hardlink (or Copy if needed)
-		if err := os.Link(sourcePath, destPath); err == nil { continue }
-		i.copyFile(sourcePath, destPath)
+
+		// 2. Hardlink
+		if err := os.Link(sourcePath, destPath); err == nil {
+			i.applyPermissions(sourcePath, destPath)
+			continue
+		}
+
+		// 3. Copy
+		if err := i.copyFile(sourcePath, destPath); err == nil {
+			i.applyPermissions(sourcePath, destPath)
+		}
 	}
 	return nil
+}
+
+func (i *Installer) applyPermissions(src, dst string) {
+	if runtime.GOOS == "windows" { return }
+	if fi, err := os.Stat(src); err == nil {
+		if (fi.Mode() & 0111) != 0 {
+			os.Chmod(dst, 0755)
+		} else {
+			os.Chmod(dst, 0644)
+		}
+	}
 }
 
 func (i *Installer) linkPackageDeps(packages []*ResolvedPackage, vstoreBase string) error {
@@ -225,7 +240,6 @@ func (i *Installer) linkPackageDeps(packages []*ResolvedPackage, vstoreBase stri
 			
 			depVStoreName := strings.ReplaceAll(depName, "/", "+") + "@" + depVersion
 			
-			// Relative links for 100% path safety
 			steps := strings.Count(depName, "/") + 2
 			relPrefix := ""
 			for j := 0; j < steps; j++ { relPrefix += "../" }
@@ -318,6 +332,7 @@ func (i *Installer) createBinLink(name, pkgDir, relPath, binDir string) {
 	relTarget, _ := filepath.Rel(binDir, absTarget)
 	if runtime.GOOS != "windows" {
 		os.Symlink(relTarget, dest)
+		// BINARIES IN BIN FOLDER MUST ALWAYS BE EXECUTABLE
 		os.Chmod(absTarget, 0755)
 	} else {
 		os.Symlink(relTarget, dest)
@@ -344,8 +359,8 @@ func (i *Installer) copyFile(src, dst string) error {
 	out, err := os.Create(dst)
 	if err != nil { return err }
 	defer out.Close()
-	io.Copy(out, in)
-	return nil
+	_, err = io.Copy(out, in)
+	return err
 }
 
 func (i *Installer) extractLocal(pkg *ResolvedPackage, targetVStore string) error {
