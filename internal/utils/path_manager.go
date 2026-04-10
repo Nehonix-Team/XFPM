@@ -29,28 +29,54 @@ func EnsurePathInShell() error {
 	}
 }
 
-// setupUnixPath appends the bin path to the appropriate shell profile(s).
-func setupUnixPath(home, binPath string) error {
-	profiles := resolveShellProfiles(home)
+// isPathActive reports whether binPath is already present in the current process PATH.
+func isPathActive(binPath string) bool {
+	current := os.Getenv("PATH")
+	sep := string(os.PathListSeparator) // ':' on Unix, ';' on Windows
+	for _, p := range strings.Split(current, sep) {
+		if filepath.Clean(p) == filepath.Clean(binPath) {
+			return true
+		}
+	}
+	return false
+}
 
+// injectPathInProcess adds binPath to the current process environment.
+// This only affects the running Go process and its children — not the parent shell.
+func injectPathInProcess(binPath string) {
+	current := os.Getenv("PATH")
+	sep := string(os.PathListSeparator)
+	_ = os.Setenv("PATH", binPath+sep+current)
+}
+
+// setupUnixPath writes binPath into the appropriate shell profile(s) and
+// injects it into the current process immediately.
+func setupUnixPath(home, binPath string) error {
+	// Always inject into the current process so xpm sub-commands work right away.
+	if !isPathActive(binPath) {
+		injectPathInProcess(binPath)
+	}
+
+	profiles := resolveShellProfiles(home)
 	exportLine := fmt.Sprintf("\n%s\nexport PATH=\"%s:$PATH\"\n", pathMarker, binPath)
 
 	var lastErr error
 	modifiedAny := false
+	var modifiedProfiles []string
 
 	for _, profile := range profiles {
 		if _, err := os.Stat(profile); os.IsNotExist(err) {
 			continue
 		}
 
-		content, err := os.ReadFile(profile) // replaces deprecated ioutil.ReadFile
+		content, err := os.ReadFile(profile)
 		if err != nil {
 			lastErr = fmt.Errorf("could not read %s: %w", profile, err)
 			continue
 		}
 
 		if strings.Contains(string(content), binPath) {
-			continue // Already present, skip
+			continue // Already written, skip
 		}
 
 		f, err := os.OpenFile(profile, os.O_APPEND|os.O_WRONLY, 0o644)
@@ -72,18 +98,46 @@ func setupUnixPath(home, binPath string) error {
 		}
 
 		modifiedAny = true
+		modifiedProfiles = append(modifiedProfiles, profile)
 	}
 
 	if modifiedAny {
-		Info("PATH updated in your shell profile. Run 'source ~/.bashrc' or 'source ~/.zshrc' (or open a new terminal) to apply.")
+		// PATH is active in this process already.
+		// But the parent shell (the terminal) still needs a manual source — this is
+		// a hard OS limitation: a child process cannot mutate its parent's environment.
+		Info("PATH injected for this session. Profile(s) updated: " + strings.Join(modifiedProfiles, ", "))
+		Info("To persist in your current terminal, run: " + sourceHint(modifiedProfiles))
 	}
 
-	// Return last encountered error only if nothing was modified at all
 	if !modifiedAny && lastErr != nil {
 		return lastErr
 	}
 
 	return nil
+}
+
+// sourceHint returns the exact shell command the user should run to reload their profile.
+func sourceHint(profiles []string) string {
+	if len(profiles) == 0 {
+		return "source ~/.profile"
+	}
+	// Use the first modified profile; it was already prioritized by resolveShellProfiles.
+	profile := profiles[0]
+	home, _ := os.UserHomeDir()
+
+	// Replace home dir with ~ for readability
+	if home != "" {
+		profile = strings.Replace(profile, home, "~", 1)
+	}
+
+	shellPath := os.Getenv("SHELL")
+	switch {
+	case strings.Contains(shellPath, "fish"):
+		// fish uses `source`, same syntax
+		return fmt.Sprintf("source %s", profile)
+	default:
+		return fmt.Sprintf("source %s", profile)
+	}
 }
 
 // resolveShellProfiles returns an ordered, deduplicated list of shell profile paths.
@@ -96,12 +150,11 @@ func resolveShellProfiles(home string) []string {
 		filepath.Join(home, ".profile"),
 	}
 
-	// macOS-specific: .zprofile is the default login shell profile since Catalina
+	// macOS: .zprofile is the default login shell profile since Catalina
 	if runtime.GOOS == "darwin" {
 		candidates = append([]string{filepath.Join(home, ".zprofile")}, candidates...)
 	}
 
-	// Prioritize the currently active shell
 	shellPath := os.Getenv("SHELL")
 	var priority string
 	switch {
@@ -119,7 +172,6 @@ func resolveShellProfiles(home string) []string {
 	}
 
 	if priority != "" {
-		// Move priority to front, deduplicate
 		deduped := []string{priority}
 		for _, c := range candidates {
 			if c != priority {
@@ -132,22 +184,27 @@ func resolveShellProfiles(home string) []string {
 	return candidates
 }
 
-// setupWindowsPath updates the user-level PATH via PowerShell (no admin required).
+// setupWindowsPath updates the user-level PATH via PowerShell (no admin required)
+// and injects it into the current process immediately.
 func setupWindowsPath(binPath string) error {
-	// Read current user PATH from registry via PowerShell
+	// Inject into current process right away
+	if !isPathActive(binPath) {
+		injectPathInProcess(binPath)
+	}
+
+	// Read current user PATH from registry
 	checkScript := `[Environment]::GetEnvironmentVariable("PATH", "User")`
 	out, err := runPowerShell(checkScript)
 	if err != nil {
 		return fmt.Errorf("could not read Windows user PATH: %w", err)
 	}
 
-	// Normalize separators for comparison
 	normalized := filepath.ToSlash(binPath)
 	if strings.Contains(filepath.ToSlash(out), normalized) {
-		return nil // Already present
+		return nil // Already present in registry
 	}
 
-	// Append binPath to user PATH
+	// Persist to user registry — no admin required, takes effect for new processes
 	setScript := fmt.Sprintf(
 		`$cur = [Environment]::GetEnvironmentVariable("PATH", "User"); `+
 			`[Environment]::SetEnvironmentVariable("PATH", $cur + ";%s", "User")`,
@@ -157,7 +214,28 @@ func setupWindowsPath(binPath string) error {
 		return fmt.Errorf("could not update Windows user PATH: %w", err)
 	}
 
-	Info("PATH updated in Windows user environment. Please restart your terminal to apply.")
+	// Broadcast WM_SETTINGCHANGE so Explorer and new terminals pick up the change
+	// without a full reboot. Errors here are non-fatal.
+	broadcastScript := `
+		Add-Type -TypeDefinition @"
+		using System;
+		using System.Runtime.InteropServices;
+		public class WinEnv {
+			[DllImport("user32.dll", SetLastError=true, CharSet=CharSet.Auto)]
+			public static extern IntPtr SendMessageTimeout(
+				IntPtr hWnd, uint Msg, UIntPtr wParam,
+				string lParam, uint fuFlags, uint uTimeout, out UIntPtr lpdwResult);
+		}
+"@
+		$r = [UIntPtr]::Zero
+		[WinEnv]::SendMessageTimeout(
+			[IntPtr]0xFFFF, 0x001A, [UIntPtr]::Zero,
+			"Environment", 2, 5000, [ref]$r) | Out-Null
+	`
+	_, _ = runPowerShell(broadcastScript) // best-effort, ignore errors
+
+	Info("PATH injected for this session and persisted to Windows user environment.")
+	Info("New terminals will pick it up automatically. Running processes may need a restart.")
 	return nil
 }
 
