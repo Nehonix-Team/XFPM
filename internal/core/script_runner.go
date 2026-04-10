@@ -152,7 +152,13 @@ func (r *ScriptRunner) buildEnv(pathVal string) []string {
 		"CI":                             "true",
 		"npm_config_foreground_scripts":  "true",
 		"NODE_PATH":                      filepath.Join(r.projectRoot, "node_modules"),
+		"TMPDIR":                         filepath.Join(r.projectRoot, "node_modules", ".xpm", "tmp"),
+		"TEMP":                           filepath.Join(r.projectRoot, "node_modules", ".xpm", "tmp"),
+		"TMP":                            filepath.Join(r.projectRoot, "node_modules", ".xpm", "tmp"),
 	}
+
+	// Ensure the temp dir exists
+	os.MkdirAll(overrides["TMPDIR"], 0755)
 
 	for _, e := range env {
 		pair := strings.SplitN(e, "=", 2)
