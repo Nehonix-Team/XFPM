@@ -1,3 +1,12 @@
+# XFPM - vG0.1.77
+
+## [G0.1.77] - 2026-04-10
+
+### Added
+
+- **Adaptive Binary Linking**: Switched from rigid metadata-based linking to an intelligent discovery algorithm. XFPM now correctly resolves binaries even if they have platform-specific extensions (like `.exe` appearing in NPM metadata on Linux) or if they are dynamically created by post-install scripts (fixing `bun` and `deno` global installs).
+- **Execution Lifecycle Sync**: Corrected the order of operations to ensure all `postinstall` scripts finish executing before binaries are exported to the global path.
+
 # XFPM - vG0.1.76
 
 ## [G0.1.76] - 2026-04-10
