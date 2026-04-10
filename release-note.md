@@ -1,3 +1,16 @@
+# XFPM - vG0.1.75
+
+## [G0.1.75] - 2026-04-10
+
+### Added
+
+- **UX - Clear Screen After Install**: As requested, the terminal is now automatically cleared after a successful installation, providing a clean slate for subsequent script logs.
+- **Unified Global Architecture**: Global installations are now organized under `~/.xpm/globals` with binaries consistently exported to `~/.xpm/bin`. This eliminates "stale" binary links from previous experimental versions.
+
+### Fixed
+
+- **Exhaustive Permission Management**: Implemented recursive `chmod 755` for all files within a package's `bin/` directory. This decisively resolves `EACCES` errors on systems where reflink/hardlink metadata might not preserve executable bits.
+
 # XFPM - vG0.1.74
 
 ## [G0.1.74] - 2026-04-10

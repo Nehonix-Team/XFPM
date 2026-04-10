@@ -188,7 +188,7 @@ var installCmd = &cobra.Command{
 		var err error
 		if global {
 			home, _ := os.UserHomeDir()
-			projectRoot = filepath.Join(home, ".xpm_global")
+			projectRoot = filepath.Join(home, ".xpm", "globals")
 			os.MkdirAll(projectRoot, 0755)
 		} else {
 			projectRoot, err = os.Getwd()

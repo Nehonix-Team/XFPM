@@ -129,7 +129,7 @@ func (r *ScriptRunner) buildPath(packageDir string) string {
 
 	// 3. Global XPM bin
 	if home, err := os.UserHomeDir(); err == nil {
-		globalBin := filepath.Join(home, ".xpm_global", "bin")
+		globalBin := filepath.Join(home, ".xpm", "bin")
 		if _, err := os.Stat(globalBin); err == nil {
 			paths = append(paths, globalBin)
 		}
