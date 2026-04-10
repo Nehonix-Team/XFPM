@@ -1,3 +1,17 @@
+# XFPM - vG0.1.81
+
+## [G0.1.81] - 2026-04-10
+
+### Added
+
+- **Immediate Process PATH Injection**: XFPM now injects the global bin path into the current process environment. This allows post-install scripts and sub-commands to access newly installed binaries in the same session.
+- **Windows Environment Broadcast**: On Windows, XFPM now broadcasts `WM_SETTINGCHANGE` after updating the PATH. This ensures that new terminals and Explorer pick up the change without a system restart.
+- **Enhanced Profile Detection**: Improved logic for Bash, Zsh, and Fish profile discovery with prioritized ordering.
+
+### Improved
+
+- **User UX**: Automated "source" suggestions and profile path normalization.
+
 # XFPM - vG0.1.80
 
 ## [G0.1.80] - 2026-04-10
