@@ -107,29 +107,50 @@ var pruneCmd = &cobra.Command{
 		absPath, _ := filepath.Abs(targetPath)
 		utils.Matrix(fmt.Sprintf("Scanning for legacy storage in: %s", absPath))
 
+		home, _ := os.UserHomeDir()
+		xpmDir := filepath.Join(home, ".xpm")
+
 		s, _ := pterm.DefaultSpinner.Start("Searching...")
 		roots := core.FindLegacyStorages(absPath)
+		
+		// SEARCH GLOBAL LEGACY
+		globalLegacies := []string{
+			filepath.Join(xpmDir, "xpm_global_storage"),
+			filepath.Join(xpmDir, "xpm_store"),
+			filepath.Join(xpmDir, "xpm_store_legacy"),
+			filepath.Join(xpmDir, "registry_cache"),
+		}
+		
+		globalFound := []string{}
+		for _, g := range globalLegacies {
+			if fi, err := os.Stat(g); err == nil && fi.IsDir() {
+				globalFound = append(globalFound, g)
+			}
+		}
 		s.Stop()
 
-		if len(roots) == 0 {
+		if len(roots) == 0 && len(globalFound) == 0 {
 			utils.Success("No legacy XFPM storage found.")
 			return nil
 		}
 
-		utils.Info("Found %d projects with legacy storage.", len(roots))
+		utils.Info("Found %d projects and %d global legacy stores.", len(roots), len(globalFound))
 		
 		// Map for selection
 		var options []string
+		for _, g := range globalFound {
+			options = append(options, "[GLOBAL] "+filepath.Base(g))
+		}
 		for _, r := range roots {
 			options = append(options, r)
 		}
-		options = append(options, "MIGRATE ALL PROJECTS")
+		options = append(options, "MIGRATE ALL")
 		options = append(options, "CANCEL")
 
 		selected, _ := pterm.DefaultInteractiveSelect.
 			WithMaxHeight(15).
 			WithOptions(options).
-			WithDefaultText("Select project to migrate").
+			WithDefaultText("Select storage to migrate").
 			Show()
 
 		if selected == "CANCEL" {
@@ -137,25 +158,38 @@ var pruneCmd = &cobra.Command{
 		}
 
 		var toMigrate []string
-		if selected == "MIGRATE ALL PROJECTS" {
-			toMigrate = roots
+		_ = home // already defined
+		xpmStore := filepath.Join(home, ".xpm", "storage")
+		cas, _ := core.NewCas(xpmStore)
+
+		if selected == "MIGRATE ALL" {
+			toMigrate = append(globalFound, roots...)
+		} else if strings.HasPrefix(selected, "[GLOBAL] ") {
+			base := strings.TrimPrefix(selected, "[GLOBAL] ")
+			toMigrate = []string{filepath.Join(xpmDir, base)}
 		} else {
 			toMigrate = []string{selected}
 		}
 
-		home, _ := os.UserHomeDir()
-		xpmStore := filepath.Join(home, ".xpm", "storage")
-		cas, _ := core.NewCas(xpmStore)
-
-		for _, root := range toMigrate {
-			pterm.DefaultSection.Printf("Migrating %s", root)
+		for _, item := range toMigrate {
+			pterm.DefaultSection.Printf("Migrating %s", item)
 			
 			pb, _ := pterm.DefaultProgressbar.
-				WithTotal(0). // will be set by the first callback call
+				WithTotal(0).
 				WithTitle("  " + pterm.Gray("->") + " Moving files").
 				Start()
 
-			err := core.MigrateLegacyStorage(root, cas, func(current, total int, message string) {
+			// Check if it's a project (needs node_modules/.xpm/storage) or a direct path
+			var migratePath string
+			if strings.HasPrefix(item, home) && !strings.Contains(item, "node_modules") {
+				// Global path
+				migratePath = item
+			} else {
+				// Project path
+				migratePath = filepath.Join(item, "node_modules", ".xpm", "storage")
+			}
+
+			err := core.MigratePathToCas(migratePath, cas, func(current, total int, message string) {
 				pb.Total = total
 				pb.Add(1)
 				pb.Title = "  " + pterm.Gray("->") + " Migrated: " + pterm.LightCyan(message)
@@ -164,9 +198,9 @@ var pruneCmd = &cobra.Command{
 			pb.Stop()
 
 			if err != nil {
-				utils.Error("Failed to migrate %s: %v", root, err)
+				utils.Error("Failed to migrate %s: %v", item, err)
 			} else {
-				utils.Success("Completed migration for %s", root)
+				utils.Success("Completed migration for %s", item)
 			}
 			fmt.Println()
 		}

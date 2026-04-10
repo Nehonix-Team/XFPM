@@ -19,7 +19,17 @@ type ProgressCallback func(current, total int, message string)
 // MigrateLegacyStorage moves files from local storage to the global CAS.
 func MigrateLegacyStorage(projectRoot string, cas *Cas, callback ProgressCallback) error {
 	legacyDir := filepath.Join(projectRoot, "node_modules", ".xpm", "storage")
-	legacyFilesDir := filepath.Join(legacyDir, "files")
+	return MigratePathToCas(legacyDir, cas, callback)
+}
+
+// MigratePathToCas moves files from ANY legacy storage directory to the unified global CAS.
+func MigratePathToCas(sourceDir string, cas *Cas, callback ProgressCallback) error {
+	legacyFilesDir := filepath.Join(sourceDir, "files")
+	// If it doesn't have a 'files' subfolder, maybe it's the root itself?
+	// Old versions might have different structures.
+	if _, err := os.Stat(legacyFilesDir); err != nil {
+		legacyFilesDir = sourceDir
+	}
 
 	// Count files first for progress reporting
 	var total int
@@ -62,7 +72,7 @@ func MigrateLegacyStorage(projectRoot string, cas *Cas, callback ProgressCallbac
 	}
 
 	// 2. Cleanup legacy storage
-	return os.RemoveAll(legacyDir)
+	return os.RemoveAll(sourceDir)
 }
 
 // FindLegacyStorages recursively finds legacy XFPM storage directories.

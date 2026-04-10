@@ -1,3 +1,15 @@
+# XFPM - vG0.1.82
+
+## [G0.1.82] - 2026-04-10
+
+### Added
+
+- **Global Store Pruning & Migration**: The `xfpm store prune --legacy` command now scans for and migrates legacy global storage directories (e.g., `xpm_global_storage`, `xpm_store`) into the new unified CAS. This ensures a clean upgrade path for users coming from very old XFPM versions.
+
+### Improved
+
+- **Generalized Migration Engine**: Decoupled migration logic from project-local paths, allowing XFPM to safely migrate data from any identified legacy source.
+
 # XFPM - vG0.1.81
 
 ## [G0.1.81] - 2026-04-10
