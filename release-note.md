@@ -1,3 +1,15 @@
+# XFPM - vG0.1.80
+
+## [G0.1.80] - 2026-04-10
+
+### Added
+
+- **Partition-Safe Script Execution**: XFPM now injects a localized `TMPDIR` within the package store during script execution. This prevents silent failures in `postinstall` scripts (like Bun or FileOnix) that attempt to move files from system temporary folders across different partitions.
+
+### Fixed
+
+- **Post-Install Reliability**: Resolved a significant regression where global tools would appear missing or broken because their installation scripts failed to persist downloaded binaries.
+
 # XFPM - vG0.1.79
 
 ## [G0.1.79] - 2026-04-10
