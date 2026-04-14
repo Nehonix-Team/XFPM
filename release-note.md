@@ -1,4 +1,10 @@
-# XFPM - vG0.1.82
+# XFPM - vG0.1.83
+
+## [G0.1.83] - 2026-04-14
+
+### Fixed
+
+- **Global Path Consistency**: Unified global storage paths across all commands (`uninstall`, `list`, `run`). Fixed a bug where `xfpm rm -g` would look in the legacy `~/.xpm_global` directory instead of the new `~/.xpm/globals` structure.
 
 ## [G0.1.82] - 2026-04-10
 

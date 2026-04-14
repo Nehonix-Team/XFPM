@@ -31,7 +31,7 @@ var listCmd = &cobra.Command{
 
 		if global {
 			home, _ := os.UserHomeDir()
-			nmRoot = filepath.Join(home, ".xpm_global", "node_modules")
+			nmRoot = filepath.Join(home, ".xpm", "globals", "node_modules")
 		} else {
 			nmRoot = filepath.Join(projectRoot, "node_modules")
 			pkgJsonPath = filepath.Join(projectRoot, "package.json")
