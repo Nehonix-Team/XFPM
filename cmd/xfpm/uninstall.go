@@ -36,7 +36,7 @@ var uninstallCmd = &cobra.Command{
 
 		if global {
 			home, _ := os.UserHomeDir()
-			nmRoot = filepath.Join(home, ".xpm_global", "node_modules")
+			nmRoot = filepath.Join(home, ".xpm", "globals", "node_modules")
 		} else {
 			nmRoot = filepath.Join(projectRoot, "node_modules")
 			pkgJsonPath = filepath.Join(projectRoot, "package.json")
@@ -77,17 +77,17 @@ var uninstallCmd = &cobra.Command{
 				// Clean up binary links from .bin
 				if global {
 					home, _ := os.UserHomeDir()
-					globalRoot := filepath.Join(home, ".xpm_global")
+					globalRoot := filepath.Join(home, ".xpm")
 					cleanupGlobalBinaries(globalRoot, pkgName)
 				} else {
 					cleanupBinaries(nmRoot, pkgName)
 				}
 
 				// Clean up from virtual store (deep clean matching version)
-				vstoreRoot := filepath.Join(projectRoot, "node_modules", ".xpm", "virtual_store")
+				vstoreRoot := filepath.Join(projectRoot, "node_modules", ".xpm", "vstore")
 				if global {
 					home, _ := os.UserHomeDir()
-					vstoreRoot = filepath.Join(home, ".xpm_global", "node_modules", ".xpm", "virtual_store")
+					vstoreRoot = filepath.Join(home, ".xpm", "globals", "node_modules", ".xpm", "vstore")
 				}
 				cleanupVirtualStore(vstoreRoot, pkgName, resolvedVersion)
 

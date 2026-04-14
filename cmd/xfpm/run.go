@@ -100,7 +100,7 @@ func buildRunEnv(dir string) []string {
 
 	// Add global XPM bin
 	if home, err := os.UserHomeDir(); err == nil {
-		globalBin := filepath.Join(home, ".xpm_global", "bin")
+		globalBin := filepath.Join(home, ".xpm", "bin")
 		if _, err := os.Stat(globalBin); err == nil {
 			path = globalBin + string(os.PathListSeparator) + path
 		}
