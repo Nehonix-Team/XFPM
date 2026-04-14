@@ -1,4 +1,10 @@
-# XFPM - vG0.1.83
+# XFPM - vG0.1.84
+
+## [G0.1.84] - 2026-04-14
+
+### Added
+
+- **Command `xfpm create`**: Introduced a new command for project initialization via community generators. It behaves like `npm create` by automatically resolving `create-<name>` packages and executing them using the local JS runtime (`bun` or `npx`).
 
 ## [G0.1.83] - 2026-04-14
 
