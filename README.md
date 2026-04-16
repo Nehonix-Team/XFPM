@@ -129,11 +129,11 @@ XFPM resolves dependencies by building a **Neural Dependency Graph** of your pro
 
 ### CAS — Content Addressable Storage
 
-Every file is hashed and stored once across the entire system, eliminating duplicates and ensuring deterministic installs.
+Every file is hashed and stored once across the entire system within the global `~/.xpm/storage` directory, eliminating duplicates and ensuring deterministic installs.
 
 ### Virtual Store
 
-Dependencies are stored by exact version under `node_modules/.xpm/virtual_store` and symlinked into the project's `node_modules`. This enforces strict isolation and prevents dependency leakage between projects.
+Dependencies are rigorously stored by exact version under the project-local `node_modules/.xpm/vstore` and symlinked into the project's root `node_modules`. This "Ancestor Hoisting" architecture enforces strict isolation while avoiding ghost dependencies.
 
 ### Targeted Resolution
 
@@ -146,4 +146,4 @@ Only the modified portions of the dependency graph are recalculated during updat
 Copyright 2025 **Nehonix**. All rights reserved.  
 Licensed under the **Nehonix OSL (NOSL)**.
 
-Powered by Nehonix and the XyPriss Engine.
+Powered by Nehonix.
