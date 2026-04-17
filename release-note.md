@@ -1,15 +1,26 @@
-# XFPM - vG0.1.88
+# XFPM - vG0.1.90
+
+## [G0.1.90] - 2026-04-17
+
+### Added
+
+- **`xfpm audit fix`**:
+  - Automatically resolve vulnerabilities by updating direct dependencies to their latest safe versions.
+  - Interactive confirmation with clear security warnings about potential breaking changes.
+  - **`--yes` / `-y` flag**: Support for automated/CI environments to skip interactive confirmation.
+- **Enhanced Dependency Insights**:
+  - The HTML report now displays a "Pulled in by" section for every vulnerability, showing the full recursive dependency path from the root project.
+  - Eliminates the need for manual `xfpm list` calls to investigate vulnerability sources.
 
 ## [G0.1.88] - 2026-04-17
 
 ### Added
 
 - **Premium Audit UI (XFPML)**:
-  - **XyPriss Fast Markup Language (XFPML)**: Unified the security report template system into a dedicated `.xfpml` architecture, embedded directly into the Go binary.
-  - **Optimized Dependency Graph**: Fully redesigned the D3.js force-directed layout with improved repulsion and collision physics to avoid package overlapping.
-  - **Enhanced Readability**: Graph labels now feature high-contrast light colors with a custom text-shadow for a superior dark-mode experience.
-  - **Interactive Viewport**: Added a new **Expand** feature allowing users to toggle between a compact and a fullscreen view of complex dependency trees.
-  - **Clean Data Injection**: Decoupled template logic from JS execution by using a separate JSON-data script block, resolving several IDE syntax highlighting issues.
+  - **XyPriss Fast Markup Language (XFPML)**: Unified the security report template system into a dedicated `.xfpml` architecture.
+  - **Optimized Dependency Graph**: Fully redesigned the D3.js force-directed layout with improved repulsion and collision physics.
+  - **Enhanced Readability**: Graph labels now feature high-contrast light colors with a custom text-shadow.
+  - **Interactive Viewport**: Added a new **Expand** feature for fullscreen graph exploration.
 
 ### Fixed
 
