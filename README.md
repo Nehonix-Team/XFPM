@@ -30,6 +30,7 @@
 | **Cross-Platform**   | Native binaries for Windows, Linux, and macOS — both `amd64` and `arm64`.                                       |
 | **Clean Output**     | Structured, minimal terminal feedback with no visual noise.                                                     |
 | **Auto-Update**      | Built-in update engine keeps the CLI current without manual intervention.                                       |
+| **Security Audit**   | Standalone SCA engine with premium interactive reports powered by **XFPML**.                                    |
 | **Single Binary**    | No runtime dependencies. One binary, fully self-contained.                                                      |
 
 ---
@@ -100,6 +101,29 @@ xfpm update
 
 # Update a specific package
 xfpm update <package>
+```
+
+### Dependency Audit
+
+Audit your dependencies for known vulnerabilities via the OSV database.
+
+```bash
+# Standard interactive audit
+xfpm audit
+
+# Force a specific report mode
+xfpm audit --tree  # Terminal tree view
+xfpm audit --html  # Open interactive XFPML dashboard
+```
+
+### Inspect Dependencies
+
+```bash
+# List all direct dependencies
+xfpm list
+
+# List specific packages and their dependents
+xfpm list <package...>
 ```
 
 ### Package Maintainers: Redirections & Deprecation
