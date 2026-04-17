@@ -30,7 +30,7 @@ import (
 	"os/exec"
 	"path/filepath"
 
-	"github.com/Nehonix-Team/xfpm-go/internal/utils"
+	"github.com/Nehonix-Team/XFMP/internal/utils"
 	"github.com/spf13/cobra"
 )
 
