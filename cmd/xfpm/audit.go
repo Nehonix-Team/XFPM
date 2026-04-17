@@ -36,8 +36,9 @@ var auditReportTmpl string
 
 var (
 	auditTree bool
-	auditHtml bool
-	auditYes  bool
+	auditHtml        bool
+	auditYes         bool
+	auditForceRemove bool
 )
 
 var auditCmd = &cobra.Command{
@@ -581,12 +582,12 @@ var auditFixCmd = &cobra.Command{
 			return err
 		}
 
-		spinner, _ := pterm.DefaultSpinner.Start("Auditing for fixable vulnerabilities...")
+		spinner, _ := pterm.DefaultSpinner.Start("Checking for fixable vulnerabilities...")
 
 		registry := core.NewRegistryClient("", 3)
 		home, _ := os.UserHomeDir()
-		registry.SetCacheDir(filepath.Join(home, ".xpm", "cache"))
-		cas, _ := core.NewCas("")
+		registry.SetCacheDir(filepath.Join(projectRoot, "node_modules", ".xpm", "cache"))
+		cas, _ := core.NewCas(filepath.Join(home, ".xpm", "storage"))
 		resolver := core.NewResolver(registry, cas)
 
 		ctx := context.Background()
@@ -604,72 +605,153 @@ var auditFixCmd = &cobra.Command{
 		spinner.Success("Audit complete")
 
 		if len(vulns) == 0 {
-			utils.Success("No vulnerabilities found. Nothing to fix.")
+			utils.Success("No vulnerabilities found. Everything is secure.")
 			return nil
 		}
 
-		fixable := make(map[string]bool)
+		// Identify direct vulnerable packages
+		directVulns := make(map[string]DetectedVuln)
 		for _, v := range vulns {
-			// Check if it's a direct dependency
 			isDirect := false
 			if _, ok := pkgJson.Dependencies[v.Package]; ok { isDirect = true }
 			if _, ok := pkgJson.DevDependencies[v.Package]; ok { isDirect = true }
 			if _, ok := pkgJson.OptionalDependencies[v.Package]; ok { isDirect = true }
 			if _, ok := pkgJson.PeerDependencies[v.Package]; ok { isDirect = true }
-
 			if isDirect {
-				fixable[v.Package] = true
+				directVulns[v.Package] = v
 			}
 		}
 
-		if len(fixable) == 0 {
-			utils.Warn("Found %d vulnerabilities, but none are direct dependencies. Manual inspection of the dependency tree required.", len(vulns))
-			displayVulnerabilityTree(resolved, vulns)
+		if len(directVulns) == 0 {
+			utils.Warn("Vulnerabilities found in transitive dependencies. Run 'xfpm audit --tree' to investigate.")
 			return nil
 		}
 
-		pterm.DefaultBox.WithTitle(pterm.FgYellow.Sprint(" SECURITY WARNING ")).Printfln(
-			"XFPM will attempt to fix %d direct vulnerabilities by updating them to 'latest'.\n" +
-			"This may introduce %s depending on new package versions.",
-			len(fixable), pterm.Bold.Sprint("BREAKING CHANGES"))
+		for pkgName, v := range directVulns {
+			pterm.DefaultSection.Printf("Security analysis for %s", pkgName)
+			
+			// 1. Check registry for latest version
+			metaSpinner, _ := pterm.DefaultSpinner.Start(fmt.Sprintf("Fetching metadata for %s...", pkgName))
+			metadata, err := registry.FetchPackage(ctx, pkgName, false)
+			if err != nil {
+				metaSpinner.Fail("Failed to fetch metadata")
+				continue
+			}
+			latestVersion := metadata.DistTags["latest"]
+			metaSpinner.Success(fmt.Sprintf("Latest version: %s (Current: %s)", latestVersion, v.Version))
 
-		if !auditYes {
-			confirm, _ := pterm.DefaultInteractiveConfirm.WithDefaultText("Do you want to proceed?").Show()
-			if !confirm {
-				return nil
+			if latestVersion == v.Version {
+				pterm.Warning.Printf("You are already on the latest version of %s. Vulnerability persists.\n", pkgName)
+				if auditForceRemove {
+					uninstallPackage(pkgName, pkgJson, pkgJsonPath)
+					continue
+				}
+				if handleUninstallPrompt(pkgName, pkgJson, pkgJsonPath) {
+					continue
+				}
+				continue
+			}
+
+			// 2. Propose update
+			pterm.Info.Printf("Proposed fix: Update %s to %s\n", pkgName, latestVersion)
+			if !auditYes {
+				confirm, _ := pterm.DefaultInteractiveConfirm.WithDefaultText("Do you want to proceed with the update?").Show()
+				if !confirm {
+					continue
+				}
+			}
+
+			// 3. Perform update
+			updateSpinner, _ := pterm.DefaultSpinner.Start(fmt.Sprintf("Updating %s...", pkgName))
+			// Update pkgJson
+			if _, ok := pkgJson.Dependencies[pkgName]; ok { pkgJson.Dependencies[pkgName] = "^" + latestVersion }
+			if _, ok := pkgJson.DevDependencies[pkgName]; ok { pkgJson.DevDependencies[pkgName] = "^" + latestVersion }
+			if _, ok := pkgJson.OptionalDependencies[pkgName]; ok { pkgJson.OptionalDependencies[pkgName] = "^" + latestVersion }
+			if _, ok := pkgJson.PeerDependencies[pkgName]; ok { pkgJson.PeerDependencies[pkgName] = "^" + latestVersion }
+
+			if err := pkgJson.Save(pkgJsonPath); err != nil {
+				updateSpinner.Fail("Failed to update package.json")
+				continue
+			}
+
+			// Resolve and Install
+			res, _, err := resolver.ResolveTree(ctx, pkgJson.AllDependencies())
+			if err != nil {
+				updateSpinner.Fail("Failed to resolve new tree")
+				continue
+			}
+			installer := core.NewInstaller(cas, registry, projectRoot)
+			if err := installer.Install(ctx, res); err != nil {
+				updateSpinner.Fail("Installation failed")
+				continue
+			}
+			updateSpinner.Success("Package updated and installed.")
+
+			// 4. Re-Verify
+			verifySpinner, _ := pterm.DefaultSpinner.Start("Re-verifying security status...")
+			// We only need to audit the updated package
+			var targetPkg *core.ResolvedPackage
+			for _, p := range res {
+				if p.Name == pkgName {
+					targetPkg = p
+					break
+				}
+			}
+			if targetPkg == nil {
+				verifySpinner.Fail("Verification error: package not found in resolved tree")
+				continue
+			}
+
+			reVulns, err := checkVulnerabilities([]*core.ResolvedPackage{targetPkg})
+			if err != nil {
+				verifySpinner.Fail("Verification check failed")
+				continue
+			}
+
+			if len(reVulns) > 0 {
+				verifySpinner.Fail(fmt.Sprintf("Vulnerability persists in %s@%s", pkgName, latestVersion))
+				if auditForceRemove {
+					uninstallPackage(pkgName, pkgJson, pkgJsonPath)
+					continue
+				}
+				if handleUninstallPrompt(pkgName, pkgJson, pkgJsonPath) {
+					continue
+				}
+			} else {
+				verifySpinner.Success(fmt.Sprintf("Fix verified! %s@%s is now secure.", pkgName, latestVersion))
 			}
 		}
 
-		fixSpinner, _ := pterm.DefaultSpinner.Start("Fixing vulnerabilities...")
-		for pkgName := range fixable {
-			fixSpinner.UpdateText(fmt.Sprintf("Updating %s to latest...", pkgName))
-			
-			// Set to latest in whatever section it belongs to
-			if _, ok := pkgJson.Dependencies[pkgName]; ok { pkgJson.Dependencies[pkgName] = "latest" }
-			if _, ok := pkgJson.DevDependencies[pkgName]; ok { pkgJson.DevDependencies[pkgName] = "latest" }
-			if _, ok := pkgJson.OptionalDependencies[pkgName]; ok { pkgJson.OptionalDependencies[pkgName] = "latest" }
-			if _, ok := pkgJson.PeerDependencies[pkgName]; ok { pkgJson.PeerDependencies[pkgName] = "latest" }
-		}
-
-		if err := pkgJson.Save(pkgJsonPath); err != nil {
-			fixSpinner.Fail(fmt.Sprintf("Failed to save package.json: %v", err))
-			return err
-		}
-		fixSpinner.Success("Package.json updated.")
-
-		utils.Info("Triggering fresh installation to apply fixes...")
-		// Use cobra's Execute on installCmd logic or just advice user to run install.
-		// For simplicity, we trigger internal install logic if possible, but easier to just notify.
-		utils.Success("Successfully applied fixes to %d packages. Please run 'xfpm install' to complete the repair.", len(fixable))
-
+		utils.Success("Audit repair sequence complete.")
 		return nil
 	},
 }
+
+func uninstallPackage(pkgName string, pkgJson *core.PackageJson, pkgJsonPath string) {
+	delete(pkgJson.Dependencies, pkgName)
+	delete(pkgJson.DevDependencies, pkgName)
+	delete(pkgJson.OptionalDependencies, pkgName)
+	delete(pkgJson.PeerDependencies, pkgName)
+	pkgJson.Save(pkgJsonPath)
+	utils.Success("%s removed from package.json for security reasons. Please run 'xfpm install' to clean node_modules.", pkgName)
+}
+
+func handleUninstallPrompt(pkgName string, pkgJson *core.PackageJson, pkgJsonPath string) bool {
+	pterm.Error.Printf("CRITICAL: No known fix for %s. It remains vulnerable even at the latest version.\n", pkgName)
+	confirm, _ := pterm.DefaultInteractiveConfirm.WithDefaultText(fmt.Sprintf("Do you want to UNINSTALL %s to secure your project?", pkgName)).Show()
+	if confirm {
+		uninstallPackage(pkgName, pkgJson, pkgJsonPath)
+		return true
+	}
+	return false
+}
+
 
 func init() {
 	auditCmd.Flags().BoolVarP(&auditTree, "tree", "t", false, "Display vulnerability tree in terminal")
 	auditCmd.Flags().BoolVarP(&auditHtml, "html", "w", false, "Generate and open HTML report")
 	auditFixCmd.Flags().BoolVarP(&auditYes, "yes", "y", false, "Skip confirmation prompt")
+	auditFixCmd.Flags().BoolVar(&auditForceRemove, "force-remove", false, "Automatically remove packages if no fix is found")
 	auditCmd.AddCommand(auditFixCmd)
 	rootCmd.AddCommand(auditCmd)
 }

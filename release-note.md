@@ -1,4 +1,14 @@
-# XFPM - vG0.1.90
+# XFPM - vG0.1.92
+
+## [G0.1.92] - 2026-04-17
+
+### Added
+
+- **Intelligent `audit fix` Loop**:
+  - Automatically compares local versions with NPM registry `latest` before suggesting updates.
+  - Programmatically executes `install` and re-verifies security status after a fix is applied.
+  - **Fallback Uninstallation**: Prompts to remove packages that remain vulnerable even at their latest versions.
+  - **`--force-remove` flag**: Enables automated uninstallation of unfixable vulnerable packages.
 
 ## [G0.1.90] - 2026-04-17
 
