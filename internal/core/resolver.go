@@ -379,8 +379,9 @@ func (r *Resolver) resolvePackage(ctx context.Context, name, req string, isOptio
 					Version: pkgJson.Version,
 					Dependencies: pkgJson.Dependencies,
 					OptionalDependencies: pkgJson.OptionalDependencies,
-					PeerDependencies: pkgJson.PeerDependencies,
-					Xfpm: pkgJson.Xfpm,
+					PeerDependencies:     pkgJson.PeerDependencies,
+					PeerDependenciesMeta: pkgJson.PeerDependenciesMeta,
+					Xfpm:                 pkgJson.Xfpm,
 					// Bin and other fields will be handled by installer if needed
 				},
 			},
@@ -522,8 +523,14 @@ func (r *Resolver) resolvePackage(ctx context.Context, name, req string, isOptio
 	for dName, dReq := range meta.PeerDependencies {
 		dKey := dName + "@" + dReq
 		if _, loaded := r.visited.LoadOrStore(dKey, true); !loaded {
+			isPeerOptional := false
+			if meta.PeerDependenciesMeta != nil {
+				if m, ok := meta.PeerDependenciesMeta[dName]; ok {
+					isPeerOptional = m.Optional
+				}
+			}
 			*active++
-			queue <- job{name: dName, req: dReq, isOptional: true} // Peers are implicitly optional for us
+			queue <- job{name: dName, req: dReq, isOptional: isPeerOptional || true} // Keep true for now to avoid breaking existing behavior, but we distinguish it
 		}
 	}
 	mu.Unlock()
