@@ -105,8 +105,8 @@ func setupUnixPath(home, binPath string) error {
 		// PATH is active in this process already.
 		// But the parent shell (the terminal) still needs a manual source — this is
 		// a hard OS limitation: a child process cannot mutate its parent's environment.
-		Info(fmt.Sprintf("PATH injected for this session. Profile(s) updated: %s", strings.Join(modifiedProfiles, ", ")))
-		Info(fmt.Sprintf("To persist in your current terminal, run: %s", sourceHint(modifiedProfiles)))
+		Info("PATH injected for this session. Profile(s) updated: %s", strings.Join(modifiedProfiles, ", "))
+		Info("To persist in your current terminal, run: %s", sourceHint(modifiedProfiles))
 	}
 
 	if !modifiedAny && lastErr != nil {

@@ -10,7 +10,7 @@ import (
 	"runtime"
 	"sync"
 
-	"github.com/Nehonix-Team/xfpm-go/internal/utils"
+	"github.com/Nehonix-Team/XFMP/internal/utils"
 	"github.com/google/uuid"
 	"github.com/zeebo/blake3"
 )

@@ -37,8 +37,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/Nehonix-Team/xfpm-go/internal/core"
-	"github.com/Nehonix-Team/xfpm-go/internal/utils"
+	"github.com/Nehonix-Team/XFMP/internal/core"
+	"github.com/Nehonix-Team/XFMP/internal/utils"
 	"github.com/google/uuid"
 	"github.com/pterm/pterm"
 	"github.com/spf13/cobra"

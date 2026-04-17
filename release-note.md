@@ -1,4 +1,18 @@
-# XFPM - vG0.1.86
+# XFPM - vG0.1.87
+
+## [G0.1.87] - 2026-04-17
+
+### Added
+
+- **Enhanced `xfpm audit` UI**:
+  - **Interactive Menu**: After scan completion, users can now choose between different visualizations.
+  - **Dependency Tree View**: A new terminal-based visualization showing exactly how vulnerabilities are pulled into the dependency graph.
+  - **Premium HTML Report**: Support for generating a high-fidelity standalone dashboard with Tailwind CSS and Mermaid.js graph visualizations.
+  - **Direct Flags**: Support for `--tree` (`-t`) and `--html` (`-w`) to bypass interactive selection.
+
+### Fixed
+
+- Resolved non-constant format string warnings in `path_manager.go`.
 
 ## [G0.1.86] - 2026-04-17
 

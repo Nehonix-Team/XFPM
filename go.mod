@@ -1,4 +1,4 @@
-module github.com/Nehonix-Team/xfpm-go
+module github.com/Nehonix-Team/XFMP
 
 go 1.24.4
 

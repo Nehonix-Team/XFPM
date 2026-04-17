@@ -11,7 +11,7 @@ import (
 	"sync"
 
 	"github.com/Masterminds/semver/v3"
-	"github.com/Nehonix-Team/xfpm-go/internal/utils"
+	"github.com/Nehonix-Team/XFMP/internal/utils"
 )
 
 type ResolvedPackage struct {
