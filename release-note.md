@@ -1,4 +1,20 @@
-# XFPM - vG0.1.87
+# XFPM - vG0.1.88
+
+## [G0.1.88] - 2026-04-17
+
+### Added
+
+- **Premium Audit UI (XFPML)**:
+  - **XyPriss Fast Markup Language (XFPML)**: Unified the security report template system into a dedicated `.xfpml` architecture, embedded directly into the Go binary.
+  - **Optimized Dependency Graph**: Fully redesigned the D3.js force-directed layout with improved repulsion and collision physics to avoid package overlapping.
+  - **Enhanced Readability**: Graph labels now feature high-contrast light colors with a custom text-shadow for a superior dark-mode experience.
+  - **Interactive Viewport**: Added a new **Expand** feature allowing users to toggle between a compact and a fullscreen view of complex dependency trees.
+  - **Clean Data Injection**: Decoupled template logic from JS execution by using a separate JSON-data script block, resolving several IDE syntax highlighting issues.
+
+### Fixed
+
+- Improved Mermaid.js configuration robustness (support for `maxTextSize` up to 1M).
+- Fixed fragile `fmt.Sprintf` template rendering by switching to a robust `html/template` engine.
 
 ## [G0.1.87] - 2026-04-17
 
