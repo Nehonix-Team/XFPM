@@ -105,16 +105,30 @@ xfpm update <package>
 
 ### Dependency Audit
 
-Audit your dependencies for known vulnerabilities via the OSV database.
+Audit your dependencies for known vulnerabilities via the OSV database and automatically repair them.
 
 ```bash
 # Standard interactive audit
 xfpm audit
 
+# Advanced repair loop
+xfpm audit fix
+
 # Force a specific report mode
 xfpm audit --tree  # Terminal tree view
 xfpm audit --html  # Open interactive XFPML dashboard
 ```
+
+#### Intelligent Fix Loop
+
+The `audit fix` command performs a multi-step remediation:
+
+1. **Registry Validation**: Compares local versions with NPM registry `latest`.
+2. **Automated Repair**: Updates `package.json` and performs a clean installation.
+3. **Re-Verification**: Automatically re-audits the project to confirm the fix is effective.
+4. **Fallback Uninstallation**: Offers to remove packages that remain vulnerable even at their latest versions.
+
+Use `--yes` and `--force-remove` for fully automated security enforcement in CI environments.
 
 ### Inspect Dependencies
 
