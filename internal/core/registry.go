@@ -47,6 +47,9 @@ type VersionMetadata struct {
 	Dist                 Dist              `json:"dist"`
 	Dependencies         map[string]string `json:"dependencies,omitempty"`
 	PeerDependencies     map[string]string `json:"peerDependencies,omitempty"`
+	PeerDependenciesMeta map[string]struct {
+		Optional bool `json:"optional"`
+	} `json:"peerDependenciesMeta,omitempty"`
 	OptionalDependencies map[string]string `json:"optionalDependencies,omitempty"`
 	Bin                  json.RawMessage   `json:"bin,omitempty"`
 	OS                   StringOrStringArray `json:"os,omitempty"`

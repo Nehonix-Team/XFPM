@@ -1,4 +1,18 @@
-# XFPM - vG0.1.84
+# XFPM - vG0.1.86
+
+## [G0.1.86] - 2026-04-17
+
+### Added
+
+- **Command `xfpm audit`**: Introduced a new Software Composition Analysis (SCA) tool that audits your project's dependency graph against the OSV (Open Source Vulnerabilities) database, identifying known security vulnerabilities.
+- **Support for `peerDependenciesMeta`**: XFPM now correctly parses and respects the `peerDependenciesMeta` field in `package.json`, allowing peer dependencies to be marked as optional.
+
+## [G0.1.85] - 2026-04-17
+
+### Added
+
+- **Multi-Package Listing**: Enhanced the `xfpm list` command to support multiple package arguments. Users can now check the location and dependents of several packages simultaneously (e.g., `xfpm list helmet express-rate-limit`).
+- **Improved List Formatting**: Added clear visual separators between package details and optimized footer printing for multi-argument execution.
 
 ## [G0.1.84] - 2026-04-14
 

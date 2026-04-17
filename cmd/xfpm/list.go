@@ -19,8 +19,8 @@ import (
 )
 
 var listCmd = &cobra.Command{
-	Use:     "list [package]",
-	Short:   "List installed packages, or show dependents of a given package",
+	Use:     "list [package...]",
+	Short:   "List installed packages, or show dependents of several given packages",
 	Aliases: []string{"ls", "ll"},
 	RunE: func(cmd *cobra.Command, args []string) error {
 		global, _ := cmd.Flags().GetBool("global")
@@ -37,10 +37,19 @@ var listCmd = &cobra.Command{
 			pkgJsonPath = filepath.Join(projectRoot, "package.json")
 		}
 
-		// If a specific package name is given, show where it's used
+		// If specific package names are given, show where they're used
 		if len(args) > 0 {
-			target := args[0]
-			return listDependents(nmRoot, pkgJsonPath, target)
+			for i, target := range args {
+				if i > 0 {
+					fmt.Println()
+					pterm.Println(pterm.FgDarkGray.Sprint("  " + strings.Repeat("─", 60)))
+				}
+				if err := listDependents(nmRoot, pkgJsonPath, target); err != nil {
+					return err
+				}
+			}
+			utils.PrintFooter(0)
+			return nil
 		}
 
 		// Otherwise, list all direct dependencies from package.json
@@ -213,7 +222,7 @@ func listDependents(nmRoot, localPkgJsonPath, target string) error {
 		fmt.Println()
 	}
 
-	utils.PrintFooter(0)
+
 	return nil
 }
 

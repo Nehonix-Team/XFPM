@@ -35,7 +35,10 @@ type PackageJson struct {
 	DevDependencies      map[string]string `json:"devDependencies,omitempty"`
 	OptionalDependencies map[string]string `json:"optionalDependencies,omitempty"`
 	PeerDependencies     map[string]string `json:"peerDependencies,omitempty"`
-	Xfpm                 *XfpmConfig       `json:"xfpm,omitempty"`
+	PeerDependenciesMeta map[string]struct {
+		Optional bool `json:"optional"`
+	} `json:"peerDependenciesMeta,omitempty"`
+	Xfpm *XfpmConfig `json:"xfpm,omitempty"`
 }
 
 type XfpmConfig struct {
