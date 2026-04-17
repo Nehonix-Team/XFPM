@@ -630,7 +630,9 @@ var auditFixCmd = &cobra.Command{
 		for pkgName, v := range directVulns {
 			pterm.DefaultSection.Printf("Security analysis for %s", pkgName)
 			
-			// 1. Check registry for latest version
+			// --- STEP 1: REGISTRY VALIDATION ---
+			// We fetch the latest metadata from the NPM registry to determine if a patch exists.
+			// If the local version is already the latest, we cannot resolve the vulnerability via update.
 			metaSpinner, _ := pterm.DefaultSpinner.Start(fmt.Sprintf("Fetching metadata for %s...", pkgName))
 			metadata, err := registry.FetchPackage(ctx, pkgName, false)
 			if err != nil {
@@ -652,7 +654,8 @@ var auditFixCmd = &cobra.Command{
 				continue
 			}
 
-			// 2. Propose update
+			// --- STEP 2: PROPOSE UPDATE ---
+			// Inform the user about the available fix and request confirmation unless --yes is provided.
 			pterm.Info.Printf("Proposed fix: Update %s to %s\n", pkgName, latestVersion)
 			if !auditYes {
 				confirm, _ := pterm.DefaultInteractiveConfirm.WithDefaultText("Do you want to proceed with the update?").Show()
@@ -661,7 +664,9 @@ var auditFixCmd = &cobra.Command{
 				}
 			}
 
-			// 3. Perform update
+			// --- STEP 3: PERFORM UPDATE ---
+			// Programmatically update package.json, resolve the new dependency tree,
+			// and trigger the installer to apply changes to node_modules and the virtual store.
 			updateSpinner, _ := pterm.DefaultSpinner.Start(fmt.Sprintf("Updating %s...", pkgName))
 			// Update pkgJson
 			if _, ok := pkgJson.Dependencies[pkgName]; ok { pkgJson.Dependencies[pkgName] = "^" + latestVersion }
@@ -687,7 +692,9 @@ var auditFixCmd = &cobra.Command{
 			}
 			updateSpinner.Success("Package updated and installed.")
 
-			// 4. Re-Verify
+			// --- STEP 4: RE-VERIFICATION ---
+			// After installation, we must re-run the vulnerability check on the specific updated package.
+			// This confirms if the 'latest' version actually resolved the security issue.
 			verifySpinner, _ := pterm.DefaultSpinner.Start("Re-verifying security status...")
 			// We only need to audit the updated package
 			var targetPkg *core.ResolvedPackage
