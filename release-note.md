@@ -1,4 +1,14 @@
-# XFPM - vG0.1.92
+# XFPM - vG0.1.95
+
+## [G0.1.95] - 2026-04-18
+
+### Added
+
+- **Zero-Trust Plugin Security**:
+  - **`xfpm gen-key`**: Decentralized Ed25519 identity generation for plugin authors.
+  - **`xfpm sign`**: Content hashing (SHA-256) and Ed25519 signature generation for plugin integrity.
+  - **Signature Verification**: Mandatory integrity checks during package extraction.
+  - **Interactive TOFU (Trust-On-First-Use) Flow**: Securely manage trusted authors in `xypriss.config.jsonc` with automated, comment-preserving patching.
 
 ## [G0.1.92] - 2026-04-17
 
