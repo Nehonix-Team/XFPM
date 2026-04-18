@@ -1,3 +1,11 @@
+# XFPM - vG0.1.103
+
+## [G0.1.103] - 2026-04-18
+
+### Fixed
+
+- **Critical Resolution Hang Fix**: Refactored the `AdaptiveSemaphore` to a high-performance mutex-based implementation. This resolves the bottleneck in the dependency resolution phase (`Neural Link`) that occurred when many goroutines blocked on the previous manager goroutine's unbuffered channels.
+
 # XFPM - vG0.1.102
 
 ## [G0.1.102] - 2026-04-18

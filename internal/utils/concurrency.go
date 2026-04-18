@@ -2,105 +2,73 @@ package utils
 
 import (
 	"context"
+	"sync"
+	"sync/atomic"
 )
 
 // AdaptiveSemaphore handles dynamic concurrency limits professionally.
-// It uses a internal manager goroutine to handle token distribution
-// and fairness, ensuring it perfectly respects context cancellation.
+// It uses a mutex-protected waiter queue to ensure fairness and efficiency,
+// eliminating the overhead and potential deadlocks of a manager goroutine.
 type AdaptiveSemaphore struct {
-	requests chan acquireReq
-	release  chan struct{}
-	update   chan int
-}
-
-type acquireReq struct {
-	ctx  context.Context
-	done chan struct{}
+	mu      sync.Mutex
+	active  int
+	limit   atomic.Int64
+	waiters []chan struct{}
 }
 
 // NewAdaptiveSemaphore creates a new adaptive semaphore.
-// It starts a background manager goroutine that lives for the duration of the object.
 func NewAdaptiveSemaphore(initialLimit int) *AdaptiveSemaphore {
-	s := &AdaptiveSemaphore{
-		requests: make(chan acquireReq),
-		release:  make(chan struct{}),
-		update:   make(chan int),
-	}
-	go s.manager(initialLimit)
+	s := &AdaptiveSemaphore{}
+	s.limit.Store(int64(initialLimit))
 	return s
-}
-
-// manager is the core logic that handles token distribution.
-func (s *AdaptiveSemaphore) manager(limit int) {
-	active := 0
-	var queue []acquireReq
-
-	for {
-		var firstReq chan struct{}
-		var currentReq acquireReq
-		
-		if active < limit && len(queue) > 0 {
-			currentReq = queue[0]
-			firstReq = currentReq.done
-		}
-
-		select {
-		case req := <-s.requests:
-			queue = append(queue, req)
-		case <-s.release:
-			active--
-		case newLimit := <-s.update:
-			limit = newLimit
-		case firstReq <- struct{}{}:
-			active++
-			queue = queue[1:]
-		}
-
-		// Cleanup cancelled requests from queue
-		newQueue := make([]acquireReq, 0, len(queue))
-		for _, r := range queue {
-			select {
-			case <-r.ctx.Done():
-				// Skip cancelled
-			default:
-				newQueue = append(newQueue, r)
-			}
-		}
-		queue = newQueue
-	}
 }
 
 // Acquire blocks until a token is available or context is cancelled.
 func (s *AdaptiveSemaphore) Acquire(ctx context.Context, limit int) error {
-	// Update limit in the manager
-	select {
-	case s.update <- limit:
-	case <-ctx.Done():
-		return ctx.Err()
+	s.limit.Store(int64(limit))
+
+	s.mu.Lock()
+	if s.active < int(s.limit.Load()) {
+		s.active++
+		s.mu.Unlock()
+		return nil
 	}
 
-	done := make(chan struct{})
-	req := acquireReq{ctx: ctx, done: done}
+	// Queue up a waiter
+	waiter := make(chan struct{}, 1)
+	s.waiters = append(s.waiters, waiter)
+	s.mu.Unlock()
 
 	select {
-	case s.requests <- req:
-	case <-ctx.Done():
-		return ctx.Err()
-	}
-
-	select {
-	case <-done:
+	case <-waiter:
 		return nil
 	case <-ctx.Done():
+		// Clean up waiter if cancelled
+		s.mu.Lock()
+		for i, w := range s.waiters {
+			if w == waiter {
+				s.waiters = append(s.waiters[:i], s.waiters[i+1:]...)
+				break
+			}
+		}
+		s.mu.Unlock()
 		return ctx.Err()
 	}
 }
 
 // Release signals that a token is available.
 func (s *AdaptiveSemaphore) Release() {
-	select {
-	case s.release <- struct{}{}:
-	default:
-		// Should not happen if correctly used
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	if len(s.waiters) > 0 && s.active <= int(s.limit.Load()) {
+		// Wake up next waiter
+		waiter := s.waiters[0]
+		s.waiters = s.waiters[1:]
+		close(waiter)
+		// We don't decrement active because the waiter takes the slot
+	} else {
+		s.active--
+		if s.active < 0 { s.active = 0 }
 	}
 }
