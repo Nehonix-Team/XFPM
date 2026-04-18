@@ -241,26 +241,48 @@ func (i *Installer) applyPermissions(src, dst string) {
 }
 
 func (i *Installer) linkPackageDeps(packages []*ResolvedPackage, vstoreBase string) error {
+	concurrency := 64
+	sem := make(chan struct{}, concurrency)
+	var wg sync.WaitGroup
+	errChan := make(chan error, len(packages))
+
 	for _, pkg := range packages {
-		pkgVStoreName := strings.ReplaceAll(pkg.Name, "/", "+") + "@" + pkg.Version
-		pkgDepsNM := filepath.Join(vstoreBase, pkgVStoreName, "node_modules")
-		
-		for depName, depVersion := range pkg.ResolvedDependencies {
-			targetLink := filepath.Join(pkgDepsNM, depName)
-			utils.CreateDirAllSecure(filepath.Dir(targetLink))
-			
-			depVStoreName := strings.ReplaceAll(depName, "/", "+") + "@" + depVersion
-			
-			steps := strings.Count(depName, "/") + 2
-			relPrefix := ""
-			for j := 0; j < steps; j++ { relPrefix += "../" }
-			relTarget := filepath.Join(relPrefix, depVStoreName, "node_modules", depName)
-			
-			os.Remove(targetLink)
-			if err := utils.LinkDir(relTarget, targetLink); err != nil {
-				utils.Error("Failed to link dependency %s -> %s: %v", depName, targetLink, err)
+		wg.Add(1)
+		go func(p *ResolvedPackage) {
+			defer wg.Done()
+			select {
+			case sem <- struct{}{}:
+				defer func() { <-sem }()
+				pkgVStoreName := strings.ReplaceAll(p.Name, "/", "+") + "@" + p.Version
+				pkgDepsNM := filepath.Join(vstoreBase, pkgVStoreName, "node_modules")
+
+				for depName, depVersion := range p.ResolvedDependencies {
+					targetLink := filepath.Join(pkgDepsNM, depName)
+					utils.CreateDirAllSecure(filepath.Dir(targetLink))
+
+					depVStoreName := strings.ReplaceAll(depName, "/", "+") + "@" + depVersion
+					steps := strings.Count(depName, "/") + 2
+					relPrefix := ""
+					for j := 0; j < steps; j++ {
+						relPrefix += "../"
+					}
+					relTarget := filepath.Join(relPrefix, depVStoreName, "node_modules", depName)
+
+					os.Remove(targetLink)
+					if err := utils.LinkDir(relTarget, targetLink); err != nil {
+						utils.Error("Failed to link dependency %s -> %s: %v", depName, targetLink, err)
+					}
+				}
+			case <-time.After(10 * time.Second):
+				errChan <- fmt.Errorf("timeout waiting for linking semaphore")
 			}
-		}
+		}(pkg)
+	}
+
+	wg.Wait()
+	close(errChan)
+	if len(errChan) > 0 {
+		return <-errChan
 	}
 	return nil
 }
@@ -271,30 +293,50 @@ func (i *Installer) linkToRoot(packages []*ResolvedPackage) error {
 	utils.CreateDirAllSecure(rootBinDir)
 
 	directNames := make(map[string]bool)
-	for name := range i.DirectDeps { directNames[name] = true }
+	for name := range i.DirectDeps {
+		directNames[name] = true
+	}
+
+	concurrency := 32
+	sem := make(chan struct{}, concurrency)
+	var wg sync.WaitGroup
 
 	linkPkg := func(pkg *ResolvedPackage) {
+		defer wg.Done()
+		sem <- struct{}{}
+		defer func() { <-sem }()
+
 		rootNM := filepath.Join(rootNMDir, pkg.Name)
 		utils.CreateDirAllSecure(filepath.Dir(rootNM))
 		pkgVStoreName := strings.ReplaceAll(pkg.Name, "/", "+") + "@" + pkg.Version
-		
+
 		absTarget := filepath.Join(i.vstoreRoot, pkgVStoreName, "node_modules", pkg.Name)
 		relTarget, _ := filepath.Rel(filepath.Dir(rootNM), absTarget)
-		
+
 		os.Remove(rootNM)
 		if err := utils.LinkDir(relTarget, rootNM); err != nil {
 			utils.Error("Failed to link root package %s -> %s: %v", pkg.Name, rootNM, err)
 		}
-		
+
 		if pkg.Metadata.Bin != nil {
 			i.linkBinaries(absTarget, rootBinDir, pkg.Metadata.Bin)
 		}
 	}
 
-	for _, pkg := range packages { if !directNames[pkg.Name] { linkPkg(pkg) } }
 	for _, pkg := range packages {
-		if v, ok := i.DirectDeps[pkg.Name]; ok && pkg.Version == v { linkPkg(pkg) }
+		if !directNames[pkg.Name] {
+			wg.Add(1)
+			go linkPkg(pkg)
+		}
 	}
+	for _, pkg := range packages {
+		if v, ok := i.DirectDeps[pkg.Name]; ok && pkg.Version == v {
+			wg.Add(1)
+			go linkPkg(pkg)
+		}
+	}
+
+	wg.Wait()
 	return nil
 }
 
