@@ -37,7 +37,7 @@ func NewCas(basePath string) (*Cas, error) {
 	}
 
 	for _, d := range dirs {
-		if err := CreateDirAllSecure(filepath.Join(basePath, d)); err != nil {
+		if err := utils.CreateDirAllSecure(filepath.Join(basePath, d)); err != nil {
 			return nil, fmt.Errorf("failed to create XCAS %s directory: %w", d, err)
 		}
 	}
@@ -45,15 +45,7 @@ func NewCas(basePath string) (*Cas, error) {
 	return cas, nil
 }
 
-func CreateDirAllSecure(path string) error {
-	if err := os.MkdirAll(path, 0755); err != nil {
-		return err
-	}
-	if runtime.GOOS != "windows" {
-		return os.Chmod(path, 0755)
-	}
-	return nil
-}
+
 
 func (c *Cas) GetFilePath(hash string) string {
 	if len(hash) < 4 {
@@ -246,7 +238,7 @@ func (c *Cas) ensureParentDirs(hash string) error {
 	
 	if _, ok := c.dirCache.Load(key); !ok {
 		dir := filepath.Join(c.BasePath, "files", prefix, subPrefix)
-		if err := CreateDirAllSecure(dir); err != nil {
+		if err := utils.CreateDirAllSecure(dir); err != nil {
 			return fmt.Errorf("failed to create CAS directory %s: %w", dir, err)
 		}
 		c.dirCache.Store(key, struct{}{})

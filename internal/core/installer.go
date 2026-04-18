@@ -32,7 +32,7 @@ type Installer struct {
 func NewInstaller(cas *Cas, registry *RegistryClient, projectRoot string) *Installer {
 	// Local Virtual Store for Ancestor Hoisting
 	vstoreRoot := filepath.Join(projectRoot, "node_modules", ".xpm", "vstore")
-	os.MkdirAll(vstoreRoot, 0755)
+	utils.CreateDirAllSecure(vstoreRoot)
 
 	return &Installer{
 		cas:         cas,
@@ -202,13 +202,13 @@ func (i *Installer) ensureExtracted(ctx context.Context, pkg *ResolvedPackage, t
 }
 
 func (i *Installer) LinkFilesToDir(destDir string, index map[string]string) error {
-	os.MkdirAll(destDir, 0755)
+	utils.CreateDirAllSecure(destDir)
 	for relPath, hash := range index {
 		normalized := relPath
 		if idx := strings.Index(relPath, "/"); idx != -1 { normalized = relPath[idx+1:] }
 		destPath := filepath.Join(destDir, normalized)
 		sourcePath := i.cas.GetFilePath(hash)
-		os.MkdirAll(filepath.Dir(destPath), 0755)
+		utils.CreateDirAllSecure(filepath.Dir(destPath))
 		os.Remove(destPath)
 		
 		err := utils.Reflink(sourcePath, destPath)
@@ -247,7 +247,7 @@ func (i *Installer) linkPackageDeps(packages []*ResolvedPackage, vstoreBase stri
 		
 		for depName, depVersion := range pkg.ResolvedDependencies {
 			targetLink := filepath.Join(pkgDepsNM, depName)
-			os.MkdirAll(filepath.Dir(targetLink), 0755)
+			utils.CreateDirAllSecure(filepath.Dir(targetLink))
 			
 			depVStoreName := strings.ReplaceAll(depName, "/", "+") + "@" + depVersion
 			
@@ -266,14 +266,14 @@ func (i *Installer) linkPackageDeps(packages []*ResolvedPackage, vstoreBase stri
 func (i *Installer) linkToRoot(packages []*ResolvedPackage) error {
 	rootNMDir := filepath.Join(i.projectRoot, "node_modules")
 	rootBinDir := filepath.Join(rootNMDir, ".bin")
-	os.MkdirAll(rootBinDir, 0755)
+	utils.CreateDirAllSecure(rootBinDir)
 
 	directNames := make(map[string]bool)
 	for name := range i.DirectDeps { directNames[name] = true }
 
 	linkPkg := func(pkg *ResolvedPackage) {
 		rootNM := filepath.Join(rootNMDir, pkg.Name)
-		os.MkdirAll(filepath.Dir(rootNM), 0755)
+		utils.CreateDirAllSecure(filepath.Dir(rootNM))
 		pkgVStoreName := strings.ReplaceAll(pkg.Name, "/", "+") + "@" + pkg.Version
 		
 		absTarget := filepath.Join(i.vstoreRoot, pkgVStoreName, "node_modules", pkg.Name)
@@ -323,7 +323,7 @@ func (i *Installer) runLifecycleScripts(ctx context.Context, packages []*Resolve
 
 func (i *Installer) linkBinaries(pkgDir, binDir string, bin json.RawMessage) error {
 	if bin == nil { return nil }
-	os.MkdirAll(binDir, 0755)
+	utils.CreateDirAllSecure(binDir)
 	type BinObject map[string]string
 	var binMap BinObject
 	var binStr string
@@ -373,6 +373,13 @@ func (i *Installer) adaptiveBinLink(name, pkgDir, relPath, binDir string) {
 		i.ensureExecutableRecursive(filepath.Dir(absTarget))
 	} else {
 		os.Symlink(relTarget, dest)
+
+		// GENERATE SHIMS FOR JS BINARIES ON WINDOWS
+		// This allows running 'eslint' instead of 'node node_modules/eslint/bin/eslint'
+		// It only applies if the target is NOT an .exe
+		if !strings.HasSuffix(strings.ToLower(absTarget), ".exe") {
+			utils.GenerateBinShim(binDir, name, relTarget)
+		}
 	}
 }
 
@@ -388,7 +395,7 @@ func (i *Installer) ensureExecutableRecursive(path string) {
 func (i *Installer) exportGlobalBinaries(packages []*ResolvedPackage) {
 	home, _ := os.UserHomeDir()
 	globalBinDir := filepath.Join(home, ".xpm", "bin")
-	os.MkdirAll(globalBinDir, 0755)
+	utils.CreateDirAllSecure(globalBinDir)
 
 	for _, pkg := range packages {
 		if _, isDirect := i.DirectDeps[pkg.Name]; !isDirect { continue }
