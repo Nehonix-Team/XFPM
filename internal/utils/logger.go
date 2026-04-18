@@ -134,6 +134,7 @@ func PrintFooter(duration time.Duration) {
 }
 
 func SetupUI() {
+	initTerminal()
 	pterm.EnableColor()
 	c := make(chan os.Signal, 1)
 	signal.Notify(c, os.Interrupt, syscall.SIGTERM)
