@@ -1,4 +1,10 @@
-# XFPM - vG0.1.96
+# XFPM - vG0.1.97
+
+## [G0.1.97] - 2026-04-18
+
+### Fixed
+
+- **Windows Script Execution**: Replaced hardcoded Unix `sh -c` command with Windows-native `cmd /c` when executing lifecycle scripts (`postinstall`, `install`). This resolves `ENOTFOUND sh` errors when installing packages with native build steps under Windows.
 
 ## [G0.1.96] - 2026-04-18
 

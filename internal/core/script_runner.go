@@ -81,7 +81,12 @@ func (r *ScriptRunner) ExecuteParallel(ctx context.Context, tasks []ScriptTask) 
 func (r *ScriptRunner) executeSandboxed(ctx context.Context, task ScriptTask) error {
 	pathVal := r.buildPath(task.PackageDir)
 
-	cmd := exec.CommandContext(ctx, "sh", "-c", task.ScriptCommand)
+	var cmd *exec.Cmd
+	if runtime.GOOS == "windows" {
+		cmd = exec.CommandContext(ctx, "cmd", "/c", task.ScriptCommand)
+	} else {
+		cmd = exec.CommandContext(ctx, "sh", "-c", task.ScriptCommand)
+	}
 	cmd.Dir = task.PackageDir
 	cmd.Env = r.buildEnv(pathVal)
 
