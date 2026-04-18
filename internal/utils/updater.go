@@ -13,6 +13,7 @@ import (
 	"os"
 	"os/exec"
 	"runtime"
+	"strings"
 	"syscall"
 	"time"
 
@@ -58,7 +59,10 @@ func CheckForUpdates() {
 	if data.Latest != "" && data.Latest != BinVersion {
 		// Only show update if the remote version is lexicographically greater (simplistic but works for G0.1.x)
 		// and avoid showing if the local version is already ahead.
-		if data.Latest < BinVersion {
+		cleanRemote := strings.TrimPrefix(data.Latest, "v")
+		cleanLocal := strings.TrimPrefix(BinVersion, "v")
+
+		if cleanRemote < cleanLocal {
 			return 
 		}
 

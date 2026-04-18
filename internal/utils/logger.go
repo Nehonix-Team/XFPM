@@ -118,7 +118,7 @@ func PrintBanner() {
 	pterm.DefaultBigText.WithLetters(
 		putils.LettersFromStringWithStyle("XFPM", AccentColor),
 	).Render()
-	pterm.Printf("  %s %s\n", DimColor.Sprint("Official XyPriss Package Manager"), AccentColor.Sprint("v"+BinVersion))
+	pterm.Printf("  %s %s\n", DimColor.Sprint("Official XyPriss Package Manager"), AccentColor.Sprint(BinVersion))
 }
 
 func PrintFooter(duration time.Duration) {
