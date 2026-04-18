@@ -21,6 +21,8 @@ type ResolvedPackage struct {
 	Metadata             *VersionMetadata
 	ResolvedDependencies map[string]string
 	LocalPath            string // If set, this package is installed from a local path
+	IsRevoked            bool
+	RevokedBy            string // Latest version that revoked this one
 }
 
 type Platform struct {
@@ -172,8 +174,10 @@ type Resolver struct {
 	Update          bool            // Global update mode
 	ForcePackages   map[string]bool // Packages to force resolve (ignore cache)
 	LocalPackages   map[string]string // Package name -> local absolute path
-	Redirects       map[string]string // Package name -> Redirect Target
-	redirectsMu     sync.Mutex
+	Redirects         map[string]string // Package name -> Redirect Target
+	redirectsMu       sync.Mutex
+	IgnoreRevocations bool
+	RevokedPackages   sync.Map // string -> string (pkg@ver -> latestVer)
 }
 
 
@@ -441,6 +445,7 @@ func (r *Resolver) resolvePackage(ctx context.Context, name, req string, isOptio
 
 	r.resolutionCache.Store(cacheKey, version)
 	versionKey := realName + "@" + version
+
 	if _, loaded := r.resolved.LoadOrStore(versionKey, &ResolvedPackage{}); loaded {
 		// Someone else is already handling this version or it's done
 		return nil
@@ -502,6 +507,42 @@ func (r *Resolver) resolvePackage(ctx context.Context, name, req string, isOptio
 		Metadata:             &meta,
 		ResolvedDependencies: make(map[string]string),
 	}
+	// Note: resolved.IsRevoked and RevokedBy might have been set above
+	
+	// Serverless Revocation Check
+	latestVersion := pkgInfo.DistTags["latest"]
+	if latestVersion != "" {
+		latestMeta, ok := pkgInfo.Versions[latestVersion]
+		if ok {
+			// If abbreviated packument, we might need full metadata for 'latest' to see revocations
+			if latestMeta.Xfpm == nil && !isRoot {
+				// We only do this if it's potentially a XyPriss plugin or if we have reason to suspect revocations
+				if strings.HasPrefix(realName, "xypriss-plugin-") || strings.Contains(realName, "xypriss") {
+					if fullLatest, err := r.registry.FetchVersionMetadata(ctx, realName, latestVersion); err == nil {
+						latestMeta.Xfpm = fullLatest.Xfpm
+						pkgInfo.Versions[latestVersion] = latestMeta
+					}
+				}
+			}
+
+			if latestMeta.Xfpm != nil {
+				for _, revoked := range latestMeta.Xfpm.Revocations {
+					if revoked == version {
+						utils.Error("Package Security Violation: %s@%s has been REVOKED by the author.", realName, version)
+						utils.Info("Reason: A critical security vulnerability or key compromise was detected for this version.")
+						utils.Info("Action: Please upgrade to the latest version (%s) or a safe version.", latestVersion)
+						if !r.IgnoreRevocations {
+							return fmt.Errorf("package %s@%s is revoked", realName, version)
+						}
+						r.RevokedPackages.Store(versionKey, latestVersion)
+						resolved.IsRevoked = true
+						resolved.RevokedBy = latestVersion
+					}
+				}
+			}
+		}
+	}
+
 	r.resolved.Store(versionKey, resolved)
 
 	// Add dependencies to queue

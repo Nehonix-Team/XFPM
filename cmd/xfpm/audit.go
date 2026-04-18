@@ -13,16 +13,16 @@ import (
 	"encoding/json"
 	"fmt"
 	"html/template"
+	"net"
 	"net/http"
 	"os"
 	"os/exec"
+	"os/signal"
 	"path/filepath"
 	"runtime"
-	"time"
-
-	"net"
-	"os/signal"
+	"strings"
 	"syscall"
+	"time"
 
 	"github.com/Nehonix-Team/XFMP/internal/core"
 	"github.com/Nehonix-Team/XFMP/internal/utils"
@@ -68,6 +68,7 @@ var auditCmd = &cobra.Command{
 			return fmt.Errorf("failed to initialize CAS: %w", err)
 		}
 		resolver := core.NewResolver(registry, cas)
+		resolver.IgnoreRevocations = true // Allow audit to see everything
 
 		ctx := context.Background()
 		resolved, _, err := resolver.ResolveTree(ctx, pkgJson.AllDependencies())
@@ -76,6 +77,24 @@ var auditCmd = &cobra.Command{
 			return err
 		}
 		spinner.Success(fmt.Sprintf("Resolved %d packages", len(resolved)))
+
+		// Check for revocations in the resolved tree
+		var revocations []DetectedVuln
+		resolver.RevokedPackages.Range(func(key, value interface{}) bool {
+			pkgKey := key.(string)
+			latestVer := value.(string)
+			parts := strings.Split(pkgKey, "@")
+			revocations = append(revocations, DetectedVuln{
+				Package:  parts[0],
+				Version:  parts[1],
+				ID:       "XFPM-REVOKED",
+				Severity: "CRITICAL",
+				Summary:  fmt.Sprintf("Version %s has been REVOKED by the author.", parts[1]),
+				Details:  fmt.Sprintf("This version is flagged as compromised or dangerous. Action: Upgrade to %s immediately.", latestVer),
+				FixedVersion: latestVer,
+			})
+			return true
+		})
 
 		if len(resolved) == 0 {
 			pterm.Info.Println("No dependencies to audit.")
@@ -88,6 +107,10 @@ var auditCmd = &cobra.Command{
 			auditSpinner.Fail(fmt.Sprintf("Audit failed: %v", err))
 			return err
 		}
+		
+		// Merge revocations into vulnerabilities list
+		vulns = append(revocations, vulns...) // Revocations first (CRITICAL)
+
 		auditSpinner.Success("Audit complete")
 
 		displayAuditReport(vulns)
