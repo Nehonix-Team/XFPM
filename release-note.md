@@ -1,4 +1,10 @@
-# XFPM - vG0.1.95
+# XFPM - vG0.1.96
+
+## [G0.1.96] - 2026-04-18
+
+### Fixed
+
+- **Windows Terminal ANSI Colors**: Fixed a rendering issue where ANSI color codes (e.g. `←[35;1m`) were printed as raw text instead of actual colors in Windows Command Prompt and administrative PowerShell sessions. Native `ENABLE_VIRTUAL_TERMINAL_PROCESSING` is now automatically applied to standard streams under Windows.
 
 ## [G0.1.95] - 2026-04-18
 
