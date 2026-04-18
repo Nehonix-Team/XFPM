@@ -1,3 +1,14 @@
+# XFPM - vG0.1.101
+
+## [G0.1.101] - 2026-04-18
+
+### Added
+
+- **Ultra-Fast Concurrent Engine**:
+  - Parallelized all recursive linking operations (`linkPackageDeps` and `linkToRoot`), dramatically reducing project assembly time for large dependency trees.
+  - Implemented **Adaptive Concurrency Control** in `RegistryClient` using a professional manager-guarded `AdaptiveSemaphore`.
+  - XFPM now dynamically throttles network requests based on connection quality (latency/errors), maximizing throughput on high-speed lines and ensuring stability on weak networks.
+
 # XFPM - vG0.1.100
 
 ## [G0.1.100] - 2026-04-18

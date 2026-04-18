@@ -12,6 +12,8 @@ import (
 	"sync"
 	"sync/atomic"
 	"time"
+
+	"github.com/Nehonix-Team/XFMP/internal/utils"
 )
 
 var GlobalBytesDownloaded atomic.Uint64
@@ -73,9 +75,9 @@ type RegistryClient struct {
 	baseURL          string
 	retries          uint32
 	packageCache    sync.Map
-	inflight        sync.Map
-	metaSemaphore   chan struct{}
-	dataSemaphore   chan struct{}
+	inflight         sync.Map
+	metaSemaphore    *utils.AdaptiveSemaphore
+	dataSemaphore    *utils.AdaptiveSemaphore
 	cacheDir        string
 	config          *DynamicConfig
 }
@@ -104,8 +106,8 @@ func NewRegistryClient(baseURL string, retries uint32) *RegistryClient {
 		downloadClient: downloadClient,
 		baseURL:        strings.TrimSuffix(baseURL, "/"),
 		retries:        retries,
-		metaSemaphore:  make(chan struct{}, 128),
-		dataSemaphore:  make(chan struct{}, 8),
+		metaSemaphore:  utils.NewAdaptiveSemaphore(128),
+		dataSemaphore:  utils.NewAdaptiveSemaphore(8),
 		config:         NewDynamicConfig(),
 	}
 }
@@ -212,17 +214,18 @@ func (c *RegistryClient) fetchPackageNetwork(ctx context.Context, name string) (
 }
 
 func (c *RegistryClient) requestWithRetry(ctx context.Context, url string, isMetadata bool, isAbbreviated bool) ([]byte, error) {
-	semaphore := c.metaSemaphore
-	if !isMetadata {
-		semaphore = c.dataSemaphore
-	}
-
 	var lastErr error
 	for attempt := uint32(0); attempt <= c.retries; attempt++ {
-		select {
-		case semaphore <- struct{}{}:
-		case <-ctx.Done():
-			return nil, ctx.Err()
+		// Adaptive Concurrency Check
+		limit := c.config.GetConcurrency()
+		semaphore := c.metaSemaphore
+		if !isMetadata {
+			limit = 8 // Keep data limited to avoid bandwidth saturated
+			semaphore = c.dataSemaphore
+		}
+
+		if err := semaphore.Acquire(ctx, limit); err != nil {
+			return nil, err
 		}
 
 		timeout := c.config.GetTimeout(attempt)
@@ -237,7 +240,7 @@ func (c *RegistryClient) requestWithRetry(ctx context.Context, url string, isMet
 		req, err := http.NewRequestWithContext(reqCtx, "GET", url, nil)
 		if err != nil {
 			cancel()
-			<-semaphore
+			semaphore.Release()
 			return nil, err
 		}
 
@@ -258,7 +261,7 @@ func (c *RegistryClient) requestWithRetry(ctx context.Context, url string, isMet
 				body, berr := io.ReadAll(resp.Body)
 				resp.Body.Close()
 				cancel()
-				<-semaphore
+				semaphore.Release()
 				if berr == nil {
 					c.config.RecordRequest(elapsed, false)
 					return body, nil
@@ -267,7 +270,7 @@ func (c *RegistryClient) requestWithRetry(ctx context.Context, url string, isMet
 			} else {
 				resp.Body.Close()
 				cancel()
-				<-semaphore
+				semaphore.Release()
 				if resp.StatusCode == http.StatusNotFound {
 					return nil, fmt.Errorf("package not found: %s", url)
 				}
@@ -275,7 +278,7 @@ func (c *RegistryClient) requestWithRetry(ctx context.Context, url string, isMet
 			}
 		} else {
 			cancel()
-			<-semaphore
+			semaphore.Release()
 			lastErr = err
 		}
 
@@ -290,18 +293,15 @@ func (c *RegistryClient) requestWithRetry(ctx context.Context, url string, isMet
 }
 
 func (c *RegistryClient) DownloadTarballStream(ctx context.Context, url string) (io.ReadCloser, error) {
-	// Respect concurrency limits
-	select {
-	case c.dataSemaphore <- struct{}{}:
-	case <-ctx.Done():
-		return nil, ctx.Err()
-	}
-
 	var lastErr error
 	for attempt := uint32(0); attempt <= c.retries; attempt++ {
+		if err := c.dataSemaphore.Acquire(ctx, 8); err != nil {
+			return nil, err
+		}
+
 		req, err := http.NewRequestWithContext(ctx, "GET", url, nil)
 		if err != nil {
-			<-c.dataSemaphore
+			c.dataSemaphore.Release()
 			return nil, err
 		}
 		req.Header.Set("User-Agent", "XyPriss/1.0 (Go)")
@@ -317,10 +317,12 @@ func (c *RegistryClient) DownloadTarballStream(ctx context.Context, url string) 
 				return &semaphoreReleasingReader{ReadCloser: wrapped, sem: c.dataSemaphore}, nil
 			}
 			resp.Body.Close()
+			c.dataSemaphore.Release()
 			lastErr = fmt.Errorf("HTTP %d for URL: %s", resp.StatusCode, url)
 		} else {
 			lastErr = err
 			c.config.RecordRequest(elapsed, true)
+			c.dataSemaphore.Release()
 		}
 
 		if attempt < c.retries {
@@ -328,20 +330,19 @@ func (c *RegistryClient) DownloadTarballStream(ctx context.Context, url string) 
 		}
 	}
 
-	<-c.dataSemaphore
 	return nil, fmt.Errorf("failed to download tarball %s: %w", url, lastErr)
 }
 
 type semaphoreReleasingReader struct {
 	io.ReadCloser
-	sem  chan struct{}
+	sem  *utils.AdaptiveSemaphore
 	once sync.Once
 }
 
 func (r *semaphoreReleasingReader) Close() error {
 	err := r.ReadCloser.Close()
 	r.once.Do(func() {
-		<-r.sem
+		r.sem.Release()
 	})
 	return err
 }
