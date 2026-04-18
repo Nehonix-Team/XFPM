@@ -1,3 +1,14 @@
+# XFPM - vG0.1.100
+
+## [G0.1.100] - 2026-04-18
+
+### Fixed
+
+- **Critical Windows Script Resolution**: Resolved `MODULE_NOT_FOUND` errors during post-install scripts on Windows.
+  - Implemented **Directory Junctions** as a fallback for symlinks, ensuring dependencies are correctly linked even without administrative privileges.
+  - Fixed `NODE_PATH` injection in script runner to append to existing paths and correctly handle project-level `node_modules`.
+  - Added explicit error checking and logging for all linking operations to eliminate silent installation failures.
+
 # XFPM - vG0.1.99
 
 ## [G0.1.99] - 2026-04-18
