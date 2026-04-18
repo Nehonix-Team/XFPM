@@ -189,6 +189,10 @@ func (i *Installer) ensureExtracted(ctx context.Context, pkg *ResolvedPackage, t
 	i.cas.StoreIndex(pkg.Name, pkg.Version, fileMap)
 	i.LinkFilesToDir(pkgDir, fileMap)
 	i.changedPackages.Store(pkg.Name+"@"+pkg.Version, true)
+
+	if sig, err := os.Stat(filepath.Join(pkgDir, "xypriss.plugin.sig")); err == nil && !sig.IsDir() {
+		i.verifySignatureTrust(filepath.Join(pkgDir, "xypriss.plugin.sig"), pkg)
+	}
 	return nil
 }
 
@@ -429,5 +433,62 @@ func (i *Installer) extractLocal(pkg *ResolvedPackage, targetVStore string) erro
 	i.cas.StoreIndex(pkg.Name, pkg.Version, fileMap)
 	i.LinkFilesToDir(pkgDir, fileMap)
 	i.changedPackages.Store(pkg.Name+"@"+pkg.Version, true)
+
+	if sig, err := os.Stat(filepath.Join(pkgDir, "xypriss.plugin.sig")); err == nil && !sig.IsDir() {
+		i.verifySignatureTrust(filepath.Join(pkgDir, "xypriss.plugin.sig"), pkg)
+	}
 	return nil
+}
+
+func (i *Installer) verifySignatureTrust(sigPath string, pkg *ResolvedPackage) {
+	sigBytes, err := os.ReadFile(sigPath)
+	if err != nil { return }
+	var sigData struct {
+		AuthorKey string `json:"author_key"`
+	}
+	if err := json.Unmarshal(sigBytes, &sigData); err != nil || sigData.AuthorKey == "" { return }
+
+	configPath := filepath.Join(i.projectRoot, "xypriss.config.jsonc")
+	if _, err := os.Stat(configPath); os.IsNotExist(err) {
+		configPath = filepath.Join(i.projectRoot, "xypriss.config.json")
+	}
+
+	var config map[string]interface{}
+	if cfgBytes, err := os.ReadFile(configPath); err == nil {
+		lines := strings.Split(string(cfgBytes), "\n")
+		var cleanLines []string
+		for _, line := range lines {
+			if idx := strings.Index(line, "//"); idx != -1 {
+				line = line[:idx]
+			}
+			cleanLines = append(cleanLines, line)
+		}
+		json.Unmarshal([]byte(strings.Join(cleanLines, "\n")), &config)
+	}
+
+	if config == nil { config = make(map[string]interface{}) }
+	tModsRaw, ok := config["trusted_plugins"]
+	if !ok { tModsRaw = make(map[string]interface{}) }
+	tMods, ok := tModsRaw.(map[string]interface{})
+	if !ok { tMods = make(map[string]interface{}) }
+
+	if trusted, exists := tMods[pkg.Name]; exists && trusted == sigData.AuthorKey { return }
+
+	pterm.Println()
+	pterm.DefaultBox.WithTitle("[SECURITY] New plugin author detected: " + pkg.Name).Println(
+		fmt.Sprintf("Declared Author ID: %s\n\n⚠ ACTION REQUIRED:\nTo trust this author, you must verify their Developer ID\nby checking the official README:\nhttps://npmjs.com/package/%s", sigData.AuthorKey, pkg.Name),
+	)
+
+	result, _ := pterm.DefaultInteractiveTextInput.Show("Paste the Developer ID here to confirm trust, or press Enter to cancel")
+	
+	if strings.TrimSpace(result) == sigData.AuthorKey {
+		tMods[pkg.Name] = sigData.AuthorKey
+		config["trusted_plugins"] = tMods
+		if out, err := json.MarshalIndent(config, "", "    "); err == nil {
+			os.WriteFile(configPath, out, 0644)
+			utils.Success("Plugin %s trusted successfully. Developer ID pinned.", pkg.Name)
+		}
+	} else {
+		utils.Error("Trust verification failed or cancelled.")
+	}
 }
