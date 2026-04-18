@@ -147,14 +147,20 @@ func (r *ScriptRunner) buildEnv(pathVal string) []string {
 		"NODE_ENV":                      "production",
 		"CI":                            "true",
 		"npm_config_foreground_scripts": "true",
-		"NODE_PATH":                     filepath.Join(r.projectRoot, "node_modules"),
 		"TMPDIR":                        filepath.Join(r.projectRoot, "node_modules", ".xpm", "tmp"),
 		"TEMP":                          filepath.Join(r.projectRoot, "node_modules", ".xpm", "tmp"),
 		"TMP":                           filepath.Join(r.projectRoot, "node_modules", ".xpm", "tmp"),
 	}
 
+	// 1. NODE_PATH addition
+	nodePath := filepath.Join(r.projectRoot, "node_modules")
+	if existing := os.Getenv("NODE_PATH"); existing != "" {
+		nodePath = nodePath + string(os.PathListSeparator) + existing
+	}
+	overrides["NODE_PATH"] = nodePath
+
 	// Ensure the temp dir exists
-	os.MkdirAll(overrides["TMPDIR"], 0755)
+	utils.CreateDirAllSecure(overrides["TMPDIR"])
 
 	newEnv := utils.CleanEnvForOverride(os.Environ(), overrides)
 

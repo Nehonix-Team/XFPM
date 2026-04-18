@@ -257,7 +257,9 @@ func (i *Installer) linkPackageDeps(packages []*ResolvedPackage, vstoreBase stri
 			relTarget := filepath.Join(relPrefix, depVStoreName, "node_modules", depName)
 			
 			os.Remove(targetLink)
-			os.Symlink(relTarget, targetLink)
+			if err := utils.LinkDir(relTarget, targetLink); err != nil {
+				utils.Error("Failed to link dependency %s -> %s: %v", depName, targetLink, err)
+			}
 		}
 	}
 	return nil
@@ -280,7 +282,9 @@ func (i *Installer) linkToRoot(packages []*ResolvedPackage) error {
 		relTarget, _ := filepath.Rel(filepath.Dir(rootNM), absTarget)
 		
 		os.Remove(rootNM)
-		os.Symlink(relTarget, rootNM)
+		if err := utils.LinkDir(relTarget, rootNM); err != nil {
+			utils.Error("Failed to link root package %s -> %s: %v", pkg.Name, rootNM, err)
+		}
 		
 		if pkg.Metadata.Bin != nil {
 			i.linkBinaries(absTarget, rootBinDir, pkg.Metadata.Bin)
@@ -372,7 +376,9 @@ func (i *Installer) adaptiveBinLink(name, pkgDir, relPath, binDir string) {
 		os.Chmod(absTarget, 0755)
 		i.ensureExecutableRecursive(filepath.Dir(absTarget))
 	} else {
-		os.Symlink(relTarget, dest)
+		if err := utils.LinkDir(relTarget, dest); err != nil {
+			utils.Error("Failed to link binary %s -> %s: %v", name, dest, err)
+		}
 
 		// GENERATE SHIMS FOR JS BINARIES ON WINDOWS
 		// This allows running 'eslint' instead of 'node node_modules/eslint/bin/eslint'

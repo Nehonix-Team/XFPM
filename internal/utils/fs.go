@@ -2,7 +2,9 @@ package utils
 
 import (
 	"fmt"
+	"io"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"runtime"
 )
@@ -41,4 +43,65 @@ func GenerateBinShim(binDir, name, absTarget string) error {
 	}
 
 	return nil
+}
+
+// LinkDir creates a symbolic link for a directory.
+// On Windows, if symlinking fails (e.g., due to missing privileges), it falls back to a Directory Junction.
+func LinkDir(oldname, newname string) error {
+	// Ensure oldname is absolute for Junctions
+	absOld := oldname
+	if !filepath.IsAbs(oldname) {
+		absOld, _ = filepath.Abs(filepath.Join(filepath.Dir(newname), oldname))
+	}
+
+	err := os.Symlink(oldname, newname)
+	if err == nil || runtime.GOOS != "windows" {
+		return err
+	}
+
+	// Fallback to Junction on Windows
+	// We use 'cmd /c mklink /j'
+	// Junctions MUST use absolute paths for the target to be reliable.
+	cmd := exec.Command("cmd", "/c", "mklink", "/j", newname, absOld)
+	if err := cmd.Run(); err != nil {
+		// Final fallback: Copying (expensive but works)
+		return CopyDir(absOld, newname)
+	}
+	return nil
+}
+
+// CopyDir recursively copies a directory.
+func CopyDir(src, dst string) error {
+	return filepath.Walk(src, func(path string, info os.FileInfo, err error) error {
+		if err != nil {
+			return err
+		}
+		rel, err := filepath.Rel(src, path)
+		if err != nil {
+			return err
+		}
+		target := filepath.Join(dst, rel)
+		if info.IsDir() {
+			return os.MkdirAll(target, info.Mode())
+		}
+		
+		// For files, we try to use hardlinks first to save space
+		if err := os.Link(path, target); err == nil {
+			return nil
+		}
+
+		// Fallback to copy
+		s, err := os.Open(path)
+		if err != nil {
+			return err
+		}
+		defer s.Close()
+		d, err := os.Create(target)
+		if err != nil {
+			return err
+		}
+		defer d.Close()
+		_, err = io.Copy(d, s)
+		return err
+	})
 }
