@@ -178,6 +178,8 @@ type Resolver struct {
 	redirectsMu       sync.Mutex
 	IgnoreRevocations bool
 	RevokedPackages   sync.Map // string -> string (pkg@ver -> latestVer)
+	resolvedByName    sync.Map // string -> []*ResolvedPackage
+	semverCache       sync.Map // string -> *semver.Version (versionStr -> *Version)
 }
 
 
@@ -252,28 +254,46 @@ func (r *Resolver) ResolveTree(ctx context.Context, rootDeps map[string]string) 
 
 	var all []*ResolvedPackage
 	r.resolved.Range(func(key, value interface{}) bool {
-		all = append(all, value.(*ResolvedPackage))
+		pkg := value.(*ResolvedPackage)
+		if pkg.Name != "" { // Avoid placeholder packages
+			all = append(all, pkg)
+		}
 		return true
 	})
 
-	// Circular dependency resolution Pass
-	for _, pkg := range all {
-		resolvedDeps := make(map[string]string)
-		
-		checkDeps := func(deps map[string]string) {
-			for dName, dReq := range deps {
-				if v, ok := r.findCompatibleVersion(dName, dReq); ok {
-					resolvedDeps[dName] = v
+	// Circular dependency resolution Pass - Parallelized
+	concurrency := 32
+	sem := make(chan struct{}, concurrency)
+	var wg sync.WaitGroup
+	errChan := make(chan error, len(all))
+
+	for _, p := range all {
+		wg.Add(1)
+		go func(pkg *ResolvedPackage) {
+			defer wg.Done()
+			sem <- struct{}{}
+			defer func() { <-sem }()
+
+			resolvedDeps := make(map[string]string)
+			
+			checkDeps := func(deps map[string]string) {
+				for dName, dReq := range deps {
+					if v, ok := r.findCompatibleVersion(dName, dReq); ok {
+						resolvedDeps[dName] = v
+					}
 				}
 			}
-		}
 
-		checkDeps(pkg.Metadata.Dependencies)
-		checkDeps(pkg.Metadata.OptionalDependencies)
-		checkDeps(pkg.Metadata.PeerDependencies)
+			checkDeps(pkg.Metadata.Dependencies)
+			checkDeps(pkg.Metadata.OptionalDependencies)
+			checkDeps(pkg.Metadata.PeerDependencies)
 
-		pkg.ResolvedDependencies = resolvedDeps
+			pkg.ResolvedDependencies = resolvedDeps
+		}(p)
 	}
+	wg.Wait()
+	close(errChan)
+	if len(errChan) > 0 { return nil, nil, <-errChan }
 
 	rootVersions := make(map[string]string)
 	for name, req := range rootDeps {
@@ -309,32 +329,31 @@ func (r *Resolver) ResolveTree(ctx context.Context, rootDeps map[string]string) 
 }
 
 func (r *Resolver) findCompatibleVersion(name, req string) (string, bool) {
-	// 1. Check if we have a version satisfying this in the resolved set
+	// Optimization: Use name-based index to avoid O(N^2) scan
+	packages, ok := r.resolvedByName.Load(name)
+	if !ok { return "", false }
+
+	pkgList := packages.([]*ResolvedPackage)
 	var best *semver.Version
 	var bestStr string
 
 	constraint, err := semver.NewConstraint(req)
 	if err != nil {
-		// If req is not a valid semver (like a tag), we might have it exactly
-		versionKey := name + "@" + req
-		if _, ok := r.resolved.Load(versionKey); ok {
-			return req, true
+		// Exact version or tag fallback
+		for _, pkg := range pkgList {
+			if pkg.Version == req { return req, true }
 		}
 		return "", false
 	}
 
-	r.resolved.Range(func(key, value interface{}) bool {
-		pkg := value.(*ResolvedPackage)
-		if pkg.Name == name {
-			if constraint.Check(pkg.SemverVersion) {
-				if best == nil || pkg.SemverVersion.GreaterThan(best) {
-					best = pkg.SemverVersion
-					bestStr = pkg.Version
-				}
+	for _, pkg := range pkgList {
+		if constraint.Check(pkg.SemverVersion) {
+			if best == nil || pkg.SemverVersion.GreaterThan(best) {
+				best = pkg.SemverVersion
+				bestStr = pkg.Version
 			}
 		}
-		return true
-	})
+	}
 
 	if best != nil {
 		return bestStr, true
@@ -545,6 +564,11 @@ func (r *Resolver) resolvePackage(ctx context.Context, name, req string, isOptio
 
 	r.resolved.Store(versionKey, resolved)
 
+	// Update index for O(1) matching in findCompatibleVersion
+	current, _ := r.resolvedByName.LoadOrStore(realName, []*ResolvedPackage{})
+	list := current.([]*ResolvedPackage)
+	r.resolvedByName.Store(realName, append(list, resolved))
+
 	// Add dependencies to queue
 	mu.Lock()
 	for dName, dReq := range meta.Dependencies {
@@ -631,10 +655,17 @@ func (r *Resolver) bestMatch(pkg *RegistryPackage, req string) (string, error) {
 
 	var best *semver.Version
 	for vStr := range pkg.Versions {
-		v, err := semver.NewVersion(vStr)
-		if err != nil {
-			continue
+		// Optimized Semver Cache
+		var v *semver.Version
+		if cached, ok := r.semverCache.Load(vStr); ok {
+			v = cached.(*semver.Version)
+		} else {
+			var err error
+			v, err = semver.NewVersion(vStr)
+			if err != nil { continue }
+			r.semverCache.Store(vStr, v)
 		}
+
 		if constraint.Check(v) {
 			if best == nil || v.GreaterThan(best) {
 				best = v
