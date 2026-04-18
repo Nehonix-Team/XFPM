@@ -1,3 +1,15 @@
+# XFPM - vG0.1.99
+
+## [G0.1.99] - 2026-04-18
+
+### Added
+
+- **Windows Binary Shims**: Automatically generates `.cmd` and `.ps1` wrappers for JavaScript binaries in `node_modules/.bin`. This enables direct execution of tools like `vite`, `eslint`, or `prisma` in CMD and PowerShell without requiring the `node` prefix.
+
+### Fixed
+
+- **Standardized Secure Directory Creation**: Centralized all directory creation logic into `utils.CreateDirAllSecure`, ensuring consistent permissions and cross-platform handling (stripping `chmod` on Windows).
+
 # XFPM - vG0.1.98
 
 ## [G0.1.98] - 2026-04-18

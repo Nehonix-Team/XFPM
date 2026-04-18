@@ -226,7 +226,7 @@ var installCmd = &cobra.Command{
 		if global {
 			home, _ := os.UserHomeDir()
 			projectRoot = filepath.Join(home, ".xpm", "globals")
-			os.MkdirAll(projectRoot, 0755)
+			utils.CreateDirAllSecure(projectRoot)
 		} else {
 			projectRoot, err = os.Getwd()
 			if err != nil {
