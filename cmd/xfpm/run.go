@@ -11,7 +11,6 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
-	"strings"
 
 	"github.com/Nehonix-Team/XFMP/internal/core"
 	"github.com/Nehonix-Team/XFMP/internal/utils"
@@ -69,7 +68,7 @@ func init() {
 }
 
 func executeShell(command, dir string) error {
-	cmd := exec.Command("sh", "-c", command)
+	cmd := utils.GetShellCommandRaw(command)
 	cmd.Dir = dir
 	cmd.Env = buildRunEnv(dir)
 	cmd.Stdout = os.Stdout
@@ -89,7 +88,6 @@ func executeCommand(name string, args []string, dir string) error {
 }
 
 func buildRunEnv(dir string) []string {
-	env := os.Environ()
 	path := os.Getenv("PATH")
 	
 	// Add project node_modules/.bin
@@ -106,11 +104,5 @@ func buildRunEnv(dir string) []string {
 		}
 	}
 
-	for i, e := range env {
-		if strings.HasPrefix(e, "PATH=") {
-			env[i] = "PATH=" + path
-			return env
-		}
-	}
-	return append(env, "PATH="+path)
+	return utils.FormatPathEnv(os.Environ(), path)
 }

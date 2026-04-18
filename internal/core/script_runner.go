@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"io"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"runtime"
 	"strings"
@@ -81,12 +80,7 @@ func (r *ScriptRunner) ExecuteParallel(ctx context.Context, tasks []ScriptTask) 
 func (r *ScriptRunner) executeSandboxed(ctx context.Context, task ScriptTask) error {
 	pathVal := r.buildPath(task.PackageDir)
 
-	var cmd *exec.Cmd
-	if runtime.GOOS == "windows" {
-		cmd = exec.CommandContext(ctx, "cmd", "/c", task.ScriptCommand)
-	} else {
-		cmd = exec.CommandContext(ctx, "sh", "-c", task.ScriptCommand)
-	}
+	cmd := utils.GetShellCommand(ctx, task.ScriptCommand)
 	cmd.Dir = task.PackageDir
 	cmd.Env = r.buildEnv(pathVal)
 
@@ -147,30 +141,22 @@ func (r *ScriptRunner) buildPath(packageDir string) string {
 }
 
 func (r *ScriptRunner) buildEnv(pathVal string) []string {
-	env := os.Environ()
-	newEnv := []string{}
-
 	// Keep existing vars but override key ones
 	overrides := map[string]string{
-		"PATH":                           pathVal,
-		"NODE_ENV":                       "production",
-		"CI":                             "true",
-		"npm_config_foreground_scripts":  "true",
-		"NODE_PATH":                      filepath.Join(r.projectRoot, "node_modules"),
-		"TMPDIR":                         filepath.Join(r.projectRoot, "node_modules", ".xpm", "tmp"),
-		"TEMP":                           filepath.Join(r.projectRoot, "node_modules", ".xpm", "tmp"),
-		"TMP":                            filepath.Join(r.projectRoot, "node_modules", ".xpm", "tmp"),
+		"PATH":                          pathVal,
+		"NODE_ENV":                      "production",
+		"CI":                            "true",
+		"npm_config_foreground_scripts": "true",
+		"NODE_PATH":                     filepath.Join(r.projectRoot, "node_modules"),
+		"TMPDIR":                        filepath.Join(r.projectRoot, "node_modules", ".xpm", "tmp"),
+		"TEMP":                          filepath.Join(r.projectRoot, "node_modules", ".xpm", "tmp"),
+		"TMP":                           filepath.Join(r.projectRoot, "node_modules", ".xpm", "tmp"),
 	}
 
 	// Ensure the temp dir exists
 	os.MkdirAll(overrides["TMPDIR"], 0755)
 
-	for _, e := range env {
-		pair := strings.SplitN(e, "=", 2)
-		if _, ok := overrides[pair[0]]; !ok {
-			newEnv = append(newEnv, e)
-		}
-	}
+	newEnv := utils.CleanEnvForOverride(os.Environ(), overrides)
 
 	for k, v := range overrides {
 		newEnv = append(newEnv, k+"="+v)

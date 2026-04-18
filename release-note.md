@@ -1,18 +1,23 @@
-# XFPM - vG0.1.97
+# XFPM - vG0.1.98
+
+## [G0.1.98] - 2026-04-18
+
+### Fixed
+
+- **Standardized Shell Execution**: Refactored the internal shell execution engine to centralize OS-aware terminal handling.
+- **Windows PATH Harmonization**: Standardized environment variable management to be case-insensitive, ensuring that native project dependencies (e.g. `node-gyp`, `prisma`) correctly find their sub-binaries in Windows `Path`/`PATH` environments.
 
 ## [G0.1.97] - 2026-04-18
 
 ### Fixed
 
-- **Windows Script Execution**: Replaced hardcoded Unix `sh -c` command with Windows-native `cmd /c` when executing lifecycle scripts (`postinstall`, `install`). This resolves `ENOTFOUND sh` errors when installing packages with native build steps under Windows.
+- **Windows Script Execution**: Replaced hardcoded Unix `sh -c` command with Windows-native `cmd /c` when executing lifecycle scripts (`postinstall`, `install`). This resolves `ENOTFOUND sh` errors.
 
 ## [G0.1.96] - 2026-04-18
 
 ### Fixed
 
-- **Windows Terminal ANSI Colors**: Fixed a rendering issue where ANSI color codes (e.g. `←[35;1m`) were printed as raw text instead of actual colors in Windows Command Prompt and administrative PowerShell sessions. Native `ENABLE_VIRTUAL_TERMINAL_PROCESSING` is now automatically applied to standard streams under Windows.
-
-## [G0.1.95] - 2026-04-18
+- **Windows Terminal ANSI Colors**: Fixed a rendering issue where ANSI color codes (e.g. `←[35;1m`) were printed as raw text instead of actual colors in Windows Command Prompt and administrative PowerShell sessions.
 
 ### Added
 
