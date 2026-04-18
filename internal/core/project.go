@@ -42,7 +42,8 @@ type PackageJson struct {
 }
 
 type XfpmConfig struct {
-	Redirect *XfpmRedirect `json:"redirect,omitempty"`
+	Redirect    *XfpmRedirect `json:"redirect,omitempty"`
+	Revocations []string      `json:"revocations,omitempty"`
 }
 
 type XfpmRedirect struct {

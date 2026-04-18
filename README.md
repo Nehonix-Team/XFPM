@@ -30,7 +30,8 @@
 | **Cross-Platform**   | Native binaries for Windows, Linux, and macOS — both `amd64` and `arm64`.                                       |
 | **Clean Output**     | Structured, minimal terminal feedback with no visual noise.                                                     |
 | **Auto-Update**      | Built-in update engine keeps the CLI current without manual intervention.                                       |
-| **Security Audit**   | Standalone SCA engine with premium interactive reports powered by **XFPML**.                                    |
+| **Security Audit**   | Standalone SCA engine with premium interactive reports and decentralized revocation enforcement.                |
+| **Zero-Trust G3**    | Ed25519 cryptographic signing and verification layer for the secure plugin ecosystem.                           |
 | **Single Binary**    | No runtime dependencies. One binary, fully self-contained.                                                      |
 
 ---
@@ -132,13 +133,57 @@ Use `--yes` and `--force-remove` for fully automated security enforcement in CI 
 
 ### Inspect Dependencies
 
-```bash
+````bash
 # List all direct dependencies
 xfpm list
 
 # List specific packages and their dependents
 xfpm list <package...>
+
+### Security & Signing (Zero-Trust G3)
+
+XFPM enforces a cryptographically verified security model for the XyPriss ecosystem.
+
+#### 1. Generate Identity
+Authors must generate a unique Ed25519 developer identity before signing plugins.
+```bash
+xfpm gen-key
+````
+
+Your public key fingerprint should be published in your plugin's official README to allow users to verify your identity.
+
+#### 2. Sign Plugin Assets
+
+Before publication, generate a tamper-proof signature manifest.
+
+```bash
+xfpm sign ./ --min-version 1.0.0
 ```
+
+This hashes all production files and creates a `xypriss.plugin.sig` file required for secure distribution.
+
+#### 3. Trust Verification (TOFU)
+
+During installation of a new plugin, XFPM activates an interactive **Trust On First Use** flow, prompting the administrator to authorize the Developer ID and pin it to the project configuration.
+
+### Dependency Audit & Revocation
+
+Audit your dependencies for known vulnerabilities and enforced framework revocations.
+
+```bash
+# Standard interactive audit
+xfpm audit
+
+# Advanced repair loop
+xfpm audit fix
+```
+
+#### Decentralized Revocation Enforcement
+
+XFPM tracks framework-level revocations via native package metadata. If a version is discovered to be compromised:
+
+- **Audit Flagging**: `xfpm audit` will mark the package as revoked.
+- **Runtime Patching**: XFPM injects an `xfpm.revoked` marker into the local `package.json`, which is natively caught by the XHSC Deep Audit engine to block execution.
 
 ### Package Maintainers: Redirections & Deprecation
 

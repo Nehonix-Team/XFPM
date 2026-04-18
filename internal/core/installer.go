@@ -193,6 +193,11 @@ func (i *Installer) ensureExtracted(ctx context.Context, pkg *ResolvedPackage, t
 	if sig, err := os.Stat(filepath.Join(pkgDir, "xypriss.plugin.sig")); err == nil && !sig.IsDir() {
 		i.verifySignatureTrust(filepath.Join(pkgDir, "xypriss.plugin.sig"), pkg)
 	}
+
+	if pkg.IsRevoked {
+		i.patchPackageJsonForRevocation(pkgDir, pkg)
+	}
+
 	return nil
 }
 
@@ -437,6 +442,10 @@ func (i *Installer) extractLocal(pkg *ResolvedPackage, targetVStore string) erro
 	if sig, err := os.Stat(filepath.Join(pkgDir, "xypriss.plugin.sig")); err == nil && !sig.IsDir() {
 		i.verifySignatureTrust(filepath.Join(pkgDir, "xypriss.plugin.sig"), pkg)
 	}
+
+	if pkg.IsRevoked {
+		i.patchPackageJsonForRevocation(pkgDir, pkg)
+	}
 	return nil
 }
 
@@ -467,12 +476,17 @@ func (i *Installer) verifySignatureTrust(sigPath string, pkg *ResolvedPackage) {
 	}
 
 	if config == nil { config = make(map[string]interface{}) }
-	tModsRaw, ok := config["trusted_plugins"]
-	if !ok { tModsRaw = make(map[string]interface{}) }
-	tMods, ok := tModsRaw.(map[string]interface{})
-	if !ok { tMods = make(map[string]interface{}) }
+	internalRaw, ok := config["$internal"]
+	if !ok { internalRaw = make(map[string]interface{}) }
+	internal, ok := internalRaw.(map[string]interface{})
+	if !ok { internal = make(map[string]interface{}) }
 
-	if trusted, exists := tMods[pkg.Name]; exists && trusted == sigData.AuthorKey { return }
+	// 1. Check existing trust in $internal
+	if pluginCfg, ok := internal[pkg.Name].(map[string]interface{}); ok {
+		if sigCfg, ok := pluginCfg["signature"].(map[string]interface{}); ok {
+			if trusted, ok := sigCfg["author_key"].(string); ok && trusted == sigData.AuthorKey { return }
+		}
+	}
 
 	pterm.Println()
 	pterm.DefaultBox.WithTitle("[SECURITY] New plugin author detected: " + pkg.Name).Println(
@@ -482,13 +496,61 @@ func (i *Installer) verifySignatureTrust(sigPath string, pkg *ResolvedPackage) {
 	result, _ := pterm.DefaultInteractiveTextInput.Show("Paste the Developer ID here to confirm trust, or press Enter to cancel")
 	
 	if strings.TrimSpace(result) == sigData.AuthorKey {
-		tMods[pkg.Name] = sigData.AuthorKey
-		config["trusted_plugins"] = tMods
+		pluginCfgRaw, ok := internal[pkg.Name]
+		if !ok { pluginCfgRaw = make(map[string]interface{}) }
+		pluginCfg, ok := pluginCfgRaw.(map[string]interface{})
+		if !ok { pluginCfg = make(map[string]interface{}) }
+
+		sigCfgRaw, ok := pluginCfg["signature"]
+		if !ok { sigCfgRaw = make(map[string]interface{}) }
+		sigCfg, ok := sigCfgRaw.(map[string]interface{})
+		if !ok { sigCfg = make(map[string]interface{}) }
+
+		sigCfg["author_key"] = sigData.AuthorKey
+		pluginCfg["signature"] = sigCfg
+		internal[pkg.Name] = pluginCfg
+		config["$internal"] = internal
+
 		if out, err := json.MarshalIndent(config, "", "    "); err == nil {
 			os.WriteFile(configPath, out, 0644)
 			utils.Success("Plugin %s trusted successfully. Developer ID pinned.", pkg.Name)
 		}
 	} else {
 		utils.Error("Trust verification failed or cancelled.")
+	}
+}
+
+func (i *Installer) patchPackageJsonForRevocation(pkgDir string, pkg *ResolvedPackage) {
+	pkgJsonPath := filepath.Join(pkgDir, "package.json")
+	data, err := os.ReadFile(pkgJsonPath)
+	if err != nil { return }
+
+	var pkgJson map[string]interface{}
+	if err := json.Unmarshal(data, &pkgJson); err != nil { return }
+
+	xfpmRaw, ok := pkgJson["xfpm"]
+	var xfpm map[string]interface{}
+	if ok {
+		xfpm, _ = xfpmRaw.(map[string]interface{})
+	}
+	if xfpm == nil {
+		xfpm = make(map[string]interface{})
+	}
+
+	xfpm["revoked"] = true
+	xfpm["revoked_by"] = pkg.RevokedBy
+	xfpm["revocation_timestamp"] = time.Now().Format(time.RFC3339)
+	
+	pkgJson["xfpm"] = xfpm
+
+	// Before writing, we must ensure we are not overwriting a hardlink/reflink from CAS
+	// if we don't want to affect the whole system.
+	// But in XFPM, we want revoked packages to BE revoked.
+	// However, it's cleaner to replace the file.
+	os.Remove(pkgJsonPath)
+	
+	if out, err := json.MarshalIndent(pkgJson, "", "  "); err == nil {
+		os.WriteFile(pkgJsonPath, out, 0644)
+		utils.Success("Package %s@%s patched with revocation metadata.", pkg.Name, pkg.Version)
 	}
 }
