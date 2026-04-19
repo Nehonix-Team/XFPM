@@ -1,3 +1,14 @@
+# XFPM - vG0.1.106
+
+## [G0.1.106] - 2026-04-19
+
+### Optimized
+
+- **Hyper-Fast File Linking**:
+  - Parallelized the internal file linking process (`LinkFilesToDir`) with a dedicated 8-worker pool per package.
+  - Achieved a significant performance boost for large packages (e.g. `typescript`, `eslint`) by overlapping filesystem latency.
+  - Resolution and Project Assembly are now fully concurrent at every layer.
+
 # XFPM - vG0.1.105
 
 ## [G0.1.105] - 2026-04-19
