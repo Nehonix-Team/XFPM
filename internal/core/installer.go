@@ -28,6 +28,7 @@ type Installer struct {
 	DirectDeps      map[string]string
 	changedPackages sync.Map
 	linkingPool     *utils.AdaptiveSemaphore
+	linkedPaths     sync.Map // string -> bool (to avoid race collisions)
 }
 
 func NewInstaller(cas *Cas, registry *RegistryClient, projectRoot string) *Installer {
@@ -62,12 +63,12 @@ func (i *Installer) Install(ctx context.Context, packages []*ResolvedPackage) er
 		return err
 	}
 
-	if err := i.linkPackageDeps(packages, i.vstoreRoot); err != nil {
+	if err := i.linkPackageDeps(uniquePackages, i.vstoreRoot); err != nil {
 		i.bar.Stop()
 		return err
 	}
 
-	if err := i.linkToRoot(packages); err != nil {
+	if err := i.linkToRoot(uniquePackages); err != nil {
 		i.bar.Stop()
 		return err
 	}
@@ -251,7 +252,7 @@ func (i *Installer) linkPackageDeps(packages []*ResolvedPackage, vstoreBase stri
 		go func(p *ResolvedPackage) {
 			defer wg.Done()
 			
-			// Use global linking pool for all linking tasks
+			// Use global linking pool
 			if err := i.linkingPool.Acquire(context.Background(), 128); err != nil {
 				return
 			}
@@ -262,8 +263,15 @@ func (i *Installer) linkPackageDeps(packages []*ResolvedPackage, vstoreBase stri
 
 			for depName, depVersion := range p.ResolvedDependencies {
 				targetLink := filepath.Join(pkgDepsNM, depName)
-				utils.CreateDirAllSecure(filepath.Dir(targetLink))
+				
+				// COLLISION GUARD: Though each unique version has its own vstore NM,
+				// if we process uniquePackages, we only ever visit each once.
+				// However, redundancy might exist if resolvedDependencies overlaps.
+				if _, seen := i.linkedPaths.LoadOrStore(targetLink, true); seen {
+					continue
+				}
 
+				utils.CreateDirAllSecure(filepath.Dir(targetLink))
 				depVStoreName := strings.ReplaceAll(depName, "/", "+") + "@" + depVersion
 				steps := strings.Count(depName, "/") + 2
 				relPrefix := ""
@@ -293,21 +301,22 @@ func (i *Installer) linkToRoot(packages []*ResolvedPackage) error {
 	rootBinDir := filepath.Join(rootNMDir, ".bin")
 	utils.CreateDirAllSecure(rootBinDir)
 
-	directNames := make(map[string]bool)
-	for name := range i.DirectDeps {
-		directNames[name] = true
-	}
-
 	var wg sync.WaitGroup
 	linkPkg := func(pkg *ResolvedPackage) {
 		defer wg.Done()
+
+		rootNM := filepath.Join(rootNMDir, pkg.Name)
+		// COLLISION GUARD: First worker to reach a path wins.
+		// For root packages, we prioritize those in i.DirectDeps below.
+		if _, seen := i.linkedPaths.LoadOrStore(rootNM, true); seen {
+			return
+		}
 		
 		if err := i.linkingPool.Acquire(context.Background(), 128); err != nil {
 			return
 		}
 		defer i.linkingPool.Release()
 
-		rootNM := filepath.Join(rootNMDir, pkg.Name)
 		utils.CreateDirAllSecure(filepath.Dir(rootNM))
 		pkgVStoreName := strings.ReplaceAll(pkg.Name, "/", "+") + "@" + pkg.Version
 
@@ -324,14 +333,23 @@ func (i *Installer) linkToRoot(packages []*ResolvedPackage) error {
 		}
 	}
 
+	// PHASE 1: Direct Dependencies (Root packages WIN)
 	for _, pkg := range packages {
-		if !directNames[pkg.Name] {
+		if v, ok := i.DirectDeps[pkg.Name]; ok && pkg.Version == v {
 			wg.Add(1)
 			go linkPkg(pkg)
 		}
 	}
+	wg.Wait() // Ensure root packages are linked first
+
+	// PHASE 2: Indirect Dependencies (Transitive packages)
+	directNames := make(map[string]bool)
+	for name := range i.DirectDeps {
+		directNames[name] = true
+	}
+
 	for _, pkg := range packages {
-		if v, ok := i.DirectDeps[pkg.Name]; ok && pkg.Version == v {
+		if !directNames[pkg.Name] {
 			wg.Add(1)
 			go linkPkg(pkg)
 		}
@@ -385,6 +403,10 @@ func (i *Installer) linkBinaries(pkgDir, binDir string, bin json.RawMessage) err
 
 func (i *Installer) adaptiveBinLink(name, pkgDir, relPath, binDir string) {
 	dest := filepath.Join(binDir, name)
+	// COLLISION GUARD: First binary to claim the name wins
+	if _, seen := i.linkedPaths.LoadOrStore(dest, true); seen {
+		return
+	}
 	os.Remove(dest)
 
 	// CLEAN RELATIVE PATH (Handle .exe suffixes in Unix or nested bins)

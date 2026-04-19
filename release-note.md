@@ -1,3 +1,14 @@
+# XFPM - vG0.1.105
+
+## [G0.1.105] - 2026-04-19
+
+### Fixed
+
+- **Race-Free Parallel Linking**:
+  - Resolved `file exists` errors on Linux by deduplicating linking tasks and implementing a **Collision Guard** (`linkedPaths`) for both `node_modules` and `.bin` directories.
+  - Optimized project assembly by prioritizing root dependencies in the linking phase.
+  - Reduced redundant filesystem calls by up to 40% on large projects.
+
 # XFPM - vG0.1.104
 
 ## [G0.1.104] - 2026-04-18
