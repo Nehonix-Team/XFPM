@@ -55,6 +55,9 @@ func LinkDir(oldname, newname string) error {
 	}
 
 	err := os.Symlink(oldname, newname)
+	if err != nil && os.IsExist(err) {
+		return nil
+	}
 	if err == nil || runtime.GOOS != "windows" {
 		return err
 	}

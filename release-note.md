@@ -1,3 +1,19 @@
+# XFPM - vG0.1.107
+
+## [G0.1.107] - 2026-04-19
+
+### Added
+
+- **Command `xfpm info`**:
+  - Implemented the `xfpm info` command to allow querying a package's registry metadata directly.
+  - Queries fetch directly from the registry using `core.RegistryClient`, supporting both the 'latest' alias and explicit version specifications `@<version>`.
+  - Information is presented in a sleek `pterm` formatting, matching native CLI visuals.
+
+### Fixed
+
+- **Concurrent Extraction Symlinks**:
+  - Supplemented the virtual store extraction by fully catching and ignoring `os.ErrExist` for symlink operations on Linux (`fs.go`). This eliminates lingering `file exists` collisions that happened to bypass the primary Collision Guard.
+
 # XFPM - vG0.1.106
 
 ## [G0.1.106] - 2026-04-19
