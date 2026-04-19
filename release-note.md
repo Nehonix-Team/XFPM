@@ -1,3 +1,14 @@
+# XFPM - vG0.1.104
+
+## [G0.1.104] - 2026-04-18
+
+### Fixed
+
+- **Windows I/O Stabilization**:
+  - Resolved a critical timeout during the linking phase on Windows by removing a hardcoded 10-second worker timeout in `linkPackageDeps`.
+  - Optimized `AdaptiveSemaphore` to support **Immediate Wake-up** on limit increases, ensuring maximum responsiveness during dynamic workload changes.
+  - Unified all internal linking pools to prevent OS thread starvation under high concurrency.
+
 # XFPM - vG0.1.103
 
 ## [G0.1.103] - 2026-04-18
