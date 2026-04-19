@@ -21,12 +21,12 @@ import (
 )
 
 var createCmd = &cobra.Command{
-	Use:   "create [initializer]",
-	Short: "Create a new project from an initializer (e.g., vite, next-app)",
-	Long:  "Native implementation of project initializers. Resolves, installs and executes generators directly.",
+	Use:                "create [initializer]",
+	Short:              "Create a new project from an initializer (e.g., vite, next-app)",
+	Long:               "Native implementation of project initializers. Resolves, installs and executes generators directly.",
 	DisableFlagParsing: true,
-	SilenceUsage: true,
-	SilenceErrors: true,
+	SilenceUsage:       true,
+	SilenceErrors:      true,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		if len(args) == 0 {
 			return fmt.Errorf("no initializer specified. Example: xfpm create vite")
@@ -38,7 +38,7 @@ var createCmd = &cobra.Command{
 		// 1. Normalize name (e.g., vite -> create-vite)
 		pkgName := initializer
 		version := "latest"
-		
+
 		lastAt := strings.LastIndex(pkgName, "@")
 		if lastAt > 0 { // > 0 ensures it's not the first character (scoped package)
 			version = pkgName[lastAt+1:]
@@ -74,9 +74,9 @@ var createCmd = &cobra.Command{
 
 		registry := core.NewRegistryClient("", 3)
 		registry.SetCacheDir(filepath.Join(tempRoot, ".xpm", "cache"))
-		
+
 		resolver := core.NewResolver(registry, cas)
-		
+
 		// 3. Resolve
 		rootDeps := map[string]string{pkgName: version}
 		resolved, rootVersions, err := resolver.ResolveTree(context.Background(), rootDeps)
@@ -130,7 +130,7 @@ var createCmd = &cobra.Command{
 		// Determine runner
 		runner := ""
 		isJS := strings.HasSuffix(binPath, ".js") || strings.HasSuffix(binPath, ".mjs") || strings.HasSuffix(binPath, ".cjs")
-		
+
 		if isJS {
 			if _, err := exec.LookPath("bun"); err == nil {
 				runner = "bun"
@@ -165,7 +165,7 @@ var createCmd = &cobra.Command{
 			}
 			return fmt.Errorf("execution failed: %w", err)
 		}
-		
+
 		return nil
 	},
 }
