@@ -18,8 +18,8 @@ import (
 )
 
 var runCmd = &cobra.Command{
-	Use:   "run [script]",
-	Short: "Run a script defined in package.json",
+	Use:     "run [script]",
+	Short:   "Run a script defined in package.json",
 	Aliases: []string{"r"},
 	RunE: func(cmd *cobra.Command, args []string) error {
 		if len(args) == 0 {
@@ -89,7 +89,7 @@ func executeCommand(name string, args []string, dir string) error {
 
 func buildRunEnv(dir string) []string {
 	path := os.Getenv("PATH")
-	
+
 	// Add project node_modules/.bin
 	binPath := filepath.Join(dir, "node_modules", ".bin")
 	if _, err := os.Stat(binPath); err == nil {
