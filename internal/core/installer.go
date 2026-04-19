@@ -206,29 +206,52 @@ func (i *Installer) ensureExtracted(ctx context.Context, pkg *ResolvedPackage, t
 
 func (i *Installer) LinkFilesToDir(destDir string, index map[string]string) error {
 	utils.CreateDirAllSecure(destDir)
-	for relPath, hash := range index {
-		normalized := relPath
-		if idx := strings.Index(relPath, "/"); idx != -1 { normalized = relPath[idx+1:] }
-		destPath := filepath.Join(destDir, normalized)
-		sourcePath := i.cas.GetFilePath(hash)
-		utils.CreateDirAllSecure(filepath.Dir(destPath))
-		os.Remove(destPath)
-		
-		err := utils.Reflink(sourcePath, destPath)
-		if err == nil {
-			i.applyPermissions(sourcePath, destPath)
-			continue
-		}
+	
+	// Speed boost: Parallelize file linking within the package
+	// We use a small local pool to avoid overwhelming the OS with open files
+	concurrency := 8
+	if len(index) < concurrency { concurrency = 1 }
+	
+	type linkJob struct { relPath, hash string }
+	jobs := make(chan linkJob, len(index))
+	for r, h := range index { jobs <- linkJob{r, h} }
+	close(jobs)
 
-		if err := os.Link(sourcePath, destPath); err == nil {
-			i.applyPermissions(sourcePath, destPath)
-			continue
-		}
+	var wg sync.WaitGroup
 
-		if err := i.copyFile(sourcePath, destPath); err == nil {
-			i.applyPermissions(sourcePath, destPath)
-		}
+	for w := 0; w < concurrency; w++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			for j := range jobs {
+				normalized := j.relPath
+				if idx := strings.Index(j.relPath, "/"); idx != -1 { 
+					normalized = j.relPath[idx+1:] 
+				}
+				destPath := filepath.Join(destDir, normalized)
+				sourcePath := i.cas.GetFilePath(j.hash)
+				
+				utils.CreateDirAllSecure(filepath.Dir(destPath))
+				os.Remove(destPath)
+				
+				err := utils.Reflink(sourcePath, destPath)
+				if err == nil {
+					i.applyPermissions(sourcePath, destPath)
+					continue
+				}
+
+				if err := os.Link(sourcePath, destPath); err == nil {
+					i.applyPermissions(sourcePath, destPath)
+					continue
+				}
+
+				if err := i.copyFile(sourcePath, destPath); err == nil {
+					i.applyPermissions(sourcePath, destPath)
+				}
+			}
+		}()
 	}
+	wg.Wait()
 	return nil
 }
 
