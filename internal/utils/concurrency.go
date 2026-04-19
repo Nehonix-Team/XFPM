@@ -7,8 +7,7 @@ import (
 )
 
 // AdaptiveSemaphore handles dynamic concurrency limits professionally.
-// It uses a mutex-protected waiter queue to ensure fairness and efficiency,
-// eliminating the overhead and potential deadlocks of a manager goroutine.
+// It uses a mutex-protected waiter queue to ensure fairness and efficiency.
 type AdaptiveSemaphore struct {
 	mu      sync.Mutex
 	active  int
@@ -25,9 +24,14 @@ func NewAdaptiveSemaphore(initialLimit int) *AdaptiveSemaphore {
 
 // Acquire blocks until a token is available or context is cancelled.
 func (s *AdaptiveSemaphore) Acquire(ctx context.Context, limit int) error {
-	s.limit.Store(int64(limit))
-
 	s.mu.Lock()
+	
+	// Update limit and check if we can wake anyone immediately
+	oldLimit := s.limit.Swap(int64(limit))
+	if int64(limit) > oldLimit {
+		s.wakeWaiters()
+	}
+
 	if s.active < int(s.limit.Load()) {
 		s.active++
 		s.mu.Unlock()
@@ -61,14 +65,31 @@ func (s *AdaptiveSemaphore) Release() {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	if len(s.waiters) > 0 && s.active <= int(s.limit.Load()) {
-		// Wake up next waiter
+	if len(s.waiters) > 0 {
+		if s.active < int(s.limit.Load()) {
+			// Normal wake up
+			waiter := s.waiters[0]
+			s.waiters = s.waiters[1:]
+			close(waiter)
+			return
+		}
+	}
+	
+	s.active--
+	if s.active < 0 { s.active = 0 }
+	
+	// If limit was increased, we might need to wake up more than one
+	s.wakeWaiters()
+}
+
+// wakeWaiters wakes up as many waiters as the current limit allows.
+// Must be called with s.mu held.
+func (s *AdaptiveSemaphore) wakeWaiters() {
+	limit := int(s.limit.Load())
+	for len(s.waiters) > 0 && s.active < limit {
 		waiter := s.waiters[0]
 		s.waiters = s.waiters[1:]
+		s.active++
 		close(waiter)
-		// We don't decrement active because the waiter takes the slot
-	} else {
-		s.active--
-		if s.active < 0 { s.active = 0 }
 	}
 }

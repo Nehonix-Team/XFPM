@@ -27,6 +27,7 @@ type Installer struct {
 	IsGlobal        bool
 	DirectDeps      map[string]string
 	changedPackages sync.Map
+	linkingPool     *utils.AdaptiveSemaphore
 }
 
 func NewInstaller(cas *Cas, registry *RegistryClient, projectRoot string) *Installer {
@@ -39,6 +40,7 @@ func NewInstaller(cas *Cas, registry *RegistryClient, projectRoot string) *Insta
 		registry:    registry,
 		projectRoot: projectRoot,
 		vstoreRoot:  vstoreRoot,
+		linkingPool: utils.NewAdaptiveSemaphore(128),
 	}
 }
 
@@ -241,8 +243,6 @@ func (i *Installer) applyPermissions(src, dst string) {
 }
 
 func (i *Installer) linkPackageDeps(packages []*ResolvedPackage, vstoreBase string) error {
-	concurrency := 64
-	sem := make(chan struct{}, concurrency)
 	var wg sync.WaitGroup
 	errChan := make(chan error, len(packages))
 
@@ -250,31 +250,32 @@ func (i *Installer) linkPackageDeps(packages []*ResolvedPackage, vstoreBase stri
 		wg.Add(1)
 		go func(p *ResolvedPackage) {
 			defer wg.Done()
-			select {
-			case sem <- struct{}{}:
-				defer func() { <-sem }()
-				pkgVStoreName := strings.ReplaceAll(p.Name, "/", "+") + "@" + p.Version
-				pkgDepsNM := filepath.Join(vstoreBase, pkgVStoreName, "node_modules")
+			
+			// Use global linking pool for all linking tasks
+			if err := i.linkingPool.Acquire(context.Background(), 128); err != nil {
+				return
+			}
+			defer i.linkingPool.Release()
 
-				for depName, depVersion := range p.ResolvedDependencies {
-					targetLink := filepath.Join(pkgDepsNM, depName)
-					utils.CreateDirAllSecure(filepath.Dir(targetLink))
+			pkgVStoreName := strings.ReplaceAll(p.Name, "/", "+") + "@" + p.Version
+			pkgDepsNM := filepath.Join(vstoreBase, pkgVStoreName, "node_modules")
 
-					depVStoreName := strings.ReplaceAll(depName, "/", "+") + "@" + depVersion
-					steps := strings.Count(depName, "/") + 2
-					relPrefix := ""
-					for j := 0; j < steps; j++ {
-						relPrefix += "../"
-					}
-					relTarget := filepath.Join(relPrefix, depVStoreName, "node_modules", depName)
+			for depName, depVersion := range p.ResolvedDependencies {
+				targetLink := filepath.Join(pkgDepsNM, depName)
+				utils.CreateDirAllSecure(filepath.Dir(targetLink))
 
-					os.Remove(targetLink)
-					if err := utils.LinkDir(relTarget, targetLink); err != nil {
-						utils.Error("Failed to link dependency %s -> %s: %v", depName, targetLink, err)
-					}
+				depVStoreName := strings.ReplaceAll(depName, "/", "+") + "@" + depVersion
+				steps := strings.Count(depName, "/") + 2
+				relPrefix := ""
+				for j := 0; j < steps; j++ {
+					relPrefix += "../"
 				}
-			case <-time.After(10 * time.Second):
-				errChan <- fmt.Errorf("timeout waiting for linking semaphore")
+				relTarget := filepath.Join(relPrefix, depVStoreName, "node_modules", depName)
+
+				os.Remove(targetLink)
+				if err := utils.LinkDir(relTarget, targetLink); err != nil {
+					utils.Error("Failed to link dependency %s -> %s: %v", depName, targetLink, err)
+				}
 			}
 		}(pkg)
 	}
@@ -297,14 +298,14 @@ func (i *Installer) linkToRoot(packages []*ResolvedPackage) error {
 		directNames[name] = true
 	}
 
-	concurrency := 32
-	sem := make(chan struct{}, concurrency)
 	var wg sync.WaitGroup
-
 	linkPkg := func(pkg *ResolvedPackage) {
 		defer wg.Done()
-		sem <- struct{}{}
-		defer func() { <-sem }()
+		
+		if err := i.linkingPool.Acquire(context.Background(), 128); err != nil {
+			return
+		}
+		defer i.linkingPool.Release()
 
 		rootNM := filepath.Join(rootNMDir, pkg.Name)
 		utils.CreateDirAllSecure(filepath.Dir(rootNM))
