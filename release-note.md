@@ -1,3 +1,16 @@
+# XFPM - vG0.1.112
+
+## [G0.1.112] - 2026-04-20
+
+### Added
+
+- **New Command: `xfpm plugin`**: Dedicated command for verifying and installing pending plugins.
+- **Improved Security Flow**: Plugins are now deferred during the main `install` phase. This prevents UI flicker and ensures zero-trust is maintained through an explicit, clean-terminal verification step.
+
+### Changed
+
+- **Deferred Extraction**: Plugins detected during `xfpm install` are now listed as "pending" instead of triggering immediate (and potentially messy) concurrent interactive prompts.
+
 # XFPM - vG0.1.111
 
 ## [G0.1.111] - 2026-04-20
