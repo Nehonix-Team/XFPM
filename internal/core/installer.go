@@ -573,6 +573,40 @@ func (i *Installer) extractLocal(pkg *ResolvedPackage, targetVStore string) erro
 	return nil
 }
 
+func (i *Installer) IsPluginTrustedDirect(pkgName string) bool {
+	configPath := filepath.Join(i.projectRoot, "xypriss.config.jsonc")
+	if _, err := os.Stat(configPath); os.IsNotExist(err) {
+		configPath = filepath.Join(i.projectRoot, "xypriss.config.json")
+	}
+
+	cfgBytes, err := os.ReadFile(configPath)
+	if err != nil { return false }
+
+	lines := strings.Split(string(cfgBytes), "\n")
+	var cleanLines []string
+	for _, line := range lines {
+		if idx := strings.Index(line, "//"); idx != -1 {
+			line = line[:idx]
+		}
+		cleanLines = append(cleanLines, line)
+	}
+
+	var config map[string]interface{}
+	if err := json.Unmarshal([]byte(strings.Join(cleanLines, "\n")), &config); err != nil { return false }
+
+	internal, ok := config["$internal"].(map[string]interface{})
+	if !ok { return false }
+
+	pluginCfg, ok := internal[pkgName].(map[string]interface{})
+	if !ok { return false }
+
+	sigCfg, ok := pluginCfg["signature"].(map[string]interface{})
+	if !ok { return false }
+
+	authorKey, ok := sigCfg["author_key"].(string)
+	return ok && authorKey != ""
+}
+
 func (i *Installer) VerifySignatureInternal(sigPath string, pkg *ResolvedPackage, index map[string]string) error {
 	var sigBytes []byte
 	var err error
@@ -732,7 +766,7 @@ func (i *Installer) SavePendingPlugins() {
 	
 	pterm.Println()
 	utils.Warn("  ⚠️  [SECURITY] %d plugin(s) pending verification.", len(i.PendingPlugins))
-	utils.Info("      Run 'xfpm plugin' to verify and install them.")
+	utils.Info("      Run 'xfpm plugin verify' to finalize installation.")
 }
 
 func (i *Installer) isPluginTrusted(pkg *ResolvedPackage) bool {
