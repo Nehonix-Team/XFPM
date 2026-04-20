@@ -222,6 +222,7 @@ func listDependents(nmRoot, localPkgJsonPath, target string) error {
 		fmt.Println()
 	}
 
+
 	return nil
 }
 

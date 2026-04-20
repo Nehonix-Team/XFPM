@@ -1,14 +1,3 @@
-# XFPM - vG0.1.108
-
-## [G0.1.108] - 2026-04-19
-
-### Improved
-
-- **Command `xfpm gen-key`**:
-  - Implemented an interactive UI prompt when the global Developer ID (`id_ed25519`) already exists.
-  - Users can now safely choose to keep the existing identity and sign a project or overwrite their identity and sign immediately.
-  - Refactored `xfpm sign` logic to be fully modular and securely invokable from `gen-key` post-generation.
-
 # XFPM - vG0.1.107
 
 ## [G0.1.107] - 2026-04-19

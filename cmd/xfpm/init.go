@@ -81,6 +81,7 @@ var initCmd = &cobra.Command{
 			langFolder = "JS"
 		}
 
+
 		s, _ := pterm.DefaultSpinner.WithText("Downloading template...").Start()
 		zipPath, err := downloadTemplate()
 		if err != nil {
@@ -363,11 +364,11 @@ func customizeProject(targetDir, name, desc, author, alias string, port uint16) 
 
 func customizeConfig(root, name, desc, author, alias string, port uint16) {
 	path := filepath.Join(root, "xypriss.config.json")
-
+	
 	// Simply create/update the __sys__ metadata
 	// A more robust implementation would use a proper JSON map
 	utils.Log("!", "Updating xypriss.config.json...")
-
+	
 	if desc == "" {
 		desc = "XyPriss project: " + name
 	}

@@ -35,7 +35,7 @@ import (
 var auditReportTmpl string
 
 var (
-	auditTree        bool
+	auditTree bool
 	auditHtml        bool
 	auditYes         bool
 	auditForceRemove bool
@@ -85,12 +85,12 @@ var auditCmd = &cobra.Command{
 			latestVer := value.(string)
 			parts := strings.Split(pkgKey, "@")
 			revocations = append(revocations, DetectedVuln{
-				Package:      parts[0],
-				Version:      parts[1],
-				ID:           "XFPM-REVOKED",
-				Severity:     "CRITICAL",
-				Summary:      fmt.Sprintf("Version %s has been REVOKED by the author.", parts[1]),
-				Details:      fmt.Sprintf("This version is flagged as compromised or dangerous. Action: Upgrade to %s immediately.", latestVer),
+				Package:  parts[0],
+				Version:  parts[1],
+				ID:       "XFPM-REVOKED",
+				Severity: "CRITICAL",
+				Summary:  fmt.Sprintf("Version %s has been REVOKED by the author.", parts[1]),
+				Details:  fmt.Sprintf("This version is flagged as compromised or dangerous. Action: Upgrade to %s immediately.", latestVer),
 				FixedVersion: latestVer,
 			})
 			return true
@@ -107,7 +107,7 @@ var auditCmd = &cobra.Command{
 			auditSpinner.Fail(fmt.Sprintf("Audit failed: %v", err))
 			return err
 		}
-
+		
 		// Merge revocations into vulnerabilities list
 		vulns = append(revocations, vulns...) // Revocations first (CRITICAL)
 
@@ -428,9 +428,9 @@ type OSVBatchResponse struct {
 }
 
 type OSVFullVuln struct {
-	ID       string `json:"id"`
-	Summary  string `json:"summary"`
-	Details  string `json:"details"`
+	ID      string `json:"id"`
+	Summary string `json:"summary"`
+	Details string `json:"details"`
 	Severity []struct {
 		Type  string `json:"type"`
 		Score string `json:"score"`
@@ -636,18 +636,10 @@ var auditFixCmd = &cobra.Command{
 		directVulns := make(map[string]DetectedVuln)
 		for _, v := range vulns {
 			isDirect := false
-			if _, ok := pkgJson.Dependencies[v.Package]; ok {
-				isDirect = true
-			}
-			if _, ok := pkgJson.DevDependencies[v.Package]; ok {
-				isDirect = true
-			}
-			if _, ok := pkgJson.OptionalDependencies[v.Package]; ok {
-				isDirect = true
-			}
-			if _, ok := pkgJson.PeerDependencies[v.Package]; ok {
-				isDirect = true
-			}
+			if _, ok := pkgJson.Dependencies[v.Package]; ok { isDirect = true }
+			if _, ok := pkgJson.DevDependencies[v.Package]; ok { isDirect = true }
+			if _, ok := pkgJson.OptionalDependencies[v.Package]; ok { isDirect = true }
+			if _, ok := pkgJson.PeerDependencies[v.Package]; ok { isDirect = true }
 			if isDirect {
 				directVulns[v.Package] = v
 			}
@@ -660,7 +652,7 @@ var auditFixCmd = &cobra.Command{
 
 		for pkgName, v := range directVulns {
 			pterm.DefaultSection.Printf("Security analysis for %s", pkgName)
-
+			
 			// --- STEP 1: REGISTRY VALIDATION ---
 			// We fetch the latest metadata from the NPM registry to determine if a patch exists.
 			// If the local version is already the latest, we cannot resolve the vulnerability via update.
@@ -700,18 +692,10 @@ var auditFixCmd = &cobra.Command{
 			// and trigger the installer to apply changes to node_modules and the virtual store.
 			updateSpinner, _ := pterm.DefaultSpinner.Start(fmt.Sprintf("Updating %s...", pkgName))
 			// Update pkgJson
-			if _, ok := pkgJson.Dependencies[pkgName]; ok {
-				pkgJson.Dependencies[pkgName] = "^" + latestVersion
-			}
-			if _, ok := pkgJson.DevDependencies[pkgName]; ok {
-				pkgJson.DevDependencies[pkgName] = "^" + latestVersion
-			}
-			if _, ok := pkgJson.OptionalDependencies[pkgName]; ok {
-				pkgJson.OptionalDependencies[pkgName] = "^" + latestVersion
-			}
-			if _, ok := pkgJson.PeerDependencies[pkgName]; ok {
-				pkgJson.PeerDependencies[pkgName] = "^" + latestVersion
-			}
+			if _, ok := pkgJson.Dependencies[pkgName]; ok { pkgJson.Dependencies[pkgName] = "^" + latestVersion }
+			if _, ok := pkgJson.DevDependencies[pkgName]; ok { pkgJson.DevDependencies[pkgName] = "^" + latestVersion }
+			if _, ok := pkgJson.OptionalDependencies[pkgName]; ok { pkgJson.OptionalDependencies[pkgName] = "^" + latestVersion }
+			if _, ok := pkgJson.PeerDependencies[pkgName]; ok { pkgJson.PeerDependencies[pkgName] = "^" + latestVersion }
 
 			if err := pkgJson.Save(pkgJsonPath); err != nil {
 				updateSpinner.Fail("Failed to update package.json")
@@ -791,6 +775,7 @@ func handleUninstallPrompt(pkgName string, pkgJson *core.PackageJson, pkgJsonPat
 	}
 	return false
 }
+
 
 func init() {
 	auditCmd.Flags().BoolVarP(&auditTree, "tree", "t", false, "Display vulnerability tree in terminal")
