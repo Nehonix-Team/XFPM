@@ -41,13 +41,13 @@ import (
 
 var (
 	rootCmd = &cobra.Command{
-		Use:     "xfpm",
-		Short:   "Official XyPriss Fast Package Manager & CLI (Go version)",
-		Long:    `Official XyPriss Fast Package Manager (XFPM). XFPM is a high-performance, cross-platform CLI tool built for the XyPriss ecosystem. Written in Go, it delivers fast dependency resolution, strict package isolation through a virtual store, and a clean terminal interface designed for professional workflows.`,
+		Use:   "xfpm",
+		Short: "Official XyPriss Fast Package Manager & CLI (Go version)",
+		Long:  `Official XyPriss Fast Package Manager (XFPM). XFPM is a high-performance, cross-platform CLI tool built for the XyPriss ecosystem. Written in Go, it delivers fast dependency resolution, strict package isolation through a virtual store, and a clean terminal interface designed for professional workflows.`,
 		Version: utils.BinVersion,
 		PersistentPreRunE: func(cmd *cobra.Command, args []string) error {
 			utils.SetupUI()
-
+			
 			cwd, _ := cmd.Flags().GetString("cwd")
 			if cwd != "" {
 				if err := os.Chdir(cwd); err != nil {
@@ -116,7 +116,7 @@ var pruneCmd = &cobra.Command{
 
 		s, _ := pterm.DefaultSpinner.Start("Searching...")
 		roots := core.FindLegacyStorages(absPath)
-
+		
 		// SEARCH GLOBAL LEGACY
 		globalLegacies := []string{
 			filepath.Join(xpmDir, "xpm_global_storage"),
@@ -124,7 +124,7 @@ var pruneCmd = &cobra.Command{
 			filepath.Join(xpmDir, "xpm_store_legacy"),
 			filepath.Join(xpmDir, "registry_cache"),
 		}
-
+		
 		globalFound := []string{}
 		for _, g := range globalLegacies {
 			if fi, err := os.Stat(g); err == nil && fi.IsDir() {
@@ -139,7 +139,7 @@ var pruneCmd = &cobra.Command{
 		}
 
 		utils.Info("Found %d projects and %d global legacy stores.", len(roots), len(globalFound))
-
+		
 		// Map for selection
 		var options []string
 		for _, g := range globalFound {
@@ -177,7 +177,7 @@ var pruneCmd = &cobra.Command{
 
 		for _, item := range toMigrate {
 			pterm.DefaultSection.Printf("Migrating %s", item)
-
+			
 			pb, _ := pterm.DefaultProgressbar.
 				WithTotal(0).
 				WithTitle("  " + pterm.Gray("->") + " Moving files").
@@ -214,8 +214,8 @@ var pruneCmd = &cobra.Command{
 }
 
 var installCmd = &cobra.Command{
-	Use:     "install [packages...]",
-	Short:   "Install dependencies for the current project",
+	Use:   "install [packages...]",
+	Short: "Install dependencies for the current project",
 	Aliases: []string{"i", "add"},
 	RunE: func(cmd *cobra.Command, args []string) error {
 		startTime := time.Now()
@@ -247,7 +247,7 @@ var installCmd = &cobra.Command{
 				"Migrate and search for ALL other legacy projects on my machine",
 				"Skip (I'll run 'xfpm store prune --legacy' later)",
 			}
-
+			
 			selected, _ := pterm.DefaultInteractiveSelect.
 				WithOptions(options).
 				WithDefaultText("What would you like to do?").
@@ -278,12 +278,12 @@ var installCmd = &cobra.Command{
 				s, _ := pterm.DefaultSpinner.Start("Scanning deep...")
 				roots := core.FindLegacyStorages(home)
 				s.Stop()
-
+				
 				if len(roots) > 0 {
 					pterm.Info.Printfln("Found %d legacy projects. Starting mass migration...", len(roots))
 					for _, r := range roots {
 						pterm.DefaultSection.Printf("Migrating %s", r)
-
+						
 						pb, _ := pterm.DefaultProgressbar.
 							WithTotal(0).
 							WithTitle("  " + pterm.Gray("->") + " Moving files").
@@ -320,7 +320,7 @@ var installCmd = &cobra.Command{
 			home, _ := os.UserHomeDir()
 			xpmStore = filepath.Join(home, ".xpm", "storage")
 		}
-
+		
 		cas, err := core.NewCas(xpmStore)
 		if err != nil {
 			return err
@@ -336,7 +336,7 @@ var installCmd = &cobra.Command{
 
 		rootDeps := make(map[string]string)
 		directPkgs := make(map[string]string)
-
+		
 		// Map for local packages: name -> absolute path
 		localPackages := make(map[string]string)
 
@@ -400,7 +400,7 @@ var installCmd = &cobra.Command{
 
 				name := p
 				req := ""
-
+				
 				if strings.HasPrefix(p, "@") {
 					// Scoped package: @scope/pkg or @scope/pkg@version
 					atIdx := strings.LastIndex(p, "@")
@@ -420,7 +420,7 @@ var installCmd = &cobra.Command{
 				if req == "" {
 					req = "latest"
 				}
-
+				
 				rootDeps[name] = req
 				directPkgs[name] = req
 				resolver.ForcePackages[name] = true
@@ -476,7 +476,7 @@ var installCmd = &cobra.Command{
 				}
 			}
 		}()
-
+		
 		resolved, rootVersions, err := resolver.ResolveTree(context.Background(), rootDeps)
 		close(stopSpinner)
 		s.Stop()
@@ -504,27 +504,19 @@ var installCmd = &cobra.Command{
 			if pkg != nil {
 				if _, ok := pkg.Dependencies[src]; ok {
 					delete(pkg.Dependencies, src)
-					if pkg.Dependencies == nil {
-						pkg.Dependencies = make(map[string]string)
-					}
+					if pkg.Dependencies == nil { pkg.Dependencies = make(map[string]string) }
 					pkg.Dependencies[dest] = "latest"
 				} else if _, ok := pkg.DevDependencies[src]; ok {
 					delete(pkg.DevDependencies, src)
-					if pkg.DevDependencies == nil {
-						pkg.DevDependencies = make(map[string]string)
-					}
+					if pkg.DevDependencies == nil { pkg.DevDependencies = make(map[string]string) }
 					pkg.DevDependencies[dest] = "latest"
 				} else if _, ok := pkg.OptionalDependencies[src]; ok {
 					delete(pkg.OptionalDependencies, src)
-					if pkg.OptionalDependencies == nil {
-						pkg.OptionalDependencies = make(map[string]string)
-					}
+					if pkg.OptionalDependencies == nil { pkg.OptionalDependencies = make(map[string]string) }
 					pkg.OptionalDependencies[dest] = "latest"
 				} else if _, ok := pkg.PeerDependencies[src]; ok {
 					delete(pkg.PeerDependencies, src)
-					if pkg.PeerDependencies == nil {
-						pkg.PeerDependencies = make(map[string]string)
-					}
+					if pkg.PeerDependencies == nil { pkg.PeerDependencies = make(map[string]string) }
 					pkg.PeerDependencies[dest] = "latest"
 				}
 			}
@@ -591,24 +583,16 @@ var installCmd = &cobra.Command{
 
 					switch targetSection {
 					case "dev":
-						if pkg.DevDependencies == nil {
-							pkg.DevDependencies = make(map[string]string)
-						}
+						if pkg.DevDependencies == nil { pkg.DevDependencies = make(map[string]string) }
 						pkg.DevDependencies[name] = version
 					case "optional":
-						if pkg.OptionalDependencies == nil {
-							pkg.OptionalDependencies = make(map[string]string)
-						}
+						if pkg.OptionalDependencies == nil { pkg.OptionalDependencies = make(map[string]string) }
 						pkg.OptionalDependencies[name] = version
 					case "peer":
-						if pkg.PeerDependencies == nil {
-							pkg.PeerDependencies = make(map[string]string)
-						}
+						if pkg.PeerDependencies == nil { pkg.PeerDependencies = make(map[string]string) }
 						pkg.PeerDependencies[name] = version
 					default:
-						if pkg.Dependencies == nil {
-							pkg.Dependencies = make(map[string]string)
-						}
+						if pkg.Dependencies == nil { pkg.Dependencies = make(map[string]string) }
 						pkg.Dependencies[name] = version
 					}
 				}
@@ -626,7 +610,7 @@ var installCmd = &cobra.Command{
 			} else {
 				pkgName = strings.Split(pkgName, "@")[0]
 			}
-
+			
 			if v, ok := rootVersions[pkgName]; ok {
 				pterm.Println()
 				utils.Premium("Success", fmt.Sprintf("%s@%s installed successfully", pkgName, v))
