@@ -600,19 +600,15 @@ func (i *Installer) verifySignatureTrust(sigPath string, pkg *ResolvedPackage) e
 		}
 	}
 
-	// Pause progress bar to prevent messy UI
+	// Pause and hide progress bar to prevent messy UI
 	i.barMu.Lock()
 	i.isBarPaused = true
-	i.barMu.Unlock()
-	defer func() {
-		i.barMu.Lock()
-		i.isBarPaused = false
-		i.barMu.Unlock()
-	}()
-
+	// We don't unlock here yet; we keep it locked to block the ticker goroutine
+	
+	// Try to clear the progress bar from the terminal view temporarily
+	pterm.Print("\r\033[K") // Clear current line (where bar is)
 	pterm.Println()
-	// FIX 1: Do NOT expose the author_key (Developer ID) in the public box.
-	// Only show what is necessary for the user to take action.
+
 	pterm.DefaultBox.WithTitle("[SECURITY] New plugin author detected: " + pkg.Name).Println(
 		fmt.Sprintf("Package: %s\n\nACTION REQUIRED:\nThis plugin has never been trusted before.\nVerify the Developer ID from the official README:\nhttps://npmjs.com/package/%s\n\nThen paste the Developer ID below to confirm trust.", pkg.Name, pkg.Name),
 	)
@@ -621,6 +617,11 @@ func (i *Installer) verifySignatureTrust(sigPath string, pkg *ResolvedPackage) e
 	result, _ := pterm.DefaultInteractiveTextInput.
 		WithDefaultText("").
 		Show("Paste the Developer ID to confirm trust, or press Enter to cancel")
+
+	// Release the progress bar lock after input is received
+	i.isBarPaused = false
+	i.barMu.Unlock()
+	pterm.Println() // Add space after prompt
 
 	if strings.TrimSpace(result) == sigData.AuthorKey {
 		pluginCfgRaw, ok := internal[pkg.Name]
@@ -644,6 +645,8 @@ func (i *Installer) verifySignatureTrust(sigPath string, pkg *ResolvedPackage) e
 		}
 		return nil
 	} else {
+		// Even if empty or cancelled via Enter, trigger deletion
+		pterm.Println()
 		utils.Error("Trust verification failed or cancelled. Removing package %s from disk...", pkg.Name)
 
 		// FIX 3: Remove the untrusted package from the virtual store and root node_modules.
