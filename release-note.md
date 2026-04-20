@@ -1,3 +1,14 @@
+# XFPM - vG0.1.110
+
+## [G0.1.110] - 2026-04-20
+
+### Improved
+
+- **`xfpm install` Security UI & Flow**:
+  - The progress bar is now correctly paused during the Developer ID trust input prompt, preventing the "loading" spinner and progress updates from overlapping and creating a messy UI.
+  - Trust verification failure is now a fatal error for the installation process of that package, ensuring that untrusted code does not accidentally remain in the system during a batch installation.
+  - All security prompts and success/error messages have been normalized to English.
+
 # XFPM - vG0.1.109
 
 ## [G0.1.109] - 2026-04-20
