@@ -564,7 +564,7 @@ func (i *Installer) extractLocal(pkg *ResolvedPackage, targetVStore string) erro
 	i.changedPackages.Store(pkg.Name+"@"+pkg.Version, true)
 
 	if sig, err := os.Stat(filepath.Join(pkgDir, "xypriss.plugin.sig")); err == nil && !sig.IsDir() {
-		i.VerifySignatureInternal(filepath.Join(pkgDir, "xypriss.plugin.sig"), pkg)
+		i.VerifySignatureInternal(filepath.Join(pkgDir, "xypriss.plugin.sig"), pkg, fileMap)
 	}
 
 	if pkg.IsRevoked {
@@ -573,13 +573,40 @@ func (i *Installer) extractLocal(pkg *ResolvedPackage, targetVStore string) erro
 	return nil
 }
 
-func (i *Installer) VerifySignatureInternal(sigPath string, pkg *ResolvedPackage) error {
-	sigBytes, err := os.ReadFile(sigPath)
-	if err != nil { return nil }
+func (i *Installer) VerifySignatureInternal(sigPath string, pkg *ResolvedPackage, index map[string]string) error {
+	var sigBytes []byte
+	var err error
+
+	if sigPath != "" {
+		sigBytes, err = os.ReadFile(sigPath)
+	}
+	
+	if err != nil || len(sigBytes) == 0 {
+		// Fallback to CAS if index is provided
+		if index != nil {
+			for path, hash := range index {
+				if strings.HasSuffix(path, "xypriss.plugin.sig") {
+					casPath := i.cas.GetFilePath(hash)
+					sigBytes, _ = os.ReadFile(casPath)
+					break
+				}
+			}
+		}
+	}
+
+	if len(sigBytes) == 0 { 
+		if index != nil {
+			return fmt.Errorf("security: signature file 'xypriss.plugin.sig' missing from package %s", pkg.Name)
+		}
+		return nil 
+	}
+	
 	var sigData struct {
 		AuthorKey string `json:"author_key"`
 	}
-	if err := json.Unmarshal(sigBytes, &sigData); err != nil || sigData.AuthorKey == "" { return nil }
+	if err := json.Unmarshal(sigBytes, &sigData); err != nil || sigData.AuthorKey == "" {
+		return fmt.Errorf("security: invalid or corrupted signature in package %s", pkg.Name)
+	}
 
 	configPath := filepath.Join(i.projectRoot, "xypriss.config.jsonc")
 	if _, err := os.Stat(configPath); os.IsNotExist(err) {
