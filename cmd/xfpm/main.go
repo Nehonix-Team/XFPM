@@ -73,6 +73,7 @@ func init() {
 	rootCmd.AddCommand(genKeyCmd)
 	rootCmd.AddCommand(signCmd)
 	rootCmd.AddCommand(infoCmd)
+	rootCmd.AddCommand(pluginCmd)
 	storeCmd.AddCommand(pruneCmd)
 
 	rootCmd.PersistentFlags().StringP("cwd", "C", "", "Change work directory")
