@@ -1,3 +1,13 @@
+# XFPM - vG0.1.111
+
+## [G0.1.111] - 2026-04-20
+
+### Improved
+
+- **`xfpm install` Security UX**:
+  - The progress bar is now fully stopped and cleared from the terminal before showing any security trust prompts. This ensures the prompt has full focus and prevents any "loading" or spinner flicker during interaction.
+  - Improved terminal cleanup logic (`\r\033[K`) to ensure no residue from background processes remains during security verification.
+
 # XFPM - vG0.1.110
 
 ## [G0.1.110] - 2026-04-20
