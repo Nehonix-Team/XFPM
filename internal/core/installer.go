@@ -31,6 +31,8 @@ type Installer struct {
 	linkedPaths     sync.Map // string -> bool (to avoid race collisions)
 	barMu           sync.Mutex
 	isBarPaused     bool
+	PendingPlugins  []*ResolvedPackage
+	pendingMu       sync.Mutex
 }
 
 func NewInstaller(cas *Cas, registry *RegistryClient, projectRoot string) *Installer {
@@ -101,6 +103,7 @@ func (i *Installer) Install(ctx context.Context, packages []*ResolvedPackage) er
 		utils.EnsurePathInShell()
 	}
 
+	i.SavePendingPlugins()
 	return nil
 }
 
@@ -134,11 +137,6 @@ func (i *Installer) batchEnsureExtracted(ctx context.Context, packages []*Resolv
 		for {
 			select {
 			case <-ticker.C:
-				i.barMu.Lock()
-				paused := i.isBarPaused
-				i.barMu.Unlock()
-				if paused { continue }
-
 				mu.Lock()
 				pkg := lastPkg
 				mu.Unlock()
@@ -162,11 +160,7 @@ func (i *Installer) batchEnsureExtracted(ctx context.Context, packages []*Resolv
 				lastPkg = p.Name
 				mu.Unlock()
 				if err := i.ensureExtracted(ctx, p, targetVStore); err != nil { errChan <- err }
-				i.barMu.Lock()
-				if !i.isBarPaused {
-					i.bar.Increment()
-				}
-				i.barMu.Unlock()
+				i.bar.Increment()
 			case <-ctx.Done(): return
 			}
 		}(pkg)
@@ -199,14 +193,32 @@ func (i *Installer) ensureExtracted(ctx context.Context, pkg *ResolvedPackage, t
 	if err != nil { return err }
 
 	i.cas.StoreIndex(pkg.Name, pkg.Version, fileMap)
-	i.LinkFilesToDir(pkgDir, fileMap)
-	i.changedPackages.Store(pkg.Name+"@"+pkg.Version, true)
-
-	if sig, err := os.Stat(filepath.Join(pkgDir, "xypriss.plugin.sig")); err == nil && !sig.IsDir() {
-		if err := i.verifySignatureTrust(filepath.Join(pkgDir, "xypriss.plugin.sig"), pkg); err != nil {
-			return err
+	
+	// Plugin Detection
+	isPlugin := false
+	for path := range fileMap {
+		if strings.HasSuffix(path, "xypriss.plugin.sig") {
+			isPlugin = true
+			break
 		}
 	}
+
+	if isPlugin {
+		// Check if already trusted
+		if i.isPluginTrusted(pkg) {
+			i.LinkFilesToDir(pkgDir, fileMap)
+		} else {
+			i.pendingMu.Lock()
+			i.PendingPlugins = append(i.PendingPlugins, pkg)
+			i.pendingMu.Unlock()
+			// We skip Linking for now
+			return nil
+		}
+	} else {
+		i.LinkFilesToDir(pkgDir, fileMap)
+	}
+
+	i.changedPackages.Store(pkg.Name+"@"+pkg.Version, true)
 
 	if pkg.IsRevoked {
 		i.patchPackageJsonForRevocation(pkgDir, pkg)
@@ -552,7 +564,7 @@ func (i *Installer) extractLocal(pkg *ResolvedPackage, targetVStore string) erro
 	i.changedPackages.Store(pkg.Name+"@"+pkg.Version, true)
 
 	if sig, err := os.Stat(filepath.Join(pkgDir, "xypriss.plugin.sig")); err == nil && !sig.IsDir() {
-		i.verifySignatureTrust(filepath.Join(pkgDir, "xypriss.plugin.sig"), pkg)
+		i.VerifySignatureInternal(filepath.Join(pkgDir, "xypriss.plugin.sig"), pkg)
 	}
 
 	if pkg.IsRevoked {
@@ -561,7 +573,7 @@ func (i *Installer) extractLocal(pkg *ResolvedPackage, targetVStore string) erro
 	return nil
 }
 
-func (i *Installer) verifySignatureTrust(sigPath string, pkg *ResolvedPackage) error {
+func (i *Installer) VerifySignatureInternal(sigPath string, pkg *ResolvedPackage) error {
 	sigBytes, err := os.ReadFile(sigPath)
 	if err != nil { return nil }
 	var sigData struct {
@@ -600,26 +612,11 @@ func (i *Installer) verifySignatureTrust(sigPath string, pkg *ResolvedPackage) e
 		}
 	}
 
-	// Pause and hide progress bar to prevent messy UI
-	i.barMu.Lock()
-	i.isBarPaused = true
-	// We don't unlock here yet; we keep it locked to block the ticker goroutine
-	
-	// Stop progress bar to ensure a clean prompt area.
-	// Since WithRemoveWhenDone(true) was set, this will clear the bar from the terminal.
-	i.barMu.Lock()
-	i.isBarPaused = true
-	if i.bar != nil {
-		i.bar.Stop()
-	}
-	i.barMu.Unlock()
-	
 	pterm.Println()
 	pterm.DefaultBox.WithTitle("[SECURITY] New plugin author detected: " + pkg.Name).Println(
 		fmt.Sprintf("Package: %s\n\nACTION REQUIRED:\nThis plugin has never been trusted before.\nVerify the Developer ID from the official README:\nhttps://npmjs.com/package/%s\n\nThen paste the Developer ID below to confirm trust.", pkg.Name, pkg.Name),
 	)
 
-	// FIX 2: Disable the spinner/loading indicator while waiting for user input.
 	result, _ := pterm.DefaultInteractiveTextInput.
 		WithDefaultText("").
 		Show("Paste the Developer ID to confirm trust, or press Enter to cancel")
@@ -644,25 +641,10 @@ func (i *Installer) verifySignatureTrust(sigPath string, pkg *ResolvedPackage) e
 			os.WriteFile(configPath, out, 0644)
 			utils.Success("Plugin %s trusted successfully. Developer ID pinned.", pkg.Name)
 		}
-		
-		// Attempt to resume the progress bar if needed? 
-		// Actually, starting a new bar is complex and might overlap. 
-		// Given we are at the end of the installation usually, it's safer to just continue without the bar.
 		return nil
 	} else {
-		// Even if empty or cancelled via Enter, trigger deletion
 		pterm.Println()
-		utils.Error("Trust verification failed or cancelled. Removing package %s from disk...", pkg.Name)
-
-		// FIX 3: Remove the untrusted package from the virtual store and root node_modules.
-		pkgVStoreName := strings.ReplaceAll(pkg.Name, "/", "+") + "@" + pkg.Version
-		vstoreDir := filepath.Join(i.vstoreRoot, pkgVStoreName)
-		rootNMDir := filepath.Join(i.projectRoot, "node_modules", pkg.Name)
-
-		os.RemoveAll(vstoreDir)
-		os.RemoveAll(rootNMDir)
-		
-		utils.Info("Package %s has been removed. Trust the author to reinstall.", pkg.Name)
+		utils.Error("Trust verification failed or cancelled for %s.", pkg.Name)
 		return fmt.Errorf("security: untrusted plugin author for %s", pkg.Name)
 	}
 }
@@ -700,4 +682,61 @@ func (i *Installer) patchPackageJsonForRevocation(pkgDir string, pkg *ResolvedPa
 		os.WriteFile(pkgJsonPath, out, 0644)
 		utils.Success("Package %s@%s patched with revocation metadata.", pkg.Name, pkg.Version)
 	}
+}
+
+func (i *Installer) SavePendingPlugins() {
+	i.pendingMu.Lock()
+	defer i.pendingMu.Unlock()
+	if len(i.PendingPlugins) == 0 { return }
+	
+	pendingPath := filepath.Join(i.projectRoot, "node_modules", ".xpm", "pending_plugins.json")
+	utils.CreateDirAllSecure(filepath.Dir(pendingPath))
+
+	var list []map[string]string
+	for _, p := range i.PendingPlugins {
+		list = append(list, map[string]string{
+			"name": p.Name,
+			"version": p.Version,
+		})
+	}
+	
+	data, _ := json.MarshalIndent(list, "", "  ")
+	os.WriteFile(pendingPath, data, 0644)
+	
+	pterm.Println()
+	utils.Warn("  ⚠️  [SECURITY] %d plugin(s) pending verification.", len(i.PendingPlugins))
+	utils.Info("      Run 'xfpm plugin' to verify and install them.")
+}
+
+func (i *Installer) isPluginTrusted(pkg *ResolvedPackage) bool {
+	configPath := filepath.Join(i.projectRoot, "xypriss.config.jsonc")
+	if _, err := os.Stat(configPath); os.IsNotExist(err) {
+		configPath = filepath.Join(i.projectRoot, "xypriss.config.json")
+	}
+
+	cfgBytes, err := os.ReadFile(configPath)
+	if err != nil { return false }
+
+	lines := strings.Split(string(cfgBytes), "\n")
+	var cleanLines []string
+	for _, line := range lines {
+		if idx := strings.Index(line, "//"); idx != -1 {
+			line = line[:idx]
+		}
+		cleanLines = append(cleanLines, line)
+	}
+
+	var config map[string]interface{}
+	json.Unmarshal([]byte(strings.Join(cleanLines, "\n")), &config)
+
+	if internalRaw, ok := config["$internal"]; ok {
+		if internal, ok := internalRaw.(map[string]interface{}); ok {
+			if pluginCfg, ok := internal[pkg.Name].(map[string]interface{}); ok {
+				if sigCfg, ok := pluginCfg["signature"].(map[string]interface{}); ok {
+					if _, ok := sigCfg["author_key"].(string); ok { return true }
+				}
+			}
+		}
+	}
+	return false
 }
