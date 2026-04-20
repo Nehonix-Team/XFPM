@@ -29,6 +29,8 @@ type Installer struct {
 	changedPackages sync.Map
 	linkingPool     *utils.AdaptiveSemaphore
 	linkedPaths     sync.Map // string -> bool (to avoid race collisions)
+	barMu           sync.Mutex
+	isBarPaused     bool
 }
 
 func NewInstaller(cas *Cas, registry *RegistryClient, projectRoot string) *Installer {
@@ -132,6 +134,11 @@ func (i *Installer) batchEnsureExtracted(ctx context.Context, packages []*Resolv
 		for {
 			select {
 			case <-ticker.C:
+				i.barMu.Lock()
+				paused := i.isBarPaused
+				i.barMu.Unlock()
+				if paused { continue }
+
 				mu.Lock()
 				pkg := lastPkg
 				mu.Unlock()
@@ -155,9 +162,11 @@ func (i *Installer) batchEnsureExtracted(ctx context.Context, packages []*Resolv
 				lastPkg = p.Name
 				mu.Unlock()
 				if err := i.ensureExtracted(ctx, p, targetVStore); err != nil { errChan <- err }
-				mu.Lock()
-				i.bar.Increment()
-				mu.Unlock()
+				i.barMu.Lock()
+				if !i.isBarPaused {
+					i.bar.Increment()
+				}
+				i.barMu.Unlock()
 			case <-ctx.Done(): return
 			}
 		}(pkg)
@@ -194,7 +203,9 @@ func (i *Installer) ensureExtracted(ctx context.Context, pkg *ResolvedPackage, t
 	i.changedPackages.Store(pkg.Name+"@"+pkg.Version, true)
 
 	if sig, err := os.Stat(filepath.Join(pkgDir, "xypriss.plugin.sig")); err == nil && !sig.IsDir() {
-		i.verifySignatureTrust(filepath.Join(pkgDir, "xypriss.plugin.sig"), pkg)
+		if err := i.verifySignatureTrust(filepath.Join(pkgDir, "xypriss.plugin.sig"), pkg); err != nil {
+			return err
+		}
 	}
 
 	if pkg.IsRevoked {
@@ -550,13 +561,13 @@ func (i *Installer) extractLocal(pkg *ResolvedPackage, targetVStore string) erro
 	return nil
 }
 
-func (i *Installer) verifySignatureTrust(sigPath string, pkg *ResolvedPackage) {
+func (i *Installer) verifySignatureTrust(sigPath string, pkg *ResolvedPackage) error {
 	sigBytes, err := os.ReadFile(sigPath)
-	if err != nil { return }
+	if err != nil { return nil }
 	var sigData struct {
 		AuthorKey string `json:"author_key"`
 	}
-	if err := json.Unmarshal(sigBytes, &sigData); err != nil || sigData.AuthorKey == "" { return }
+	if err := json.Unmarshal(sigBytes, &sigData); err != nil || sigData.AuthorKey == "" { return nil }
 
 	configPath := filepath.Join(i.projectRoot, "xypriss.config.jsonc")
 	if _, err := os.Stat(configPath); os.IsNotExist(err) {
@@ -585,9 +596,19 @@ func (i *Installer) verifySignatureTrust(sigPath string, pkg *ResolvedPackage) {
 	// 1. Check existing trust in $internal
 	if pluginCfg, ok := internal[pkg.Name].(map[string]interface{}); ok {
 		if sigCfg, ok := pluginCfg["signature"].(map[string]interface{}); ok {
-			if trusted, ok := sigCfg["author_key"].(string); ok && trusted == sigData.AuthorKey { return }
+			if trusted, ok := sigCfg["author_key"].(string); ok && trusted == sigData.AuthorKey { return nil }
 		}
 	}
+
+	// Pause progress bar to prevent messy UI
+	i.barMu.Lock()
+	i.isBarPaused = true
+	i.barMu.Unlock()
+	defer func() {
+		i.barMu.Lock()
+		i.isBarPaused = false
+		i.barMu.Unlock()
+	}()
 
 	pterm.Println()
 	// FIX 1: Do NOT expose the author_key (Developer ID) in the public box.
@@ -621,6 +642,7 @@ func (i *Installer) verifySignatureTrust(sigPath string, pkg *ResolvedPackage) {
 			os.WriteFile(configPath, out, 0644)
 			utils.Success("Plugin %s trusted successfully. Developer ID pinned.", pkg.Name)
 		}
+		return nil
 	} else {
 		utils.Error("Trust verification failed or cancelled. Removing package %s from disk...", pkg.Name)
 
@@ -629,13 +651,11 @@ func (i *Installer) verifySignatureTrust(sigPath string, pkg *ResolvedPackage) {
 		vstoreDir := filepath.Join(i.vstoreRoot, pkgVStoreName)
 		rootNMDir := filepath.Join(i.projectRoot, "node_modules", pkg.Name)
 
-		if err := os.RemoveAll(vstoreDir); err != nil {
-			utils.Error("Failed to remove vstore entry for %s: %v", pkg.Name, err)
-		}
-		if err := os.RemoveAll(rootNMDir); err != nil {
-			utils.Error("Failed to remove node_modules entry for %s: %v", pkg.Name, err)
-		}
+		os.RemoveAll(vstoreDir)
+		os.RemoveAll(rootNMDir)
+		
 		utils.Info("Package %s has been removed. Trust the author to reinstall.", pkg.Name)
+		return fmt.Errorf("security: untrusted plugin author for %s", pkg.Name)
 	}
 }
 
