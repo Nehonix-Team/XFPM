@@ -590,12 +590,17 @@ func (i *Installer) verifySignatureTrust(sigPath string, pkg *ResolvedPackage) {
 	}
 
 	pterm.Println()
+	// FIX 1: Do NOT expose the author_key (Developer ID) in the public box.
+	// Only show what is necessary for the user to take action.
 	pterm.DefaultBox.WithTitle("[SECURITY] New plugin author detected: " + pkg.Name).Println(
-		fmt.Sprintf("Declared Author ID: %s\n\n⚠ ACTION REQUIRED:\nTo trust this author, you must verify their Developer ID\nby checking the official README:\nhttps://npmjs.com/package/%s", sigData.AuthorKey, pkg.Name),
+		fmt.Sprintf("Package: %s\n\nACTION REQUIRED:\nThis plugin has never been trusted before.\nVerify the Developer ID from the official README:\nhttps://npmjs.com/package/%s\n\nThen paste the Developer ID below to confirm trust.", pkg.Name, pkg.Name),
 	)
 
-	result, _ := pterm.DefaultInteractiveTextInput.Show("Paste the Developer ID here to confirm trust, or press Enter to cancel")
-	
+	// FIX 2: Disable the spinner/loading indicator while waiting for user input.
+	result, _ := pterm.DefaultInteractiveTextInput.
+		WithDefaultText("").
+		Show("Paste the Developer ID to confirm trust, or press Enter to cancel")
+
 	if strings.TrimSpace(result) == sigData.AuthorKey {
 		pluginCfgRaw, ok := internal[pkg.Name]
 		if !ok { pluginCfgRaw = make(map[string]interface{}) }
@@ -617,7 +622,20 @@ func (i *Installer) verifySignatureTrust(sigPath string, pkg *ResolvedPackage) {
 			utils.Success("Plugin %s trusted successfully. Developer ID pinned.", pkg.Name)
 		}
 	} else {
-		utils.Error("Trust verification failed or cancelled.")
+		utils.Error("Trust verification failed or cancelled. Removing package %s from disk...", pkg.Name)
+
+		// FIX 3: Remove the untrusted package from the virtual store and root node_modules.
+		pkgVStoreName := strings.ReplaceAll(pkg.Name, "/", "+") + "@" + pkg.Version
+		vstoreDir := filepath.Join(i.vstoreRoot, pkgVStoreName)
+		rootNMDir := filepath.Join(i.projectRoot, "node_modules", pkg.Name)
+
+		if err := os.RemoveAll(vstoreDir); err != nil {
+			utils.Error("Failed to remove vstore entry for %s: %v", pkg.Name, err)
+		}
+		if err := os.RemoveAll(rootNMDir); err != nil {
+			utils.Error("Failed to remove node_modules entry for %s: %v", pkg.Name, err)
+		}
+		utils.Info("Package %s has been removed. Trust the author to reinstall.", pkg.Name)
 	}
 }
 

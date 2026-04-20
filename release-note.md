@@ -1,3 +1,14 @@
+# XFPM - vG0.1.109
+
+## [G0.1.109] - 2026-04-20
+
+### Fixed
+
+- **`xfpm install` Security (TOFU Flow)**:
+  - The security box no longer exposes the plugin's Developer ID (public key) to the terminal. Only actionable information is shown.
+  - The loading indicator no longer displays during the Developer ID trust input prompt.
+  - If trust verification fails or is cancelled, the package is now automatically removed from the virtual store and `node_modules` instead of remaining installed in an untrusted state.
+
 # XFPM - vG0.1.107
 
 ## [G0.1.107] - 2026-04-19
