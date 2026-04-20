@@ -605,10 +605,16 @@ func (i *Installer) verifySignatureTrust(sigPath string, pkg *ResolvedPackage) e
 	i.isBarPaused = true
 	// We don't unlock here yet; we keep it locked to block the ticker goroutine
 	
-	// Try to clear the progress bar from the terminal view temporarily
-	pterm.Print("\r\033[K") // Clear current line (where bar is)
+	// Stop progress bar to ensure a clean prompt area.
+	// Since WithRemoveWhenDone(true) was set, this will clear the bar from the terminal.
+	i.barMu.Lock()
+	i.isBarPaused = true
+	if i.bar != nil {
+		i.bar.Stop()
+	}
+	i.barMu.Unlock()
+	
 	pterm.Println()
-
 	pterm.DefaultBox.WithTitle("[SECURITY] New plugin author detected: " + pkg.Name).Println(
 		fmt.Sprintf("Package: %s\n\nACTION REQUIRED:\nThis plugin has never been trusted before.\nVerify the Developer ID from the official README:\nhttps://npmjs.com/package/%s\n\nThen paste the Developer ID below to confirm trust.", pkg.Name, pkg.Name),
 	)
@@ -617,11 +623,6 @@ func (i *Installer) verifySignatureTrust(sigPath string, pkg *ResolvedPackage) e
 	result, _ := pterm.DefaultInteractiveTextInput.
 		WithDefaultText("").
 		Show("Paste the Developer ID to confirm trust, or press Enter to cancel")
-
-	// Release the progress bar lock after input is received
-	i.isBarPaused = false
-	i.barMu.Unlock()
-	pterm.Println() // Add space after prompt
 
 	if strings.TrimSpace(result) == sigData.AuthorKey {
 		pluginCfgRaw, ok := internal[pkg.Name]
@@ -643,6 +644,10 @@ func (i *Installer) verifySignatureTrust(sigPath string, pkg *ResolvedPackage) e
 			os.WriteFile(configPath, out, 0644)
 			utils.Success("Plugin %s trusted successfully. Developer ID pinned.", pkg.Name)
 		}
+		
+		// Attempt to resume the progress bar if needed? 
+		// Actually, starting a new bar is complex and might overlap. 
+		// Given we are at the end of the installation usually, it's safer to just continue without the bar.
 		return nil
 	} else {
 		// Even if empty or cancelled via Enter, trigger deletion
