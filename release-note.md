@@ -1,11 +1,13 @@
-# XFPM - vG0.1.120
+# XFPM - vG0.1.122
 
-## [G0.1.120] - 2026-04-21
+## [G0.1.122] - 2026-04-21
 
 ### Features & Security
 
-- **Signature Format Normalization**: Removed redundant newlines in the `.xsig` manifest generation to normalize the cryptographic proof block and ensure cross-platform parsing consistency.
-- **Cross-Runtime Consistency**: Aligned manifest output with XHSC `.R1` signature verification requirements.
+- **Unified UI Architecture**: Migrated all progress tracking to a single `mpb` (Multi-Progress Bar) container, eliminating terminal synchronization issues between `pterm` and concurrent bars.
+- **Optimized Telemetry Footer**: Refined the network speed monitor with a non-blocking footer bar and EWMA-smoothed metrics.
+- **Layout Stabilization**: Enforced a strict bar priority system where the global installation sequence and network metrics are pinned to the bottom of the terminal, providing a cleaner and more professional UI.
+- **Signature Format Normalization**: Finalized the `.xsig` manifest logic for cross-platform parsing consistency.
 
 # XFPM - vG0.1.118
 

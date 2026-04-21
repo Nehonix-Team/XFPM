@@ -23,7 +23,7 @@ type Installer struct {
 	registry        *RegistryClient
 	projectRoot     string
 	vstoreRoot      string // node_modules/.xpm/vstore
-	bar             *pterm.ProgressbarPrinter
+	globalBar       *mpb.Bar
 	Force           bool
 	ForcePackages   map[string]bool
 	IsGlobal        bool
@@ -60,32 +60,33 @@ func NewInstaller(cas *Cas, registry *RegistryClient, projectRoot string) *Insta
 func (i *Installer) Install(ctx context.Context, packages []*ResolvedPackage) error {
 	utils.Info("Starting installation of %d packages via Ancestor Hoisting...", len(packages))
 
-	i.bar, _ = pterm.DefaultProgressbar.
-		WithTotal(len(packages)).
-		WithTitle(utils.MatrixColor.Sprint("  [INIT_SEQ]")).
-		WithBarCharacter("█").
-		WithLastCharacter("█").
-		WithRemoveWhenDone(true).
-		Start()
-
 	uniquePackages := i.getUniquePackages(packages)
+	
+	i.globalBar = i.progress.AddBar(int64(len(uniquePackages)),
+		mpb.PrependDecorators(
+			decor.Name(utils.MatrixColor.Sprint("  [INIT_SEQ] ")),
+			decor.CountersNoUnit("[%d/%d]"),
+		),
+		mpb.AppendDecorators(
+			decor.Percentage(),
+			decor.Elapsed(decor.ET_STYLE_GO),
+		),
+		mpb.BarPriority(10), // Global bar higher priority (lower on screen)
+	)
 
 	if err := i.batchEnsureExtracted(ctx, uniquePackages, i.vstoreRoot); err != nil {
-		i.bar.Stop()
 		return err
 	}
 
 	if err := i.linkPackageDeps(uniquePackages, i.vstoreRoot); err != nil {
-		i.bar.Stop()
 		return err
 	}
 
 	if err := i.linkToRoot(uniquePackages); err != nil {
-		i.bar.Stop()
 		return err
 	}
 
-	i.bar.Stop()
+	i.globalBar.SetTotal(int64(len(uniquePackages)), true)
 	
 	changedCount := 0
 	i.changedPackages.Range(func(_, _ interface{}) bool {
@@ -100,8 +101,6 @@ func (i *Installer) Install(ctx context.Context, packages []*ResolvedPackage) er
 	}
 
 	// ALWAYS run lifecycle scripts BEFORE exporting global binaries
-	// This ensures that tools like 'bun' which download their binaries during postinstall
-	// have the binaries ready for linking.
 	if err := i.runLifecycleScripts(ctx, packages); err != nil {
 		return err
 	}
@@ -120,13 +119,14 @@ func (i *Installer) Install(ctx context.Context, packages []*ResolvedPackage) er
 }
 
 func (i *Installer) startNetworkMonitoring() {
+	if i.netBar != nil { return } // Avoid duplication
+	
 	i.netBar = i.progress.AddBar(0,
-		mpb.BarFillerTrim(),
+		mpb.BarPriority(20), // Net bar at the very bottom
 		mpb.PrependDecorators(
 			decor.Name(utils.DimColor.Sprint("   [NET] ")),
 			decor.EwmaSpeed(decor.SizeB1024(0), "% .1f", 60),
 		),
-		mpb.BarPriority(-1), // Pin to bottom
 	)
 
 	go func() {
@@ -173,7 +173,7 @@ func (i *Installer) batchEnsureExtracted(ctx context.Context, packages []*Resolv
 			case sem <- struct{}{}:
 				defer func() { <-sem }()
 				if err := i.ensureExtracted(ctx, p, targetVStore); err != nil { errChan <- err }
-				i.bar.Increment()
+				i.globalBar.Increment()
 			case <-ctx.Done(): return
 			}
 		}(pkg)
