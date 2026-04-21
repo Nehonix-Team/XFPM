@@ -1,3 +1,15 @@
+# XFPM - vG0.1.114
+
+## [G0.1.114] - 2026-04-21
+
+### Added
+
+- **Selective Signing Enforcement**: Mandatory `files` field requirement in `package.json` for all plugin sign operations. XFPM now strictly hashes only the assets destined for distribution.
+- **Improved Zero-Trust UI**:
+  - Added matrix-style real-time file logging during hashing.
+  - New `--package` (`-p`) flag to specify custom `package.json` locations.
+- **Deterministic Hashing**: Implemented strict byte-wise lexical sorting of files before hashing for cross-layer consistency with XHSC.
+
 # XFPM - vG0.1.112
 
 ## [G0.1.112] - 2026-04-20
