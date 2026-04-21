@@ -1,3 +1,12 @@
+# XFPM - vG0.1.115
+
+## [G0.1.115] - 2026-04-21
+
+### Added
+
+- **Signature Location Fix**: The plugin signature file `xypriss.plugin.sig` is now always saved at the root of the plugin (same directory as `package.json`), ensuring compatibility with XHSC even when signing sub-directories (e.g., `dist/`).
+- **Signature Inclusion Validation**: XFPM now enforces that `xypriss.plugin.sig` is explicitly included in the `files` array of `package.json`. This prevents distribution errors and ensures Zero-Trust integrity.
+
 # XFPM - vG0.1.114
 
 ## [G0.1.114] - 2026-04-21
