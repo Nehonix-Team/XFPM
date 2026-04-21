@@ -1,13 +1,13 @@
-# XFPM - vG0.1.136
+# XFPM - vG0.1.138
 
-## [G0.1.136] - 2026-04-21
+## [G0.1.138] - 2026-04-21
 
 ### Features & Security
 
-- **Professional Lifecycle Transition**: Restored the legacy terminal clearing mechanism and banner restoration before executing lifecycle scripts. This provides a perfectly clean slate for post-installation output and prevents progress bar persistence issues.
-- **Enhanced UI State Management**: Refined the synchronization between the concurrent extraction engine and sequential script execution phases.
+- **Corrected Execution Lifecycle**: Realigned the installation lifecycle to ensure the "Installation complete" message is only displayed after ALL phases, including lifecycle scripts, derived from the core resolution.
+- **Aggressive Terminal Clearing**: Hardened the transition between extraction and execution by implementing a multi-layered terminal clearing sequence, ensuring no residual progress bars interfere with script logs.
 
-# XFPM - vG0.1.134
+# XFPM - vG0.1.136
 
 # XFPM - vG0.1.118
 
