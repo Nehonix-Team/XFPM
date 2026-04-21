@@ -1,13 +1,14 @@
-# XFPM - vG0.1.122
+# XFPM - vG0.1.124
 
-## [G0.1.122] - 2026-04-21
+## [G0.1.124] - 2026-04-21
 
 ### Features & Security
 
-- **Unified UI Architecture**: Migrated all progress tracking to a single `mpb` (Multi-Progress Bar) container, eliminating terminal synchronization issues between `pterm` and concurrent bars.
-- **Optimized Telemetry Footer**: Refined the network speed monitor with a non-blocking footer bar and EWMA-smoothed metrics.
-- **Layout Stabilization**: Enforced a strict bar priority system where the global installation sequence and network metrics are pinned to the bottom of the terminal, providing a cleaner and more professional UI.
-- **Signature Format Normalization**: Finalized the `.xsig` manifest logic for cross-platform parsing consistency.
+- **Enforced Footer Layout**: Stabilized the terminal UI by pinning the global installation progress and network telemetry to the bottom of the screen using a calibrated `mpb` priority system.
+- **Visual Parity**: Realigned the progress visualization to match the legacy XFPM aesthetic while maintaining the performance benefits of concurrent multi-bar tracking.
+- **Optimized UI Synchronization**: Refined the `mpb` container handling to prevent terminal clashing and ensure a smooth, flicker-free experience.
+
+# XFPM - vG0.1.122
 
 # XFPM - vG0.1.118
 

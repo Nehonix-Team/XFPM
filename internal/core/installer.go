@@ -71,7 +71,7 @@ func (i *Installer) Install(ctx context.Context, packages []*ResolvedPackage) er
 			decor.Percentage(),
 			decor.Elapsed(decor.ET_STYLE_GO),
 		),
-		mpb.BarPriority(10), // Global bar higher priority (lower on screen)
+		mpb.BarPriority(-10), // Pin to bottom (lower priority number = lower on screen?)
 	)
 
 	if err := i.batchEnsureExtracted(ctx, uniquePackages, i.vstoreRoot); err != nil {
@@ -122,7 +122,7 @@ func (i *Installer) startNetworkMonitoring() {
 	if i.netBar != nil { return } // Avoid duplication
 	
 	i.netBar = i.progress.AddBar(0,
-		mpb.BarPriority(20), // Net bar at the very bottom
+		mpb.BarPriority(-20), // Verify if -20 is below -10
 		mpb.PrependDecorators(
 			decor.Name(utils.DimColor.Sprint("   [NET] ")),
 			decor.EwmaSpeed(decor.SizeB1024(0), "% .1f", 60),
@@ -197,6 +197,7 @@ func (i *Installer) ensureExtracted(ctx context.Context, pkg *ResolvedPackage, t
 	if total == 0 { total = 100 } // fallback
 
 	pBar := i.progress.AddBar(int64(total),
+		mpb.BarPriority(100), // Extraction bars higher up
 		mpb.PrependDecorators(
 			decor.Name(utils.DimColor.Sprint("   [EXTRACTING] ")),
 			decor.Name(utils.AccentColor.Sprint(pkg.Name)),
