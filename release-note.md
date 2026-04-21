@@ -1,13 +1,13 @@
-# XFPM - vG0.1.118
+# XFPM - vG0.1.120
 
-## [G0.1.118] - 2026-04-21
+## [G0.1.120] - 2026-04-21
 
 ### Features & Security
 
-- **Selective Signing Enforcement**: XFPM now only hashes files explicitly listed in the `files` array of `package.json`. This ensures that internal development files (e.g., `.env`, `.git`) are never included in the cryptographic fingerprint.
-- **Deterministic Hashing**: Implemented **Relative Path Sorting** for consistent fingerprints across different environments (dev machines, CI/CD, production).
-- **Signature Branding (.xsig)**: Migrated plugin signatures to the custom, human-readable `.xsig` format with branded headers and Ed25519 cryptographic proof.
-- **MIME Type Authority**: Registered `application/xypriss-signature` as the official MIME type for `.xsig` files.
+- **Signature Format Normalization**: Removed redundant newlines in the `.xsig` manifest generation to normalize the cryptographic proof block and ensure cross-platform parsing consistency.
+- **Cross-Runtime Consistency**: Aligned manifest output with XHSC `.R1` signature verification requirements.
+
+# XFPM - vG0.1.118
 
 # XFPM - vG0.1.114
 
