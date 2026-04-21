@@ -1,21 +1,13 @@
-# XFPM - vG0.1.116
+# XFPM - vG0.1.118
 
-## [G0.1.116] - 2026-04-21
+## [G0.1.118] - 2026-04-21
 
-### Added
+### Features & Security
 
-- **Signature Extension Branding**: Renamed the plugin signature file from `xypriss.plugin.sig` to `xypriss.xsig`.
-- **Custom MIME Type**: Registered `application/xypriss-signature` for `.xsig` files across the XyPriss ecosystem.
-- **Global Identity Alignment**: All security documentation and internal logic now use the branded `.xsig` extension.
-
-# XFPM - vG0.1.115
-
-## [G0.1.115] - 2026-04-21
-
-### Added
-
-- **Signature Location Fix**: The plugin signature file `xypriss.xsig` is now always saved at the root of the plugin (same directory as `package.json`), ensuring compatibility with XHSC even when signing sub-directories (e.g., `dist/`).
-- **Signature Inclusion Validation**: XFPM now enforces that `xypriss.xsig` is explicitly included in the `files` array of `package.json`. This prevents distribution errors and ensures Zero-Trust integrity.
+- **Selective Signing Enforcement**: XFPM now only hashes files explicitly listed in the `files` array of `package.json`. This ensures that internal development files (e.g., `.env`, `.git`) are never included in the cryptographic fingerprint.
+- **Deterministic Hashing**: Implemented **Relative Path Sorting** for consistent fingerprints across different environments (dev machines, CI/CD, production).
+- **Signature Branding (.xsig)**: Migrated plugin signatures to the custom, human-readable `.xsig` format with branded headers and Ed25519 cryptographic proof.
+- **MIME Type Authority**: Registered `application/xypriss-signature` as the official MIME type for `.xsig` files.
 
 # XFPM - vG0.1.114
 
