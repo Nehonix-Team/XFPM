@@ -1,14 +1,14 @@
-# XFPM - vG0.1.130
+# XFPM - vG0.1.132
 
-## [G0.1.130] - 2026-04-21
+## [G0.1.132] - 2026-04-21
 
 ### Features & Security
 
-- **Dynamic Color-Shift Progress**: Implemented a responsive color-gradient for the global progress bar (Cyan → Yellow → Green) providing immediate visual feedback on installation maturity.
-- **Full Visual Parity**: Restored the legacy "thick bar" solid Unicode aesthetic (█/░) integrated into the high-performance `mpb` concurrent engine.
-- **Integrated Telemetry Suite**: Combined elapsed timing, completion percentage, and real-time network throughput into a single, unified footer bar for maximum information density with zero terminal clutter.
+- **Real-Time Contextual Footer**: Restored the active package status next to the global progress counter, providing immediate visibility into which dependency is currently being processed.
+- **Accurate Telemetry Correction**: Fixed a bug where network speed would report as 0.0 MB/s by implementing precise per-session byte delta tracking.
+- **UI Logic Optimization**: Refined concurrent status updates and timing metrics for maximum visual fluidness during large-scale installations.
 
-# XFPM - vG0.1.128
+# XFPM - vG0.1.130
 
 # XFPM - vG0.1.118
 

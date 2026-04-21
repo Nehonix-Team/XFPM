@@ -36,6 +36,8 @@ type Installer struct {
 	PendingPlugins  []*ResolvedPackage
 	pendingMu       sync.Mutex
 	progress        *mpb.Progress
+	lastPkg         string
+	lpMu            sync.Mutex
 }
 
 func NewInstaller(cas *Cas, registry *RegistryClient, projectRoot string) *Installer {
@@ -61,6 +63,8 @@ func (i *Installer) Install(ctx context.Context, packages []*ResolvedPackage) er
 
 	uniquePackages := i.getUniquePackages(packages)
 	startTime := time.Now()
+	initialBytes := GlobalBytesDownloaded.Load()
+
 	i.globalBar, _ = i.progress.Add(int64(len(uniquePackages)),
 		mpb.BarFillerFunc(func(w io.Writer, st decor.Statistics) error {
 			percent := float64(st.Current) / float64(st.Total) * 100
@@ -82,6 +86,13 @@ func (i *Installer) Install(ctx context.Context, packages []*ResolvedPackage) er
 		mpb.PrependDecorators(
 			decor.Name(utils.MatrixColor.Sprint("  [INIT_SEQ] ")),
 			decor.CountersNoUnit("[%d/%d] "),
+			decor.Any(func(s decor.Statistics) string {
+				i.lpMu.Lock()
+				pkg := i.lastPkg
+				i.lpMu.Unlock()
+				if pkg == "" { return "" }
+				return utils.DimColor.Sprint("(") + utils.AccentColor.Sprint(pkg) + utils.DimColor.Sprint(") ")
+			}),
 		),
 		mpb.AppendDecorators(
 			decor.Name(" "),
@@ -90,10 +101,11 @@ func (i *Installer) Install(ctx context.Context, packages []*ResolvedPackage) er
 			decor.Percentage(),
 			decor.Name("  "),
 			decor.Any(func(s decor.Statistics) string {
-				speed := GlobalBytesDownloaded.Load()
+				speedNano := GlobalBytesDownloaded.Load() - initialBytes
 				elapsed := time.Since(startTime).Seconds()
 				if elapsed < 1 { elapsed = 1 }
-				return utils.AccentColor.Sprint(fmt.Sprintf("% .1f MB/s", float64(speed)/elapsed/1024/1024))
+				mbps := float64(speedNano) / elapsed / 1024 / 1024
+				return utils.AccentColor.Sprint(fmt.Sprintf("% .1f MB/s", mbps))
 			}),
 		),
 		mpb.BarPriority(1000),
@@ -173,6 +185,9 @@ func (i *Installer) batchEnsureExtracted(ctx context.Context, packages []*Resolv
 			select {
 			case sem <- struct{}{}:
 				defer func() { <-sem }()
+				i.lpMu.Lock()
+				i.lastPkg = p.Name
+				i.lpMu.Unlock()
 				if err := i.ensureExtracted(ctx, p, targetVStore); err != nil { errChan <- err }
 				i.globalBar.Increment()
 			case <-ctx.Done(): return
