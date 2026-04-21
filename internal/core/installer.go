@@ -126,10 +126,23 @@ func (i *Installer) Install(ctx context.Context, packages []*ResolvedPackage) er
 	i.globalBar.SetTotal(int64(len(uniquePackages)), true)
 	i.progress.Wait()
 
-	// UX: Clear screen after installation progress to provide clean slate for scripts
+	// UX: Aggressive clear screen after installation progress
 	fmt.Print("\033[H\033[2J")
 	utils.PrintBanner()
 	
+	// ALWAYS run lifecycle scripts BEFORE exporting global binaries
+	if err := i.runLifecycleScripts(ctx, packages); err != nil {
+		return err
+	}
+
+	if i.IsGlobal {
+		i.exportGlobalBinaries(packages)
+		utils.EnsurePathInShell()
+	}
+
+	i.SavePendingPlugins()
+
+	// Final success message after EVERYTHING is done
 	changedCount := 0
 	i.changedPackages.Range(func(_, _ interface{}) bool {
 		changedCount++
@@ -142,17 +155,6 @@ func (i *Installer) Install(ctx context.Context, packages []*ResolvedPackage) er
 		utils.Success("Installation complete: %d updated.", changedCount)
 	}
 
-	// ALWAYS run lifecycle scripts BEFORE exporting global binaries
-	if err := i.runLifecycleScripts(ctx, packages); err != nil {
-		return err
-	}
-
-	if i.IsGlobal {
-		i.exportGlobalBinaries(packages)
-		utils.EnsurePathInShell()
-	}
-
-	i.SavePendingPlugins()
 	return nil
 }
 
