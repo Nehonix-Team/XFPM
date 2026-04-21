@@ -5,7 +5,6 @@ import (
 	"crypto/sha256"
 	"encoding/base64"
 	"encoding/hex"
-	"encoding/json"
 	"fmt"
 	"io"
 	"os"
@@ -53,9 +52,7 @@ var signCmd = &cobra.Command{
 			return fmt.Errorf("failed to read package.json at %s: %w", absPkgPath, err)
 		}
 
-		if len(pkg.Files) == 0 {
-			return fmt.Errorf("mandatory 'files' field is missing or empty in package.json. XFPM refuses to sign unsafe wide-packages")
-		}
+		packageDir := filepath.Dir(absPkgPath)
 
 		home, _ := os.UserHomeDir()
 		privPath := filepath.Join(home, ".xfpm", "id_ed25519")
@@ -106,7 +103,7 @@ var signCmd = &cobra.Command{
 							return nil
 						}
 						// Skip the signature file itself
-						if info.Name() == "xypriss.xsig" {
+						if info.Name() == "xypriss.plugin.xsig" {
 							return nil
 						}
 						allFilesMap[path] = true
@@ -114,7 +111,7 @@ var signCmd = &cobra.Command{
 					})
 				} else {
 					// Skip the signature file if matched by glob/file
-					if info.Name() != "xypriss.xsig" {
+					if info.Name() != "xypriss.plugin.xsig" {
 						allFilesMap[m] = true
 					}
 				}
@@ -122,20 +119,26 @@ var signCmd = &cobra.Command{
 		}
 
 		// Convert to sorted slice for deterministic hashing
-		var fileList []string
+		type fileRel struct {
+			abs string
+			rel string
+		}
+		var fileList []fileRel
 		for f := range allFilesMap {
-			fileList = append(fileList, f)
+			rel, _ := filepath.Rel(packageDir, f)
+			fileList = append(fileList, fileRel{abs: f, rel: rel})
 		}
 		
-		// Byte-wise sort (natural Go string sort)
-		sort.Strings(fileList)
+		// Sort by relative path (essential for cross-machine hashing)
+		sort.Slice(fileList, func(i, j int) bool {
+			return fileList[i].rel < fileList[j].rel
+		})
 
 		h := sha256.New()
-		for _, path := range fileList {
-			rel, _ := filepath.Rel(absPath, path)
-			utils.StickyStatus(rel, "hashing...")
+		for _, fEntry := range fileList {
+			utils.StickyStatus(fEntry.rel, "hashing...")
 
-			f, err := os.Open(path)
+			f, err := os.Open(fEntry.abs)
 			if err != nil {
 				return err
 			}
@@ -151,39 +154,43 @@ var signCmd = &cobra.Command{
 		expiresAt := time.Now().AddDate(1, 0, 0).Format(time.RFC3339)
 
 
-		sigData := map[string]interface{}{
-			"name":          pkg.Name,
-			"version":       pkg.Version,
-			"min_version":   minVersion,
-			"content_hash":  contentHash,
-			"prev_sig_hash": prevSigHash,
-			"author_key":    authorID,
-			"expires_at":    expiresAt,
-		}
+		// Generate custom branded signature format
+		sigContent := fmt.Sprintf(
+			"--- XYPRISS SIGNATURE (G3) ---\n"+
+				"Manifest: %s@%s\n"+
+				"Min-Engine: %s\n"+
+				"Fingerprint: %s\n"+
+				"Identity: %s\n"+
+				"Expires: %s\n"+
+				"Revision: %s\n",
+			pkg.Name, pkg.Version, minVersion, contentHash, authorID, expiresAt, prevSigHash,
+		)
 
-		payloadJSON, _ := json.Marshal(sigData)
-		signatureBytes := ed25519.Sign(privKey, payloadJSON)
-		sigData["signature"] = fmt.Sprintf("base64:%s", base64.StdEncoding.EncodeToString(signatureBytes))
+		signatureBytes := ed25519.Sign(privKey, []byte(sigContent))
+		signatureBase64 := base64.StdEncoding.EncodeToString(signatureBytes)
 
-		// Enforce "xypriss.xsig" in the files array
+		finalSig := fmt.Sprintf(
+			"%s\n--- BEGIN CRYPTOGRAPHIC PROOF ---\nbase64:%s\n--- END XYPRISS SIGNATURE ---\n",
+			sigContent, signatureBase64,
+		)
+
+		// Enforce "xypriss.plugin.xsig" in the files array
 		sigInFiles := false
 		for _, f := range pkg.Files {
-			if f == "xypriss.xsig" {
+			if f == "xypriss.plugin.xsig" {
 				sigInFiles = true
 				break
 			}
 		}
 
 		if !sigInFiles {
-			return fmt.Errorf("\"xypriss.xsig\" MUST be present in the \"files\" array of package.json")
+			return fmt.Errorf("\"xypriss.plugin.xsig\" MUST be present in the \"files\" array of package.json")
 		}
 
 		// Save signature to the same directory as package.json (root of plugin)
-		packageDir := filepath.Dir(absPkgPath)
-		sigFilePath := filepath.Join(packageDir, "xypriss.xsig")
-		
-		finalJSON, _ := json.MarshalIndent(sigData, "", "    ")
-		if err := os.WriteFile(sigFilePath, finalJSON, 0644); err != nil {
+		sigFilePath := filepath.Join(packageDir, "xypriss.plugin.xsig")
+
+		if err := os.WriteFile(sigFilePath, []byte(finalSig), 0644); err != nil {
 			return fmt.Errorf("failed to write signature: %w", err)
 		}
 

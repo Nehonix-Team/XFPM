@@ -160,7 +160,7 @@ Before publication, generate a tamper-proof signature manifest.
 xfpm sign ./ --min-version 1.0.0
 ```
 
-This hashes all production files and creates a `xypriss.xsig` file required for secure distribution.
+This hashes all production files and creates a `xypriss.plugin.xsig` file required for secure distribution.
 
 #### 3. Trust Verification (TOFU)
 
