@@ -106,7 +106,7 @@ var signCmd = &cobra.Command{
 							return nil
 						}
 						// Skip the signature file itself
-						if info.Name() == "xypriss.plugin.sig" {
+						if info.Name() == "xypriss.xsig" {
 							return nil
 						}
 						allFilesMap[path] = true
@@ -114,7 +114,7 @@ var signCmd = &cobra.Command{
 					})
 				} else {
 					// Skip the signature file if matched by glob/file
-					if info.Name() != "xypriss.plugin.sig" {
+					if info.Name() != "xypriss.xsig" {
 						allFilesMap[m] = true
 					}
 				}
@@ -165,22 +165,22 @@ var signCmd = &cobra.Command{
 		signatureBytes := ed25519.Sign(privKey, payloadJSON)
 		sigData["signature"] = fmt.Sprintf("base64:%s", base64.StdEncoding.EncodeToString(signatureBytes))
 
-		// Enforce "xypriss.plugin.sig" in the files array
+		// Enforce "xypriss.xsig" in the files array
 		sigInFiles := false
 		for _, f := range pkg.Files {
-			if f == "xypriss.plugin.sig" {
+			if f == "xypriss.xsig" {
 				sigInFiles = true
 				break
 			}
 		}
 
 		if !sigInFiles {
-			return fmt.Errorf("\"xypriss.plugin.sig\" MUST be present in the \"files\" array of package.json")
+			return fmt.Errorf("\"xypriss.xsig\" MUST be present in the \"files\" array of package.json")
 		}
 
 		// Save signature to the same directory as package.json (root of plugin)
 		packageDir := filepath.Dir(absPkgPath)
-		sigFilePath := filepath.Join(packageDir, "xypriss.plugin.sig")
+		sigFilePath := filepath.Join(packageDir, "xypriss.xsig")
 		
 		finalJSON, _ := json.MarshalIndent(sigData, "", "    ")
 		if err := os.WriteFile(sigFilePath, finalJSON, 0644); err != nil {
