@@ -213,6 +213,7 @@ func (i *Installer) ensureExtracted(ctx context.Context, pkg *ResolvedPackage, t
 
 	pBar := i.progress.AddBar(int64(total),
 		mpb.BarPriority(0), // Extraction bars at the top
+		mpb.BarRemoveOnComplete(),
 		mpb.PrependDecorators(
 			decor.Name(utils.DimColor.Sprint("   [EXTRACTING] ")),
 			decor.Name(utils.AccentColor.Sprint(pkg.Name)),
@@ -661,13 +662,11 @@ func (i *Installer) VerifySignatureInternal(sigPath string, pkg *ResolvedPackage
 	
 	if err != nil || len(sigBytes) == 0 {
 		// Fallback to CAS if index is provided
-		if index != nil {
-			for path, hash := range index {
-				if strings.HasSuffix(path, "xypriss.plugin.xsig") {
-					casPath := i.cas.GetFilePath(hash)
-					sigBytes, _ = os.ReadFile(casPath)
-					break
-				}
+		for path, hash := range index {
+			if strings.HasSuffix(path, "xypriss.plugin.xsig") {
+				casPath := i.cas.GetFilePath(hash)
+				sigBytes, _ = os.ReadFile(casPath)
+				break
 			}
 		}
 	}
