@@ -170,7 +170,7 @@ var signCmd = &cobra.Command{
 		signatureBase64 := base64.StdEncoding.EncodeToString(signatureBytes)
 
 		finalSig := fmt.Sprintf(
-			"%s\n--- BEGIN CRYPTOGRAPHIC PROOF ---\nbase64:%s\n--- END XYPRISS SIGNATURE ---\n",
+			"%s--- BEGIN CRYPTOGRAPHIC PROOF ---\nbase64:%s\n--- END XYPRISS SIGNATURE ---\n",
 			sigContent, signatureBase64,
 		)
 

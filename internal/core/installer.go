@@ -14,6 +14,8 @@ import (
 
 	"github.com/Nehonix-Team/XFMP/internal/utils"
 	"github.com/pterm/pterm"
+	"github.com/vbauerster/mpb/v8"
+	"github.com/vbauerster/mpb/v8/decor"
 )
 
 type Installer struct {
@@ -33,6 +35,8 @@ type Installer struct {
 	isBarPaused     bool
 	PendingPlugins  []*ResolvedPackage
 	pendingMu       sync.Mutex
+	progress        *mpb.Progress
+	netBar          *mpb.Bar
 }
 
 func NewInstaller(cas *Cas, registry *RegistryClient, projectRoot string) *Installer {
@@ -46,6 +50,10 @@ func NewInstaller(cas *Cas, registry *RegistryClient, projectRoot string) *Insta
 		projectRoot: projectRoot,
 		vstoreRoot:  vstoreRoot,
 		linkingPool: utils.NewAdaptiveSemaphore(128),
+		progress: mpb.New(
+			mpb.WithWidth(64),
+			mpb.WithRefreshRate(180*time.Millisecond),
+		),
 	}
 }
 
@@ -104,7 +112,35 @@ func (i *Installer) Install(ctx context.Context, packages []*ResolvedPackage) er
 	}
 
 	i.SavePendingPlugins()
+	if i.netBar != nil {
+		i.netBar.Abort(true)
+	}
+	i.progress.Wait()
 	return nil
+}
+
+func (i *Installer) startNetworkMonitoring() {
+	i.netBar = i.progress.AddBar(0,
+		mpb.BarFillerTrim(),
+		mpb.PrependDecorators(
+			decor.Name(utils.DimColor.Sprint("   [NET] ")),
+			decor.EwmaSpeed(decor.SizeB1024(0), "% .1f", 60),
+		),
+		mpb.BarPriority(-1), // Pin to bottom
+	)
+
+	go func() {
+		lastBytes := GlobalBytesDownloaded.Load()
+		for {
+			time.Sleep(500 * time.Millisecond)
+			currentBytes := GlobalBytesDownloaded.Load()
+			delta := currentBytes - lastBytes
+			lastBytes = currentBytes
+			if i.netBar != nil {
+				i.netBar.IncrBy(int(delta))
+			}
+		}
+	}()
 }
 
 func (i *Installer) getUniquePackages(packages []*ResolvedPackage) []*ResolvedPackage {
@@ -126,28 +162,8 @@ func (i *Installer) batchEnsureExtracted(ctx context.Context, packages []*Resolv
 	sem := make(chan struct{}, concurrency)
 	errChan := make(chan error, len(packages))
 	var wg sync.WaitGroup
-	var mu sync.Mutex
-	lastPkg := ""
-
-	startTime := time.Now()
-	stopProgress := make(chan struct{})
-	go func() {
-		ticker := time.NewTicker(200 * time.Millisecond)
-		defer ticker.Stop()
-		for {
-			select {
-			case <-ticker.C:
-				mu.Lock()
-				pkg := lastPkg
-				mu.Unlock()
-				if pkg != "" {
-					elapsed := time.Since(startTime).Truncate(time.Millisecond)
-					i.bar.UpdateTitle(fmt.Sprintf("  %s %s %s  ", pterm.FgCyan.Sprint("[EXTRACTING]"), utils.AccentColor.Sprint(elapsed.String()), utils.DimColor.Sprint(pkg)))
-				}
-			case <-stopProgress: return
-			}
-		}
-	}()
+	
+	i.startNetworkMonitoring()
 
 	for _, pkg := range packages {
 		wg.Add(1)
@@ -156,9 +172,6 @@ func (i *Installer) batchEnsureExtracted(ctx context.Context, packages []*Resolv
 			select {
 			case sem <- struct{}{}:
 				defer func() { <-sem }()
-				mu.Lock()
-				lastPkg = p.Name
-				mu.Unlock()
 				if err := i.ensureExtracted(ctx, p, targetVStore); err != nil { errChan <- err }
 				i.bar.Increment()
 			case <-ctx.Done(): return
@@ -166,9 +179,7 @@ func (i *Installer) batchEnsureExtracted(ctx context.Context, packages []*Resolv
 		}(pkg)
 	}
 	wg.Wait()
-	close(stopProgress)
-	close(errChan)
-	if len(errChan) > 0 { return <-errChan }
+	if i.netBar != nil { i.netBar.Abort(true) }
 	return nil
 }
 
@@ -182,14 +193,31 @@ func (i *Installer) ensureExtracted(ctx context.Context, pkg *ResolvedPackage, t
 
 	if pkg.LocalPath != "" { return i.extractLocal(pkg, targetVStore) }
 
-	pterm.Printf("   %s %-30s %s\n", utils.GreenColor.Sprint("├─"), pkg.Name+"@"+pkg.Version, utils.DimColor.Sprint("reflinking..."))
-	
+	total := pkg.Metadata.Dist.UnpackedSize
+	if total == 0 { total = 100 } // fallback
+
+	pBar := i.progress.AddBar(int64(total),
+		mpb.PrependDecorators(
+			decor.Name(utils.DimColor.Sprint("   [EXTRACTING] ")),
+			decor.Name(utils.AccentColor.Sprint(pkg.Name)),
+		),
+		mpb.AppendDecorators(
+			decor.Counters(decor.SizeB1024(0), "% .1f / % .1f"),
+			decor.Percentage(),
+		),
+	)
+	defer pBar.Abort(true)
+
 	stream, err := i.registry.DownloadTarballStream(ctx, pkg.Metadata.Dist.Tarball)
 	if err != nil { return err }
 	defer stream.Close()
 
+	// Wrap stream for progress reporting
+	progressStream := pBar.ProxyReader(stream)
+	defer progressStream.Close()
+
 	extractor := NewStreamingExtractor(i.cas)
-	fileMap, err := extractor.Extract(stream)
+	fileMap, err := extractor.Extract(progressStream)
 	if err != nil { return err }
 
 	i.cas.StoreIndex(pkg.Name, pkg.Version, fileMap)
