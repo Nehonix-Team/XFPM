@@ -10,9 +10,11 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"sort"
 	"time"
 
 	"github.com/Nehonix-Team/XFMP/internal/core"
+
 	"github.com/Nehonix-Team/XFMP/internal/utils"
 	"github.com/spf13/cobra"
 )
@@ -36,10 +38,23 @@ var signCmd = &cobra.Command{
 			return err
 		}
 
-		pkgPath := filepath.Join(absPath, "package.json")
-		pkg, err := core.LoadPackageJson(pkgPath)
+		pkgPath, _ := cmd.Flags().GetString("package")
+		if pkgPath == "" {
+			pkgPath = filepath.Join(absPath, "package.json")
+		}
+		
+		absPkgPath, err := filepath.Abs(pkgPath)
 		if err != nil {
-			return fmt.Errorf("failed to read package.json: %w", err)
+			return err
+		}
+
+		pkg, err := core.LoadPackageJson(absPkgPath)
+		if err != nil {
+			return fmt.Errorf("failed to read package.json at %s: %w", absPkgPath, err)
+		}
+
+		if len(pkg.Files) == 0 {
+			return fmt.Errorf("mandatory 'files' field is missing or empty in package.json. XFPM refuses to sign unsafe wide-packages")
 		}
 
 		home, _ := os.UserHomeDir()
@@ -58,37 +73,83 @@ var signCmd = &cobra.Command{
 		copy(pubKey, privKey[32:])
 		authorID := fmt.Sprintf("ed25519:%s", hex.EncodeToString(pubKey))
 
-		utils.Matrix("Calculating content hash...")
-		h := sha256.New()
-		err = filepath.Walk(absPath, func(path string, info os.FileInfo, err error) error {
-			if err != nil { return err }
-			if info.IsDir() {
-				name := info.Name()
-				if name == "node_modules" || name == ".git" || name == ".idea" {
-					return filepath.SkipDir
-				}
-				return nil
-			}
-			if info.Name() == "xypriss.plugin.sig" {
-				return nil
-			}
+		utils.Matrix("Calculating content hash for: " + targetDir)
+		
+		// Collect matching files
+		allFilesMap := make(map[string]bool)
+		pkgDir := filepath.Dir(absPkgPath)
+
+		for _, pattern := range pkg.Files {
+			fullPattern := filepath.Join(pkgDir, pattern)
 			
+			// Resolve directory vs file vs glob
+			matches, err := filepath.Glob(fullPattern)
+			if err != nil {
+				// If glob fails, try direct path
+				matches = []string{fullPattern}
+			}
+
+			for _, m := range matches {
+				info, err := os.Stat(m)
+				if err != nil {
+					continue
+				}
+
+				if info.IsDir() {
+					filepath.Walk(m, func(path string, info os.FileInfo, err error) error {
+						if err != nil { return nil }
+						if info.IsDir() {
+							name := info.Name()
+							if name == "node_modules" || name == ".git" || name == ".idea" {
+								return filepath.SkipDir
+							}
+							return nil
+						}
+						// Skip the signature file itself
+						if info.Name() == "xypriss.plugin.sig" {
+							return nil
+						}
+						allFilesMap[path] = true
+						return nil
+					})
+				} else {
+					// Skip the signature file if matched by glob/file
+					if info.Name() != "xypriss.plugin.sig" {
+						allFilesMap[m] = true
+					}
+				}
+			}
+		}
+
+		// Convert to sorted slice for deterministic hashing
+		var fileList []string
+		for f := range allFilesMap {
+			fileList = append(fileList, f)
+		}
+		
+		// Byte-wise sort (natural Go string sort)
+		sort.Strings(fileList)
+
+		h := sha256.New()
+		for _, path := range fileList {
+			rel, _ := filepath.Rel(absPath, path)
+			utils.StickyStatus(rel, "hashing...")
+
 			f, err := os.Open(path)
-			if err != nil { return err }
-			defer f.Close()
-			if _, err := io.Copy(h, f); err != nil {
+			if err != nil {
 				return err
 			}
-			return nil
-		})
-
-		if err != nil {
-			return fmt.Errorf("failed to hash content: %w", err)
+			if _, err := io.Copy(h, f); err != nil {
+				f.Close()
+				return err
+			}
+			f.Close()
 		}
 
 		contentHash := fmt.Sprintf("sha256:%s", hex.EncodeToString(h.Sum(nil)))
 		prevSigHash := "sha256:none"
 		expiresAt := time.Now().AddDate(1, 0, 0).Format(time.RFC3339)
+
 
 		sigData := map[string]interface{}{
 			"name":          pkg.Name,
@@ -111,10 +172,13 @@ var signCmd = &cobra.Command{
 		}
 
 		utils.Success("Plugin signed successfully! Developer ID: %s", authorID)
+		utils.Info("Signature saved to: %s", sigFilePath)
 		return nil
 	},
 }
 
 func init() {
 	signCmd.Flags().String("min-version", "", "Minimum allowed version (anti-downgrade)")
+	signCmd.Flags().StringP("package", "p", "", "Path to package.json (default: path/package.json)")
 }
+
