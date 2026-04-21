@@ -197,7 +197,7 @@ func (i *Installer) ensureExtracted(ctx context.Context, pkg *ResolvedPackage, t
 	// Plugin Detection
 	isPlugin := false
 	for path := range fileMap {
-		if strings.HasSuffix(path, "xypriss.plugin.sig") {
+		if strings.HasSuffix(path, "xypriss.xsig") {
 			isPlugin = true
 			break
 		}
@@ -563,8 +563,8 @@ func (i *Installer) extractLocal(pkg *ResolvedPackage, targetVStore string) erro
 	i.LinkFilesToDir(pkgDir, fileMap)
 	i.changedPackages.Store(pkg.Name+"@"+pkg.Version, true)
 
-	if sig, err := os.Stat(filepath.Join(pkgDir, "xypriss.plugin.sig")); err == nil && !sig.IsDir() {
-		i.VerifySignatureInternal(filepath.Join(pkgDir, "xypriss.plugin.sig"), pkg, fileMap)
+	if sig, err := os.Stat(filepath.Join(pkgDir, "xypriss.xsig")); err == nil && !sig.IsDir() {
+		i.VerifySignatureInternal(filepath.Join(pkgDir, "xypriss.xsig"), pkg, fileMap)
 	}
 
 	if pkg.IsRevoked {
@@ -619,7 +619,7 @@ func (i *Installer) VerifySignatureInternal(sigPath string, pkg *ResolvedPackage
 		// Fallback to CAS if index is provided
 		if index != nil {
 			for path, hash := range index {
-				if strings.HasSuffix(path, "xypriss.plugin.sig") {
+				if strings.HasSuffix(path, "xypriss.xsig") {
 					casPath := i.cas.GetFilePath(hash)
 					sigBytes, _ = os.ReadFile(casPath)
 					break
@@ -630,7 +630,7 @@ func (i *Installer) VerifySignatureInternal(sigPath string, pkg *ResolvedPackage
 
 	if len(sigBytes) == 0 { 
 		if index != nil {
-			return fmt.Errorf("security: signature file 'xypriss.plugin.sig' missing from package %s", pkg.Name)
+			return fmt.Errorf("security: signature file 'xypriss.xsig' missing from package %s", pkg.Name)
 		}
 		return nil 
 	}

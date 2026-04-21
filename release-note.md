@@ -1,11 +1,21 @@
+# XFPM - vG0.1.116
+
+## [G0.1.116] - 2026-04-21
+
+### Added
+
+- **Signature Extension Branding**: Renamed the plugin signature file from `xypriss.plugin.sig` to `xypriss.xsig`.
+- **Custom MIME Type**: Registered `application/xypriss-signature` for `.xsig` files across the XyPriss ecosystem.
+- **Global Identity Alignment**: All security documentation and internal logic now use the branded `.xsig` extension.
+
 # XFPM - vG0.1.115
 
 ## [G0.1.115] - 2026-04-21
 
 ### Added
 
-- **Signature Location Fix**: The plugin signature file `xypriss.plugin.sig` is now always saved at the root of the plugin (same directory as `package.json`), ensuring compatibility with XHSC even when signing sub-directories (e.g., `dist/`).
-- **Signature Inclusion Validation**: XFPM now enforces that `xypriss.plugin.sig` is explicitly included in the `files` array of `package.json`. This prevents distribution errors and ensures Zero-Trust integrity.
+- **Signature Location Fix**: The plugin signature file `xypriss.xsig` is now always saved at the root of the plugin (same directory as `package.json`), ensuring compatibility with XHSC even when signing sub-directories (e.g., `dist/`).
+- **Signature Inclusion Validation**: XFPM now enforces that `xypriss.xsig` is explicitly included in the `files` array of `package.json`. This prevents distribution errors and ensures Zero-Trust integrity.
 
 # XFPM - vG0.1.114
 
