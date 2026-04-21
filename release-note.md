@@ -1,13 +1,13 @@
-# XFPM - vG0.1.134
+# XFPM - vG0.1.136
 
-## [G0.1.134] - 2026-04-21
+## [G0.1.136] - 2026-04-21
 
 ### Features & Security
 
-- **Auto-Cleaning Extraction UI**: Enabled automatic removal of per-package extraction bars upon completion, preventing terminal clutter and ensuring a focused view during post-installation activities.
-- **Visual Lifecycle Optimization**: Refined the transition between the installation sequence and lifecycle script execution for a seamless professional terminal experience.
+- **Professional Lifecycle Transition**: Restored the legacy terminal clearing mechanism and banner restoration before executing lifecycle scripts. This provides a perfectly clean slate for post-installation output and prevents progress bar persistence issues.
+- **Enhanced UI State Management**: Refined the synchronization between the concurrent extraction engine and sequential script execution phases.
 
-# XFPM - vG0.1.132
+# XFPM - vG0.1.134
 
 # XFPM - vG0.1.118
 
