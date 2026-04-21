@@ -1,13 +1,13 @@
-# XFPM - vG0.1.140
+# XFPM - vG0.1.142
 
-## [G0.1.140] - 2026-04-21
+## [G0.1.142] - 2026-04-21
 
 ### Features & Security
 
-- **Minimalist Lifecycle Transition**: Streamlined the transition between extraction and execution by removing redundant banner re-printing. This provides a focused, clutter-free environment for monitoring lifecycle script output.
-- **Refined Terminal Clearing**: Maintained aggressive clearing logic to ensure a professional transition without visual distractions.
+- **Automated Plugin Verification**: Introduced the `--verify` flag for `install` and `update` commands. This allows for seamless cryptographic trust enrollment and plugin configuration injection directly within the installation phase, eliminating the need for manual `xfpm plugin verify` execution.
+- **Enhanced Security UX**: Integrated the security enrollment flow into the core installer, providing a professional and uninterrupted experience for managing trusted plugins.
 
-# XFPM - vG0.1.138
+# XFPM - vG0.1.140
 
 # XFPM - vG0.1.118
 

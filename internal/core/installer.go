@@ -38,6 +38,7 @@ type Installer struct {
 	progress        *mpb.Progress
 	lastPkg         string
 	lpMu            sync.Mutex
+	AutoVerify      bool
 }
 
 func NewInstaller(cas *Cas, registry *RegistryClient, projectRoot string) *Installer {
@@ -127,8 +128,8 @@ func (i *Installer) Install(ctx context.Context, packages []*ResolvedPackage) er
 	i.progress.Wait()
 
 	// UX: Aggressive clear screen after installation progress
-	fmt.Print("\033[H\033[2J")
-	// utils.PrintBanner()
+	// fmt.Print("\033[H\033[2J")
+	// utils.PrintBanner() // permet d'afficher le banner
 	
 	// ALWAYS run lifecycle scripts BEFORE exporting global binaries
 	if err := i.runLifecycleScripts(ctx, packages); err != nil {
@@ -799,6 +800,42 @@ func (i *Installer) SavePendingPlugins() {
 	defer i.pendingMu.Unlock()
 	if len(i.PendingPlugins) == 0 { return }
 	
+	if i.AutoVerify {
+		var verifiedCount int
+		var stillPending []*ResolvedPackage
+
+		for _, p := range i.PendingPlugins {
+			pkgVStoreName := strings.ReplaceAll(p.Name, "/", "+") + "@" + p.Version
+			pkgDir := filepath.Join(i.projectRoot, "node_modules", ".xpm", "vstore", pkgVStoreName, "node_modules", p.Name)
+			sigPath := filepath.Join(pkgDir, "xypriss.plugin.xsig")
+
+			// Load index from CAS to verify
+			index, err := i.cas.GetIndex(p.Name, p.Version)
+			if err != nil {
+				utils.Error("Package index not found in CAS for %s. Skipping auto-verify.", p.Name)
+				stillPending = append(stillPending, p)
+				continue
+			}
+
+			if err := i.VerifySignatureInternal(sigPath, p, index); err == nil {
+				// Finalize installation for this plugin
+				i.LinkFilesToDir(pkgDir, index)
+				rootDest := filepath.Join(i.projectRoot, "node_modules", p.Name)
+				utils.LinkDir(pkgDir, rootDest)
+				verifiedCount++
+			} else {
+				utils.Error("Verification failed for %s: %v", p.Name, err)
+				stillPending = append(stillPending, p)
+			}
+		}
+
+		i.PendingPlugins = stillPending
+		if verifiedCount > 0 {
+			utils.Success("Auto-verified and finalized %d plugin(s).", verifiedCount)
+		}
+		if len(i.PendingPlugins) == 0 { return }
+	}
+
 	pendingPath := filepath.Join(i.projectRoot, "node_modules", ".xpm", "pending_plugins.json")
 	utils.CreateDirAllSecure(filepath.Dir(pendingPath))
 
