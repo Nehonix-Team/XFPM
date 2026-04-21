@@ -1,14 +1,13 @@
-# XFPM - vG0.1.132
+# XFPM - vG0.1.134
 
-## [G0.1.132] - 2026-04-21
+## [G0.1.134] - 2026-04-21
 
 ### Features & Security
 
-- **Real-Time Contextual Footer**: Restored the active package status next to the global progress counter, providing immediate visibility into which dependency is currently being processed.
-- **Accurate Telemetry Correction**: Fixed a bug where network speed would report as 0.0 MB/s by implementing precise per-session byte delta tracking.
-- **UI Logic Optimization**: Refined concurrent status updates and timing metrics for maximum visual fluidness during large-scale installations.
+- **Auto-Cleaning Extraction UI**: Enabled automatic removal of per-package extraction bars upon completion, preventing terminal clutter and ensuring a focused view during post-installation activities.
+- **Visual Lifecycle Optimization**: Refined the transition between the installation sequence and lifecycle script execution for a seamless professional terminal experience.
 
-# XFPM - vG0.1.130
+# XFPM - vG0.1.132
 
 # XFPM - vG0.1.118
 
