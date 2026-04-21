@@ -84,8 +84,10 @@ func init() {
 	installCmd.Flags().Bool("update", false, "Update mode: always fetch fresh metadata from registry")
 	installCmd.Flags().BoolP("global", "g", false, "Install packages globally")
 	installCmd.Flags().StringP("path", "P", "", "Install from a local path")
-
+	installCmd.Flags().Bool("verify", false, "Automatically verify plugins during installation")
+	
 	updateCmd.Flags().BoolP("global", "g", false, "Update packages globally")
+	updateCmd.Flags().Bool("verify", false, "Automatically verify plugins during update")
 	pruneCmd.Flags().Bool("legacy", false, "Prune legacy storage from older XFPM versions")
 }
 
@@ -530,6 +532,10 @@ var installCmd = &cobra.Command{
 		installer.ForcePackages = resolver.ForcePackages
 		installer.IsGlobal = global
 		installer.DirectDeps = rootVersions
+
+		autoVerify, _ := cmd.Flags().GetBool("verify")
+		installer.AutoVerify = autoVerify
+
 		if err := installer.Install(context.Background(), resolved); err != nil {
 			return err
 		}
