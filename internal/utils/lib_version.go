@@ -1,3 +1,3 @@
 package utils
 
-const BinVersion = "vG0.1.134"
+const BinVersion = "vG0.1.136"

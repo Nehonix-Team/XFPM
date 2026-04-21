@@ -124,6 +124,11 @@ func (i *Installer) Install(ctx context.Context, packages []*ResolvedPackage) er
 	}
 
 	i.globalBar.SetTotal(int64(len(uniquePackages)), true)
+	i.progress.Wait()
+
+	// UX: Clear screen after installation progress to provide clean slate for scripts
+	fmt.Print("\033[H\033[2J")
+	utils.PrintBanner()
 	
 	changedCount := 0
 	i.changedPackages.Range(func(_, _ interface{}) bool {
@@ -148,7 +153,6 @@ func (i *Installer) Install(ctx context.Context, packages []*ResolvedPackage) er
 	}
 
 	i.SavePendingPlugins()
-	i.progress.Wait()
 	return nil
 }
 
