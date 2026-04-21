@@ -1,14 +1,13 @@
-# XFPM - vG0.1.124
+# XFPM - vG0.1.126
 
-## [G0.1.124] - 2026-04-21
+## [G0.1.126] - 2026-04-21
 
 ### Features & Security
 
-- **Enforced Footer Layout**: Stabilized the terminal UI by pinning the global installation progress and network telemetry to the bottom of the screen using a calibrated `mpb` priority system.
-- **Visual Parity**: Realigned the progress visualization to match the legacy XFPM aesthetic while maintaining the performance benefits of concurrent multi-bar tracking.
-- **Optimized UI Synchronization**: Refined the `mpb` container handling to prevent terminal clashing and ensure a smooth, flicker-free experience.
+- **Final UI Stabilization**: Perfected the footer layout by enforcing a strict priority system that pins global progress and telemetry to the bottom.
+- **Legacy Aesthetic Parity**: Restored the elapsed timer and optimized bar visualization to match the user's preferred layout while leveraging the power of parallel extraction tracking.
 
-# XFPM - vG0.1.122
+# XFPM - vG0.1.124
 
 # XFPM - vG0.1.118
 
