@@ -165,14 +165,30 @@ var signCmd = &cobra.Command{
 		signatureBytes := ed25519.Sign(privKey, payloadJSON)
 		sigData["signature"] = fmt.Sprintf("base64:%s", base64.StdEncoding.EncodeToString(signatureBytes))
 
-		sigFilePath := filepath.Join(absPath, "xypriss.plugin.sig")
+		// Enforce "xypriss.plugin.sig" in the files array
+		sigInFiles := false
+		for _, f := range pkg.Files {
+			if f == "xypriss.plugin.sig" {
+				sigInFiles = true
+				break
+			}
+		}
+
+		if !sigInFiles {
+			return fmt.Errorf("\"xypriss.plugin.sig\" MUST be present in the \"files\" array of package.json")
+		}
+
+		// Save signature to the same directory as package.json (root of plugin)
+		packageDir := filepath.Dir(absPkgPath)
+		sigFilePath := filepath.Join(packageDir, "xypriss.plugin.sig")
+		
 		finalJSON, _ := json.MarshalIndent(sigData, "", "    ")
 		if err := os.WriteFile(sigFilePath, finalJSON, 0644); err != nil {
 			return fmt.Errorf("failed to write signature: %w", err)
 		}
 
 		utils.Success("Plugin signed successfully! Developer ID: %s", authorID)
-		utils.Info("Signature saved to: %s", sigFilePath)
+		utils.Info("Signature saved to root: %s", sigFilePath)
 		return nil
 	},
 }
