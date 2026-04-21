@@ -128,7 +128,7 @@ func (i *Installer) Install(ctx context.Context, packages []*ResolvedPackage) er
 
 	// UX: Aggressive clear screen after installation progress
 	fmt.Print("\033[H\033[2J")
-	utils.PrintBanner()
+	// utils.PrintBanner()
 	
 	// ALWAYS run lifecycle scripts BEFORE exporting global binaries
 	if err := i.runLifecycleScripts(ctx, packages); err != nil {

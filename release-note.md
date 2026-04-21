@@ -1,13 +1,13 @@
-# XFPM - vG0.1.138
+# XFPM - vG0.1.140
 
-## [G0.1.138] - 2026-04-21
+## [G0.1.140] - 2026-04-21
 
 ### Features & Security
 
-- **Corrected Execution Lifecycle**: Realigned the installation lifecycle to ensure the "Installation complete" message is only displayed after ALL phases, including lifecycle scripts, derived from the core resolution.
-- **Aggressive Terminal Clearing**: Hardened the transition between extraction and execution by implementing a multi-layered terminal clearing sequence, ensuring no residual progress bars interfere with script logs.
+- **Minimalist Lifecycle Transition**: Streamlined the transition between extraction and execution by removing redundant banner re-printing. This provides a focused, clutter-free environment for monitoring lifecycle script output.
+- **Refined Terminal Clearing**: Maintained aggressive clearing logic to ensure a professional transition without visual distractions.
 
-# XFPM - vG0.1.136
+# XFPM - vG0.1.138
 
 # XFPM - vG0.1.118
 
