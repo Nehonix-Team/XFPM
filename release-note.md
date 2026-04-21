@@ -1,13 +1,14 @@
-# XFPM - vG0.1.126
+# XFPM - vG0.1.130
 
-## [G0.1.126] - 2026-04-21
+## [G0.1.130] - 2026-04-21
 
 ### Features & Security
 
-- **Final UI Stabilization**: Perfected the footer layout by enforcing a strict priority system that pins global progress and telemetry to the bottom.
-- **Legacy Aesthetic Parity**: Restored the elapsed timer and optimized bar visualization to match the user's preferred layout while leveraging the power of parallel extraction tracking.
+- **Dynamic Color-Shift Progress**: Implemented a responsive color-gradient for the global progress bar (Cyan → Yellow → Green) providing immediate visual feedback on installation maturity.
+- **Full Visual Parity**: Restored the legacy "thick bar" solid Unicode aesthetic (█/░) integrated into the high-performance `mpb` concurrent engine.
+- **Integrated Telemetry Suite**: Combined elapsed timing, completion percentage, and real-time network throughput into a single, unified footer bar for maximum information density with zero terminal clutter.
 
-# XFPM - vG0.1.124
+# XFPM - vG0.1.128
 
 # XFPM - vG0.1.118
 

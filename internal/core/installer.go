@@ -36,7 +36,6 @@ type Installer struct {
 	PendingPlugins  []*ResolvedPackage
 	pendingMu       sync.Mutex
 	progress        *mpb.Progress
-	netBar          *mpb.Bar
 }
 
 func NewInstaller(cas *Cas, registry *RegistryClient, projectRoot string) *Installer {
@@ -61,17 +60,43 @@ func (i *Installer) Install(ctx context.Context, packages []*ResolvedPackage) er
 	utils.Info("Starting installation of %d packages via Ancestor Hoisting...", len(packages))
 
 	uniquePackages := i.getUniquePackages(packages)
-	
-	i.globalBar = i.progress.AddBar(int64(len(uniquePackages)),
+	startTime := time.Now()
+	i.globalBar, _ = i.progress.Add(int64(len(uniquePackages)),
+		mpb.BarFillerFunc(func(w io.Writer, st decor.Statistics) error {
+			percent := float64(st.Current) / float64(st.Total) * 100
+			color := pterm.FgCyan
+			if percent > 50 { color = pterm.FgYellow }
+			if percent > 90 { color = pterm.FgGreen }
+			
+			width := 40
+			filled := int(float64(width) * float64(percent) / 100)
+			if filled > width { filled = width }
+			
+			bar := color.Sprint(strings.Repeat("█", filled))
+			if filled < width {
+				bar += utils.DimColor.Sprint(strings.Repeat("░", width-filled))
+			}
+			fmt.Fprintf(w, "[%s]", bar)
+			return nil
+		}),
 		mpb.PrependDecorators(
 			decor.Name(utils.MatrixColor.Sprint("  [INIT_SEQ] ")),
-			decor.CountersNoUnit("[%d/%d]"),
+			decor.CountersNoUnit("[%d/%d] "),
 		),
 		mpb.AppendDecorators(
+			decor.Name(" "),
 			decor.Elapsed(decor.ET_STYLE_GO),
+			decor.Name("  "),
 			decor.Percentage(),
+			decor.Name("  "),
+			decor.Any(func(s decor.Statistics) string {
+				speed := GlobalBytesDownloaded.Load()
+				elapsed := time.Since(startTime).Seconds()
+				if elapsed < 1 { elapsed = 1 }
+				return utils.AccentColor.Sprint(fmt.Sprintf("% .1f MB/s", float64(speed)/elapsed/1024/1024))
+			}),
 		),
-		mpb.BarPriority(1000), // Pin to bottom
+		mpb.BarPriority(1000),
 	)
 
 	if err := i.batchEnsureExtracted(ctx, uniquePackages, i.vstoreRoot); err != nil {
@@ -111,36 +136,12 @@ func (i *Installer) Install(ctx context.Context, packages []*ResolvedPackage) er
 	}
 
 	i.SavePendingPlugins()
-	if i.netBar != nil {
-		i.netBar.Abort(true)
-	}
 	i.progress.Wait()
 	return nil
 }
 
 func (i *Installer) startNetworkMonitoring() {
-	if i.netBar != nil { return } // Avoid duplication
-	
-	i.netBar = i.progress.AddBar(0,
-		mpb.BarPriority(1001), 
-		mpb.PrependDecorators(
-			decor.Name(utils.DimColor.Sprint("   [NET] ")),
-			decor.EwmaSpeed(decor.SizeB1024(0), "% .1f", 60),
-		),
-	)
-
-	go func() {
-		lastBytes := GlobalBytesDownloaded.Load()
-		for {
-			time.Sleep(500 * time.Millisecond)
-			currentBytes := GlobalBytesDownloaded.Load()
-			delta := currentBytes - lastBytes
-			lastBytes = currentBytes
-			if i.netBar != nil {
-				i.netBar.IncrBy(int(delta))
-			}
-		}
-	}()
+	// Logic merged into globalBar decorator
 }
 
 func (i *Installer) getUniquePackages(packages []*ResolvedPackage) []*ResolvedPackage {
@@ -179,7 +180,6 @@ func (i *Installer) batchEnsureExtracted(ctx context.Context, packages []*Resolv
 		}(pkg)
 	}
 	wg.Wait()
-	if i.netBar != nil { i.netBar.Abort(true) }
 	return nil
 }
 
