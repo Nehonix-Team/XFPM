@@ -1,0 +1,7 @@
+{
+  "name": "test-latest",
+  "version": "",
+  "dependencies": {
+    "nehoid": "^2.2.1"
+  }
+}

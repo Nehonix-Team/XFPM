@@ -142,6 +142,10 @@ xfpm list <package...>
 
 # List all plugins and their trust status
 xfpm plugin list
+
+# Get Developer Identity for a plugin
+xfpm plugin id <package...>
+xfpm plugin id <package...> --online
 ```
 
 ### Security & Signing (Zero-Trust G3)
