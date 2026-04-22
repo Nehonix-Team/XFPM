@@ -335,10 +335,107 @@ var pluginRevokeCmd = &cobra.Command{
 	},
 }
 
+var pluginIDCmd = &cobra.Command{
+	Use:     "id <package...>",
+	Aliases: []string{"get-id", "get"},
+	Short:   "Retrieve the Developer ID (Identity) of one or more plugins",
+	Args:    cobra.MinimumNArgs(1),
+	RunE: func(cmd *cobra.Command, args []string) error {
+		online, _ := cmd.Flags().GetBool("online")
+		projectRoot, _ := os.Getwd()
+
+		registry := core.NewRegistryClient("https://registry.npmjs.org", 3)
+
+		utils.Matrix("Fetching plugin identity information...")
+
+		for _, pkgName := range args {
+			var identity string
+			var version string
+			var source string
+
+			if online {
+				source = "Registry"
+				regPkg, err := registry.FetchPackage(context.Background(), pkgName, false)
+				if err != nil {
+					utils.Error("Failed to fetch %s from registry: %v", pkgName, err)
+					continue
+				}
+				version = regPkg.DistTags["latest"]
+				meta, err := registry.FetchVersionMetadata(context.Background(), pkgName, version)
+				if err != nil {
+					utils.Error("Failed to fetch metadata for %s@%s: %v", pkgName, version, err)
+					continue
+				}
+
+				xsigBytes, err := registry.FetchFileFromTarball(context.Background(), meta.Dist.Tarball, "xypriss.plugin.xsig")
+				if err != nil {
+					utils.Error("%s is not a signed plugin: %v", pkgName, err)
+					continue
+				}
+
+				identity = extractIdentityFromXsig(xsigBytes)
+			} else {
+				source = "Local"
+				// Try to find in node_modules
+				pkgDir := filepath.Join(projectRoot, "node_modules", pkgName)
+				sigPath := filepath.Join(pkgDir, "xypriss.plugin.xsig")
+
+				if _, err := os.Stat(sigPath); os.IsNotExist(err) {
+					// Try to find in vstore (might be a different version)
+					// This is a bit more complex as we need to find the installed version
+					pkgJsonPath := filepath.Join(pkgDir, "package.json")
+					pj, err := core.LoadPackageJson(pkgJsonPath)
+					if err == nil {
+						version = pj.Version
+						pkgVStoreName := strings.ReplaceAll(pkgName, "/", "+") + "@" + version
+						sigPath = filepath.Join(projectRoot, "node_modules", ".xpm", "vstore", pkgVStoreName, "node_modules", pkgName, "xypriss.plugin.xsig")
+					}
+				} else {
+					pj, _ := core.LoadPackageJson(filepath.Join(pkgDir, "package.json"))
+					if pj != nil {
+						version = pj.Version
+					}
+				}
+
+				xsigBytes, err := os.ReadFile(sigPath)
+				if err != nil {
+					utils.Error("Plugin %s is not installed locally or not signed. Use --online to fetch from registry.", pkgName)
+					continue
+				}
+				identity = extractIdentityFromXsig(xsigBytes)
+			}
+
+			if identity == "" {
+				utils.Error("Could not extract Identity from %s signature.", pkgName)
+				continue
+			}
+
+			pterm.DefaultSection.Printf("Plugin: %s", pkgName)
+			pterm.Info.Printfln("  Version:  %s (%s)", pterm.FgCyan.Sprint(version), source)
+			pterm.Info.Printfln("  Identity: %s", pterm.FgGreen.Sprint(identity))
+			fmt.Println()
+		}
+
+		return nil
+	},
+}
+
+func extractIdentityFromXsig(data []byte) string {
+	lines := strings.Split(string(data), "\n")
+	for _, l := range lines {
+		if strings.HasPrefix(l, "Identity: ") {
+			return strings.TrimPrefix(l, "Identity: ")
+		}
+	}
+	return ""
+}
+
 func init() {
 	pluginVerifyCmd.Flags().BoolP("no-interact", "n", false, "Disable interactive prompts and auto-verify if signature is valid")
+	pluginIDCmd.Flags().BoolP("online", "o", false, "Fetch plugin identity from registry instead of local installation")
 	pluginCmd.AddCommand(pluginVerifyCmd)
 	pluginCmd.AddCommand(pluginListCmd)
 	pluginCmd.AddCommand(pluginTrustCmd)
 	pluginCmd.AddCommand(pluginRevokeCmd)
+	pluginCmd.AddCommand(pluginIDCmd)
 }

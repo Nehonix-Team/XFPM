@@ -1,6 +1,11 @@
-# XFPM - vG0.1.150
+# XFPM - vG0.1.151
 
-## [G0.1.150] - 2026-04-22
+## [G0.1.151] - 2026-04-22
+
+### Added
+
+- **New Command: `xfpm plugin id`**: High-performance subcommand to retrieve a plugin's Ed25519 Developer Identity. Supports both local lookup (via `node_modules`) and remote lookup (via Registry `--online`).
+- **Latest Version Resolving**: Enhanced `xfpm install` to automatically replace "latest" strings in `package.json` with their actual pinned versions during installation, ensuring deterministic environments.
 
 ### Fixed
 

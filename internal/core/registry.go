@@ -1,6 +1,8 @@
 package core
 
 import (
+	"archive/tar"
+	"compress/gzip"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -332,6 +334,36 @@ func (c *RegistryClient) DownloadTarballStream(ctx context.Context, url string) 
 	}
 
 	return nil, fmt.Errorf("failed to download tarball %s: %w", url, lastErr)
+}
+
+func (c *RegistryClient) FetchFileFromTarball(ctx context.Context, tarballURL, targetFile string) ([]byte, error) {
+	stream, err := c.DownloadTarballStream(ctx, tarballURL)
+	if err != nil {
+		return nil, err
+	}
+	defer stream.Close()
+
+	gz, err := gzip.NewReader(stream)
+	if err != nil {
+		return nil, err
+	}
+	defer gz.Close()
+
+	tr := tar.NewReader(gz)
+	for {
+		hdr, err := tr.Next()
+		if err == io.EOF {
+			break
+		}
+		if err != nil {
+			return nil, err
+		}
+
+		if hdr.Name == targetFile || hdr.Name == "package/"+targetFile {
+			return io.ReadAll(tr)
+		}
+	}
+	return nil, fmt.Errorf("file %s not found in tarball", targetFile)
 }
 
 type semaphoreReleasingReader struct {

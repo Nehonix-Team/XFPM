@@ -341,6 +341,7 @@ var installCmd = &cobra.Command{
 
 		rootDeps := make(map[string]string)
 		directPkgs := make(map[string]string)
+		hasLatest := false
 		
 		// Map for local packages: name -> absolute path
 		localPackages := make(map[string]string)
@@ -353,6 +354,9 @@ var installCmd = &cobra.Command{
 			if pkg != nil {
 				for name, req := range pkg.AllDependencies() {
 					rootDeps[name] = req
+					if req == "latest" {
+						hasLatest = true
+					}
 				}
 			}
 		} else if len(args) > 0 {
@@ -544,7 +548,7 @@ var installCmd = &cobra.Command{
 			return err
 		}
 		// Update package.json
-		if pkg != nil && len(directPkgs) > 0 && (len(args) > 0 || update || hasRedirects) {
+		if pkg != nil && len(directPkgs) > 0 && (len(args) > 0 || update || hasRedirects || hasLatest) {
 			for name := range directPkgs {
 				version := "latest"
 				if v, ok := rootVersions[name]; ok {
