@@ -360,6 +360,11 @@ func (i *Installer) linkPackageDeps(packages []*ResolvedPackage, vstoreBase stri
 			pkgDepsNM := filepath.Join(vstoreBase, pkgVStoreName, "node_modules")
 
 			for depName, depVersion := range p.ResolvedDependencies {
+				realDepName := depName
+				if rName, ok := p.DependencyRealNames[depName]; ok {
+					realDepName = rName
+				}
+
 				targetLink := filepath.Join(pkgDepsNM, depName)
 				
 				// COLLISION GUARD: Though each unique version has its own vstore NM,
@@ -370,13 +375,13 @@ func (i *Installer) linkPackageDeps(packages []*ResolvedPackage, vstoreBase stri
 				}
 
 				utils.CreateDirAllSecure(filepath.Dir(targetLink))
-				depVStoreName := strings.ReplaceAll(depName, "/", "+") + "@" + depVersion
+				depVStoreName := strings.ReplaceAll(realDepName, "/", "+") + "@" + depVersion
 				steps := strings.Count(depName, "/") + 2
 				relPrefix := ""
 				for j := 0; j < steps; j++ {
 					relPrefix += "../"
 				}
-				relTarget := filepath.Join(relPrefix, depVStoreName, "node_modules", depName)
+				relTarget := filepath.Join(relPrefix, depVStoreName, "node_modules", realDepName)
 
 				os.Remove(targetLink)
 				if err := utils.LinkDir(relTarget, targetLink); err != nil {

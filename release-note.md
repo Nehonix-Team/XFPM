@@ -1,3 +1,12 @@
+# XFPM - vG0.1.144
+
+## [G0.1.144] - 2026-04-22
+
+### Fixed
+
+- **Aliased Dependency Resolution**: Resolved a critical issue where `xfpm` failed to satisfy aliased dependencies (e.g., `npm:@babel/traverse@^7.25.3`).
+- **Enhanced Virtual Store Linking**: The installer now correctly tracks and links aliased packages in the `vstore`, ensuring full compatibility with tools like `metro-source-map` that require specific aliased module names during resolution.
+
 # XFPM - vG0.1.142
 
 ## [G0.1.142] - 2026-04-21
