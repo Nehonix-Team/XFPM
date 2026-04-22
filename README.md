@@ -172,6 +172,14 @@ For non-interactive environments or manual pinning, use the `trust` subcommand:
 xfpm plugin trust <package> <developer-id>
 ```
 
+#### 5. Non-Interactive Mode (CI)
+
+For CI/CD and automation, XFPM supports skip-prompt verification. Use the `--no-interact` (or `-n`) flag with `verify` or `install`. This will automatically trust any plugin that carries a **cryptographically valid G3 signature**.
+
+```bash
+xfpm plugin verify --no-interact
+```
+
 Example:
 
 ```bash

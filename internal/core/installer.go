@@ -43,6 +43,7 @@ type Installer struct {
 	lastPkg         string
 	lpMu            sync.Mutex
 	AutoVerify      bool
+	NoInteract      bool
 }
 
 func NewInstaller(cas *Cas, registry *RegistryClient, projectRoot string) *Installer {
@@ -802,11 +803,17 @@ func (i *Installer) VerifySignatureInternal(sigPath string, pkg *ResolvedPackage
 		fmt.Sprintf("Package: %s\n\nACTION REQUIRED:\nThis plugin has never been trusted before.\nVerify the Developer ID from the official README:\nhttps://npmjs.com/package/%s\n\nThen paste the Developer ID below to confirm trust.", pkg.Name, pkg.Name),
 	)
 
-	result, _ := pterm.DefaultInteractiveTextInput.
-		WithDefaultText("").
-		Show("Paste the Developer ID to confirm trust, or press Enter to cancel")
+	var result string
+	if !i.NoInteract {
+		result, _ = pterm.DefaultInteractiveTextInput.
+			WithDefaultText("").
+			Show("Paste the Developer ID to confirm trust, or press Enter to cancel")
+	}
 
-	if strings.TrimSpace(result) == sigData.AuthorKey {
+	if i.NoInteract || strings.TrimSpace(result) == sigData.AuthorKey {
+		if i.NoInteract {
+			utils.Info("Auto-verifying plugin %s (Non-interactive mode)...", pkg.Name)
+		}
 		pluginCfgRaw, ok := internal[pkg.Name]
 		if !ok { pluginCfgRaw = make(map[string]interface{}) }
 		pluginCfg, ok := pluginCfgRaw.(map[string]interface{})
