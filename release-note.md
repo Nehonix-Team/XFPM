@@ -1,3 +1,11 @@
+# XFPM - vG0.1.148
+
+## [G0.1.148] - 2026-04-22
+
+### Added
+
+- **Enhanced Plugin List UI**: Replaced silent analysis in `xfpm plugin list` with a dynamic, matrix-style progress tracker and real-time status updates (spinner + package count).
+
 # XFPM - vG0.1.147
 
 ## [G0.1.147] - 2026-04-22
