@@ -1,3 +1,13 @@
+# XFPM - vG0.1.146
+
+## [G0.1.146] - 2026-04-22
+
+### Added
+
+- **Intelligent Plugin Listing**: The `xfpm plugin list` command now intelligently scans your `package.json` and fetches registry metadata to identify both installed and potential plugins.
+- **Improved Plugin UX**: Enhanced the plugin list UI with a premium data table showing status (VERIFIED vs UNTRUSTED) and Developer IDs.
+- **Non-Interactive Verification**: Added the `--no-interact` (short `-n`) flag to `plugin verify` and `install`. This allows for automated trust enrollment in CI/CD environments by auto-verifying valid G3 signatures.
+
 # XFPM - vG0.1.145
 
 ## [G0.1.145] - 2026-04-22

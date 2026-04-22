@@ -59,6 +59,7 @@ type VersionMetadata struct {
 	Libc                 StringOrStringArray `json:"libc,omitempty"`
 	Xfpm                 *XfpmConfig         `json:"xfpm,omitempty"`
 	Scripts              map[string]string   `json:"scripts,omitempty"`
+	Files                []string            `json:"files,omitempty"`
 }
 
 type Dist struct {
