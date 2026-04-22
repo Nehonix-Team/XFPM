@@ -1,3 +1,11 @@
+# XFPM - vG0.1.150
+
+## [G0.1.150] - 2026-04-22
+
+### Fixed
+
+- **Plugin Verification Logic**: Fixed a bug in `xfpm plugin list` where statuses were incorrectly marked as `VERIFIED` without strictly comparing the current signature's Developer ID with the pinned project configuration. It now correctly identifies `KEY_MISMATCH` scenarios.
+
 # XFPM - vG0.1.149
 
 ## [G0.1.149] - 2026-04-22

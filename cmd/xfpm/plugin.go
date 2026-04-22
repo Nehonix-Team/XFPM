@@ -104,10 +104,8 @@ var pluginListCmd = &cobra.Command{
 			Start()
 
 		allDeps := pkg.AllDependencies()
-		cas, _ := core.NewCas(filepath.Join(os.Getenv("HOME"), ".xpm", "storage"))
 		registry := core.NewRegistryClient("https://registry.npmjs.org", 8)
 		registry.SetCacheDir("")
-		installer := core.NewInstaller(cas, registry, projectRoot)
 		
 		var items [][]string
 		items = append(items, []string{"Plugin", "Version", "Status", "Developer ID"})
@@ -165,12 +163,9 @@ var pluginListCmd = &cobra.Command{
 				}
 
 				if isPlugin {
-					trusted := installer.IsPluginTrustedDirect(n)
-					trustStr := pterm.FgRed.Sprint("UNTRUSTED")
-					if trusted { trustStr = pterm.FgGreen.Sprint("VERIFIED") }
-					
 					authorID := "-"
-					// Try to extract author ID from xsig if present
+					pinnedKey := ""
+					// Extract author ID from xsig if present
 					if b, err := os.ReadFile(sigPath); err == nil {
 						lines := strings.Split(string(b), "\n")
 						for _, l := range lines {
@@ -179,6 +174,39 @@ var pluginListCmd = &cobra.Command{
 								break
 							}
 						}
+					}
+
+					// Get pinned key from config
+					configPath := filepath.Join(projectRoot, "xypriss.config.jsonc")
+					if _, err := os.Stat(configPath); os.IsNotExist(err) {
+						configPath = filepath.Join(projectRoot, "xypriss.config.json")
+					}
+					if cfgBytes, err := os.ReadFile(configPath); err == nil {
+						lines := strings.Split(string(cfgBytes), "\n")
+						var cleanLines []string
+						for _, line := range lines {
+							if idx := strings.Index(line, "//"); idx != -1 {
+								line = line[:idx]
+							}
+							cleanLines = append(cleanLines, line)
+						}
+						var config map[string]interface{}
+						if err := json.Unmarshal([]byte(strings.Join(cleanLines, "\n")), &config); err == nil {
+							if internal, ok := config["$internal"].(map[string]interface{}); ok {
+								if pluginCfg, ok := internal[n].(map[string]interface{}); ok {
+									if sigCfg, ok := pluginCfg["signature"].(map[string]interface{}); ok {
+										pinnedKey, _ = sigCfg["author_key"].(string)
+									}
+								}
+							}
+						}
+					}
+
+					trusted := pinnedKey != "" && pinnedKey == authorID
+					trustStr := pterm.FgRed.Sprint("UNTRUSTED")
+					if trusted { trustStr = pterm.FgGreen.Sprint("VERIFIED") }
+					if pinnedKey != "" && pinnedKey != authorID {
+						trustStr = pterm.FgYellow.Sprint("KEY_MISMATCH")
 					}
 
 					mu.Lock()
