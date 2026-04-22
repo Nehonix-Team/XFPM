@@ -1,3 +1,16 @@
+# XFPM - vG0.1.145
+
+## [G0.1.145] - 2026-04-22
+
+### Added
+
+- **G3 Signature Verification**: Implemented full Ed25519 cryptographic verification for the Zero-Trust G3 plugin architecture. XFPM now validates the cryptographic proof against the signed content to ensure package integrity.
+- **Manual Trust Command**: Documented the `xfpm plugin trust <package> <author_key>` command for manual, non-interactive trust enrollment.
+
+### Fixed
+
+- **G3 Signature Parsing**: Resolved a regression where G3 text-based signature manifests were incorrectly parsed as JSON, causing "invalid or corrupted signature" errors during plugin verification.
+
 # XFPM - vG0.1.144
 
 ## [G0.1.144] - 2026-04-22
