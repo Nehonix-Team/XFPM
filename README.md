@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="assets/logo.png" width="300" alt="XFPM Logo">
+</p>
+
 # XFPM — XyPriss Fast Package Manager
 
 > High-performance CLI package manager for the XyPriss ecosystem, built in Go.
