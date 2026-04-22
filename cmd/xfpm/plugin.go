@@ -337,11 +337,15 @@ var pluginRevokeCmd = &cobra.Command{
 
 var pluginIDCmd = &cobra.Command{
 	Use:     "id <package...>",
-	Aliases: []string{"get-id", "get"},
-	Short:   "Retrieve the Developer ID (Identity) of one or more plugins",
+	Aliases: []string{"get-id", "get", "info"},
+	Short:   "Retrieve detailed plugin information and identity",
 	Args:    cobra.MinimumNArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		online, _ := cmd.Flags().GetBool("online")
+		// If command was called as 'get' or 'info', force online mode
+		if cmd.CalledAs() == "get" || cmd.CalledAs() == "info" {
+			online = true
+		}
 		projectRoot, _ := os.Getwd()
 
 		registry := core.NewRegistryClient("https://registry.npmjs.org", 3)
@@ -351,6 +355,7 @@ var pluginIDCmd = &cobra.Command{
 		for _, pkgName := range args {
 			var identity string
 			var version string
+			var description string
 			var source string
 
 			if online {
@@ -366,6 +371,7 @@ var pluginIDCmd = &cobra.Command{
 					utils.Error("Failed to fetch metadata for %s@%s: %v", pkgName, version, err)
 					continue
 				}
+				description = meta.Description
 
 				xsigBytes, err := registry.FetchFileFromTarball(context.Background(), meta.Dist.Tarball, "xypriss.plugin.xsig")
 				if err != nil {
@@ -387,6 +393,7 @@ var pluginIDCmd = &cobra.Command{
 					pj, err := core.LoadPackageJson(pkgJsonPath)
 					if err == nil {
 						version = pj.Version
+						description = pj.Description
 						pkgVStoreName := strings.ReplaceAll(pkgName, "/", "+") + "@" + version
 						sigPath = filepath.Join(projectRoot, "node_modules", ".xpm", "vstore", pkgVStoreName, "node_modules", pkgName, "xypriss.plugin.xsig")
 					}
@@ -394,12 +401,13 @@ var pluginIDCmd = &cobra.Command{
 					pj, _ := core.LoadPackageJson(filepath.Join(pkgDir, "package.json"))
 					if pj != nil {
 						version = pj.Version
+						description = pj.Description
 					}
 				}
 
 				xsigBytes, err := os.ReadFile(sigPath)
 				if err != nil {
-					utils.Error("Plugin %s is not installed locally or not signed. Use --online to fetch from registry.", pkgName)
+					utils.Error("Plugin %s is not installed locally or not signed. Use --online or 'xfpm plugin get' to fetch from registry.", pkgName)
 					continue
 				}
 				identity = extractIdentityFromXsig(xsigBytes)
@@ -411,6 +419,9 @@ var pluginIDCmd = &cobra.Command{
 			}
 
 			pterm.DefaultSection.Printf("Plugin: %s", pkgName)
+			if description != "" {
+				pterm.Info.Printfln("  Detail:   %s", pterm.FgGray.Sprint(description))
+			}
 			pterm.Info.Printfln("  Version:  %s (%s)", pterm.FgCyan.Sprint(version), source)
 			pterm.Info.Printfln("  Identity: %s", pterm.FgGreen.Sprint(identity))
 			fmt.Println()

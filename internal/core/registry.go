@@ -48,6 +48,7 @@ func (s *StringOrStringArray) UnmarshalJSON(data []byte) error {
 type VersionMetadata struct {
 	Name                 string            `json:"name"`
 	Version              string            `json:"version"`
+	Description          string            `json:"description,omitempty"`
 	Dist                 Dist              `json:"dist"`
 	Dependencies         map[string]string `json:"dependencies,omitempty"`
 	PeerDependencies     map[string]string `json:"peerDependencies,omitempty"`
