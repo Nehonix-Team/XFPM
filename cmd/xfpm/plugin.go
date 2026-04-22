@@ -96,8 +96,13 @@ var pluginListCmd = &cobra.Command{
 			return fmt.Errorf("failed to load package.json: %w", err)
 		}
 
-		utils.Info("Analyzing project dependencies for plugins...")
+		utils.Matrix("Analyzing project dependencies for plugins...")
 		
+		s, _ := pterm.DefaultSpinner.
+			WithRemoveWhenDone(true).
+			WithText("Initializing analysis...").
+			Start()
+
 		allDeps := pkg.AllDependencies()
 		cas, _ := core.NewCas(filepath.Join(os.Getenv("HOME"), ".xpm", "storage"))
 		registry := core.NewRegistryClient("https://registry.npmjs.org", 8)
@@ -111,6 +116,8 @@ var pluginListCmd = &cobra.Command{
 		var wg sync.WaitGroup
 		var mu sync.Mutex
 		
+		count := 0
+		total := len(allDeps)
 		sem := make(chan struct{}, 10)
 		for name, versionRange := range allDeps {
 			wg.Add(1)
@@ -118,6 +125,11 @@ var pluginListCmd = &cobra.Command{
 				defer wg.Done()
 				sem <- struct{}{}
 				defer func() { <-sem }()
+
+				mu.Lock()
+				count++
+				s.UpdateText(fmt.Sprintf(" [%d/%d] Fetching metadata for %s...", count, total, n))
+				mu.Unlock()
 
 				// Resolve version first
 				regPkg, err := registry.FetchPackage(context.Background(), n, false)
@@ -176,6 +188,7 @@ var pluginListCmd = &cobra.Command{
 			}(name, versionRange)
 		}
 		wg.Wait()
+		s.Stop()
 
 		if len(items) <= 1 {
 			utils.Info("No plugins found in direct dependencies.")
