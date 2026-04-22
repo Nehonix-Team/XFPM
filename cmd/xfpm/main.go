@@ -84,7 +84,7 @@ func init() {
 	installCmd.Flags().Bool("update", false, "Update mode: always fetch fresh metadata from registry")
 	installCmd.Flags().BoolP("global", "g", false, "Install packages globally")
 	installCmd.Flags().StringP("path", "P", "", "Install from a local path")
-	installCmd.Flags().Bool("verify", false, "Automatically verify plugins during installation")
+	installCmd.Flags().BoolP("verify", "v", false, "Automatically verify plugins during installation")
 	
 	updateCmd.Flags().BoolP("global", "g", false, "Update packages globally")
 	updateCmd.Flags().Bool("verify", false, "Automatically verify plugins during update")
