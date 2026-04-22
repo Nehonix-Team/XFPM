@@ -23,6 +23,7 @@ type ResolvedPackage struct {
 	LocalPath            string // If set, this package is installed from a local path
 	IsRevoked            bool
 	RevokedBy            string // Latest version that revoked this one
+	DependencyRealNames  map[string]string // Mapping from dependency alias to real package name
 }
 
 type Platform struct {
@@ -280,6 +281,8 @@ func (r *Resolver) ResolveTree(ctx context.Context, rootDeps map[string]string) 
 				for dName, dReq := range deps {
 					if v, ok := r.findCompatibleVersion(dName, dReq); ok {
 						resolvedDeps[dName] = v
+						rName, _ := r.parseAlias(dName, dReq)
+						pkg.DependencyRealNames[dName] = rName
 					}
 				}
 			}
@@ -329,19 +332,20 @@ func (r *Resolver) ResolveTree(ctx context.Context, rootDeps map[string]string) 
 }
 
 func (r *Resolver) findCompatibleVersion(name, req string) (string, bool) {
+	realName, realReq := r.parseAlias(name, req)
 	// Optimization: Use name-based index to avoid O(N^2) scan
-	packages, ok := r.resolvedByName.Load(name)
+	packages, ok := r.resolvedByName.Load(realName)
 	if !ok { return "", false }
 
 	pkgList := packages.([]*ResolvedPackage)
 	var best *semver.Version
 	var bestStr string
 
-	constraint, err := semver.NewConstraint(req)
+	constraint, err := semver.NewConstraint(realReq)
 	if err != nil {
 		// Exact version or tag fallback
 		for _, pkg := range pkgList {
-			if pkg.Version == req { return req, true }
+			if pkg.Version == realReq { return realReq, true }
 		}
 		return "", false
 	}
@@ -498,7 +502,7 @@ func (r *Resolver) resolvePackage(ctx context.Context, name, req string, isOptio
 			r.redirectsMu.Unlock()
 
 			mu.Lock()
-			*active++
+			*active++ 
 			queue <- job{name: redirect, req: "latest", isOptional: isOptional}
 			
 			if r.overrides == nil {
@@ -525,6 +529,7 @@ func (r *Resolver) resolvePackage(ctx context.Context, name, req string, isOptio
 		SemverVersion:        sv,
 		Metadata:             &meta,
 		ResolvedDependencies: make(map[string]string),
+		DependencyRealNames:  make(map[string]string),
 	}
 	// Note: resolved.IsRevoked and RevokedBy might have been set above
 	
