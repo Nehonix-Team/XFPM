@@ -274,16 +274,34 @@ var pluginRevokeCmd = &cobra.Command{
 		b, err := os.ReadFile(configPath)
 		if err != nil { return err }
 
+		// Pre-revocation check: Ensure it's an actual plugin in node_modules
+		pkgDir := filepath.Join(projectRoot, "node_modules", pkgName)
+		if _, err := os.Stat(pkgDir); os.IsNotExist(err) {
+			return fmt.Errorf("package %s is not installed. Revocation requires an active installation for verification", pkgName)
+		}
+		
+		sigPath := filepath.Join(pkgDir, "xypriss.plugin.xsig")
+		if _, err := os.Stat(sigPath); os.IsNotExist(err) {
+			return fmt.Errorf("package %s is not a verified plugin (missing .xsig).", pkgName)
+		}
+
 		var config map[string]interface{}
 		json.Unmarshal(b, &config)
 
-		if internal, ok := config["$internal"].(map[string]interface{}); ok {
-			delete(internal, pkgName)
-			config["$internal"] = internal
-			if out, err := json.MarshalIndent(config, "", "    "); err == nil {
-				os.WriteFile(configPath, out, 0644)
-				utils.Success("Trust revoked for %s.", pkgName)
-			}
+		internal, ok := config["$internal"].(map[string]interface{})
+		if !ok {
+			return fmt.Errorf("no trusted plugins found in project configuration")
+		}
+
+		if _, exists := internal[pkgName]; !exists {
+			return fmt.Errorf("plugin %s is not currently trusted in this project", pkgName)
+		}
+
+		delete(internal, pkgName)
+		config["$internal"] = internal
+		if out, err := json.MarshalIndent(config, "", "    "); err == nil {
+			os.WriteFile(configPath, out, 0644)
+			utils.Success("Trust revoked for %s.", pkgName)
 		}
 		return nil
 	},

@@ -1,3 +1,11 @@
+# XFPM - vG0.1.149
+
+## [G0.1.149] - 2026-04-22
+
+### Security
+
+- **Hardened Revocation Logic**: The `xfpm plugin revoke` command now enforces strict pre-condition checks. It verifies that the plugin is actually installed in `node_modules` and contains a valid `.xsig` manifest before allowing trust revocation, preventing accidental removal of manual configuration entries.
+
 # XFPM - vG0.1.148
 
 ## [G0.1.148] - 2026-04-22
