@@ -85,9 +85,11 @@ func init() {
 	installCmd.Flags().BoolP("global", "g", false, "Install packages globally")
 	installCmd.Flags().StringP("path", "P", "", "Install from a local path")
 	installCmd.Flags().BoolP("verify", "v", false, "Automatically verify plugins during installation")
+	installCmd.Flags().BoolP("no-interact", "n", false, "Disable interactive prompts and auto-verify valid signatures")
 	
 	updateCmd.Flags().BoolP("global", "g", false, "Update packages globally")
 	updateCmd.Flags().Bool("verify", false, "Automatically verify plugins during update")
+	updateCmd.Flags().BoolP("no-interact", "n", false, "Disable interactive prompts and auto-verify valid signatures")
 	pruneCmd.Flags().Bool("legacy", false, "Prune legacy storage from older XFPM versions")
 }
 
@@ -534,7 +536,9 @@ var installCmd = &cobra.Command{
 		installer.DirectDeps = rootVersions
 
 		autoVerify, _ := cmd.Flags().GetBool("verify")
+		noInteract, _ := cmd.Flags().GetBool("no-interact")
 		installer.AutoVerify = autoVerify
+		installer.NoInteract = noInteract
 
 		if err := installer.Install(context.Background(), resolved); err != nil {
 			return err
