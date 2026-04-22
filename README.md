@@ -133,22 +133,28 @@ Use `--yes` and `--force-remove` for fully automated security enforcement in CI 
 
 ### Inspect Dependencies
 
-````bash
+```bash
 # List all direct dependencies
 xfpm list
 
 # List specific packages and their dependents
 xfpm list <package...>
 
+# List all plugins and their trust status
+xfpm plugin list
+```
+
 ### Security & Signing (Zero-Trust G3)
 
 XFPM enforces a cryptographically verified security model for the XyPriss ecosystem.
 
 #### 1. Generate Identity
+
 Authors must generate a unique Ed25519 developer identity before signing plugins.
+
 ```bash
 xfpm gen-key
-````
+```
 
 Your public key fingerprint should be published in your plugin's official README to allow users to verify your identity.
 
