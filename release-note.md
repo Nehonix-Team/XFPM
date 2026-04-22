@@ -1,3 +1,11 @@
+# XFPM - vG0.1.147
+
+## [G0.1.147] - 2026-04-22
+
+### Fixed
+
+- **CLI Compatibility**: Added missing `--no-interact` (short `-n`) flag to `install` and `update` commands. This resolves the `unknown shorthand flag: 'n'` error when attempting to combine verification with non-interactive mode (e.g., `xfpm i -vn`).
+
 # XFPM - vG0.1.146
 
 ## [G0.1.146] - 2026-04-22

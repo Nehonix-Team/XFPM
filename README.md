@@ -172,18 +172,24 @@ For non-interactive environments or manual pinning, use the `trust` subcommand:
 xfpm plugin trust <package> <developer-id>
 ```
 
-#### 5. Non-Interactive Mode (CI)
+#### 5. Non-Interactive Mode (CI & Automation)
 
-For CI/CD and automation, XFPM supports skip-prompt verification. Use the `--no-interact` (or `-n`) flag with `verify` or `install`. This will automatically trust any plugin that carries a **cryptographically valid G3 signature**.
+For CI/CD and automation, XFPM supports a **Zero-Prompt** mode. Use the `--no-interact` (or `-n`) flag with `install`, `update`, or `verify`.
+
+When this flag is active, XFPM will automatically trust any plugin that carries a **cryptographically valid G3 signature**, bypassing the manual Author ID confirmation prompt.
 
 ```bash
+# Automated installation with verification
+xfpm install -vn
+
+# Automated verification of pending plugins
 xfpm plugin verify --no-interact
 ```
 
 Example:
 
 ```bash
-xfpm plugin trust xypriss-swagger ed25519:a58b17a3e46302dd3ae5538bc9b8b991c57f4c5fe2e7d8ac41803de818d947f4
+xfpm plugin trust my-plugin ed25519:adl*******
 ```
 
 ### Dependency Audit & Revocation
