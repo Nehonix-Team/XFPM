@@ -1,7 +1,11 @@
 package core
 
 import (
+	"bufio"
 	"context"
+	"crypto/ed25519"
+	"encoding/base64"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -693,8 +697,73 @@ func (i *Installer) VerifySignatureInternal(sigPath string, pkg *ResolvedPackage
 	var sigData struct {
 		AuthorKey string `json:"author_key"`
 	}
-	if err := json.Unmarshal(sigBytes, &sigData); err != nil || sigData.AuthorKey == "" {
-		return fmt.Errorf("security: invalid or corrupted signature in package %s", pkg.Name)
+
+	sigStr := string(sigBytes)
+	if strings.Contains(sigStr, "--- XYPRISS SIGNATURE (G3) ---") {
+		// G3 Signature Parser (Zero-Trust G3)
+		headers := make(map[string]string)
+		var sigBody strings.Builder
+		var proofBase64 string
+		inProof := false
+
+		scanner := bufio.NewScanner(strings.NewReader(sigStr))
+		for scanner.Scan() {
+			line := scanner.Text()
+			if line == "--- BEGIN CRYPTOGRAPHIC PROOF ---" {
+				inProof = true
+				continue
+			}
+			if strings.HasPrefix(line, "--- END") {
+				break
+			}
+
+			if inProof {
+				if strings.HasPrefix(line, "base64:") {
+					proofBase64 = strings.TrimPrefix(line, "base64:")
+				}
+				continue
+			}
+
+			// We MUST include the newline in the sigBody for verification
+			// as it was part of the signed content in sign.go
+			sigBody.WriteString(line + "\n")
+
+			if idx := strings.Index(line, ": "); idx != -1 {
+				key := line[:idx]
+				val := line[idx+2:]
+				headers[key] = val
+			}
+		}
+
+		identity, ok := headers["Identity"]
+		if !ok || proofBase64 == "" {
+			return fmt.Errorf("security: invalid or corrupted G3 signature in package %s", pkg.Name)
+		}
+
+		// Cryptographic Proof Verification
+		if strings.HasPrefix(identity, "ed25519:") {
+			pubKeyHex := strings.TrimPrefix(identity, "ed25519:")
+			pubKey, err := hex.DecodeString(pubKeyHex)
+			if err != nil {
+				return fmt.Errorf("security: invalid identity format in G3 signature")
+			}
+
+			sig, err := base64.StdEncoding.DecodeString(proofBase64)
+			if err != nil {
+				return fmt.Errorf("security: corrupted cryptographic proof in G3 signature")
+			}
+
+			if !ed25519.Verify(pubKey, []byte(sigBody.String()), sig) {
+				return fmt.Errorf("security: cryptographic verification failed for package %s", pkg.Name)
+			}
+		}
+
+		sigData.AuthorKey = identity
+	} else {
+		// Legacy JSON format
+		if err := json.Unmarshal(sigBytes, &sigData); err != nil || sigData.AuthorKey == "" {
+			return fmt.Errorf("security: invalid or corrupted signature in package %s", pkg.Name)
+		}
 	}
 
 	configPath := filepath.Join(i.projectRoot, "xypriss.config.jsonc")

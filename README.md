@@ -162,9 +162,21 @@ xfpm sign ./ --min-version 1.0.0
 
 This hashes all production files and creates a `xypriss.plugin.xsig` file required for secure distribution.
 
-#### 3. Trust Verification (TOFU)
-
 During installation of a new plugin, XFPM activates an interactive **Trust On First Use** flow, prompting the administrator to authorize the Developer ID and pin it to the project configuration.
+
+#### 4. Manual Trust (CI/Automated)
+
+For non-interactive environments or manual pinning, use the `trust` subcommand:
+
+```bash
+xfpm plugin trust <package> <developer-id>
+```
+
+Example:
+
+```bash
+xfpm plugin trust xypriss-swagger ed25519:a58b17a3e46302dd3ae5538bc9b8b991c57f4c5fe2e7d8ac41803de818d947f4
+```
 
 ### Dependency Audit & Revocation
 
