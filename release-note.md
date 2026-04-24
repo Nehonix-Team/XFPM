@@ -1,5 +1,11 @@
 # XFPM - Release Notes
 
+## [G0.1.159] - 2026-04-24
+
+### Added
+
+- **Dynamic Release Messages**: The update check now displays a custom message from the registry if available, providing immediate context for new versions.
+
 ## [G0.1.158] - 2026-04-24
 
 ### Added

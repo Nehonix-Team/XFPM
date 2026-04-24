@@ -62,7 +62,8 @@ func CheckForUpdates(forced bool) bool {
 	}
 
 	var data struct {
-		Latest string `json:"latest"`
+		Latest  string `json:"latest"`
+		Message string `json:"message"`
 	}
 
 	if err := json.NewDecoder(resp.Body).Decode(&data); err != nil {
@@ -89,6 +90,12 @@ func CheckForUpdates(forced bool) bool {
 		Premium("UPDATE", fmt.Sprintf("A new version of XFPM is available: %s (Current: %s)", 
 			pterm.FgGreen.Sprint(data.Latest), 
 			pterm.FgGray.Sprint(BinVersion)))
+		
+		if data.Message != "" {
+			pterm.Printf("   %s %s\n", 
+				pterm.FgCyan.Sprint("ℹ"), 
+				pterm.Italic.Sprint(data.Message))
+		}
 		
 		pterm.Printf("   %s %s\n", 
 			pterm.FgYellow.Sprint("?"), 
