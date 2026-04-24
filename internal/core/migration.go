@@ -4,11 +4,13 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+
+	"github.com/Nehonix-Team/XFMP/internal/paths"
 )
 
 // HasLegacyStorage checks if a project has the old storage format.
 func HasLegacyStorage(projectRoot string) bool {
-	legacyDir := filepath.Join(projectRoot, "node_modules", ".xpm", "storage")
+	legacyDir := filepath.Join(paths.LocalXpmDir(projectRoot), "storage")
 	fi, err := os.Stat(legacyDir)
 	return err == nil && fi.IsDir()
 }
@@ -18,7 +20,7 @@ type ProgressCallback func(current, total int, message string)
 
 // MigrateLegacyStorage moves files from local storage to the global CAS.
 func MigrateLegacyStorage(projectRoot string, cas *Cas, callback ProgressCallback) error {
-	legacyDir := filepath.Join(projectRoot, "node_modules", ".xpm", "storage")
+	legacyDir := filepath.Join(paths.LocalXpmDir(projectRoot), "storage")
 	return MigratePathToCas(legacyDir, cas, callback)
 }
 

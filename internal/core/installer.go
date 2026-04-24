@@ -16,6 +16,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/Nehonix-Team/XFMP/internal/paths"
 	"github.com/Nehonix-Team/XFMP/internal/utils"
 	"github.com/pterm/pterm"
 	"github.com/vbauerster/mpb/v8"
@@ -48,7 +49,7 @@ type Installer struct {
 
 func NewInstaller(cas *Cas, registry *RegistryClient, projectRoot string) *Installer {
 	// Local Virtual Store for Ancestor Hoisting
-	vstoreRoot := filepath.Join(projectRoot, "node_modules", ".xpm", "vstore")
+	vstoreRoot := paths.LocalVStoreDir(projectRoot)
 	utils.CreateDirAllSecure(vstoreRoot)
 
 	return &Installer{
@@ -572,8 +573,7 @@ func (i *Installer) ensureExecutableRecursive(path string) {
 }
 
 func (i *Installer) exportGlobalBinaries(packages []*ResolvedPackage) {
-	home, _ := os.UserHomeDir()
-	globalBinDir := filepath.Join(home, ".xpm", "bin")
+	globalBinDir := paths.BinDir()
 	utils.CreateDirAllSecure(globalBinDir)
 
 	for _, pkg := range packages {
@@ -636,10 +636,7 @@ func (i *Installer) extractLocal(pkg *ResolvedPackage, targetVStore string) erro
 }
 
 func (i *Installer) IsPluginTrustedDirect(pkgName string) bool {
-	configPath := filepath.Join(i.projectRoot, "xypriss.config.jsonc")
-	if _, err := os.Stat(configPath); os.IsNotExist(err) {
-		configPath = filepath.Join(i.projectRoot, "xypriss.config.json")
-	}
+	configPath := paths.ConfigPath(i.projectRoot)
 
 	cfgBytes, err := os.ReadFile(configPath)
 	if err != nil { return false }
@@ -767,10 +764,7 @@ func (i *Installer) VerifySignatureInternal(sigPath string, pkg *ResolvedPackage
 		}
 	}
 
-	configPath := filepath.Join(i.projectRoot, "xypriss.config.jsonc")
-	if _, err := os.Stat(configPath); os.IsNotExist(err) {
-		configPath = filepath.Join(i.projectRoot, "xypriss.config.json")
-	}
+	configPath := paths.ConfigPath(i.projectRoot)
 
 	var config map[string]interface{}
 	if cfgBytes, err := os.ReadFile(configPath); err == nil {
@@ -917,7 +911,7 @@ func (i *Installer) SavePendingPlugins() {
 		if len(i.PendingPlugins) == 0 { return }
 	}
 
-	pendingPath := filepath.Join(i.projectRoot, "node_modules", ".xpm", "pending_plugins.json")
+	pendingPath := filepath.Join(paths.LocalXpmDir(i.projectRoot), "pending_plugins.json")
 	utils.CreateDirAllSecure(filepath.Dir(pendingPath))
 
 	var list []map[string]string
@@ -937,10 +931,7 @@ func (i *Installer) SavePendingPlugins() {
 }
 
 func (i *Installer) isPluginTrusted(pkg *ResolvedPackage) bool {
-	configPath := filepath.Join(i.projectRoot, "xypriss.config.jsonc")
-	if _, err := os.Stat(configPath); os.IsNotExist(err) {
-		configPath = filepath.Join(i.projectRoot, "xypriss.config.json")
-	}
+	configPath := paths.ConfigPath(i.projectRoot)
 
 	cfgBytes, err := os.ReadFile(configPath)
 	if err != nil { return false }

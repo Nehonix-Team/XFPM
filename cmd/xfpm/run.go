@@ -13,6 +13,7 @@ import (
 	"path/filepath"
 
 	"github.com/Nehonix-Team/XFMP/internal/core"
+	"github.com/Nehonix-Team/XFMP/internal/paths"
 	"github.com/Nehonix-Team/XFMP/internal/utils"
 	"github.com/spf13/cobra"
 )
@@ -97,11 +98,9 @@ func buildRunEnv(dir string) []string {
 	}
 
 	// Add global XPM bin
-	if home, err := os.UserHomeDir(); err == nil {
-		globalBin := filepath.Join(home, ".xpm", "bin")
-		if _, err := os.Stat(globalBin); err == nil {
-			path = globalBin + string(os.PathListSeparator) + path
-		}
+	globalBin := paths.BinDir()
+	if _, err := os.Stat(globalBin); err == nil {
+		path = globalBin + string(os.PathListSeparator) + path
 	}
 
 	return utils.FormatPathEnv(os.Environ(), path)

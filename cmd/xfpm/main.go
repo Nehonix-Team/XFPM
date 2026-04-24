@@ -34,6 +34,7 @@ import (
 	"time"
 
 	"github.com/Nehonix-Team/XFMP/internal/core"
+	"github.com/Nehonix-Team/XFMP/internal/paths"
 	"github.com/Nehonix-Team/XFMP/internal/utils"
 	"github.com/pterm/pterm"
 	"github.com/spf13/cobra"
@@ -122,19 +123,11 @@ var pruneCmd = &cobra.Command{
 		absPath, _ := filepath.Abs(targetPath)
 		utils.Matrix(fmt.Sprintf("Scanning for legacy storage in: %s", absPath))
 
-		home, _ := os.UserHomeDir()
-		xpmDir := filepath.Join(home, ".xpm")
-
 		s, _ := pterm.DefaultSpinner.Start("Searching...")
 		roots := core.FindLegacyStorages(absPath)
 		
 		// SEARCH GLOBAL LEGACY
-		globalLegacies := []string{
-			filepath.Join(xpmDir, "xpm_global_storage"),
-			filepath.Join(xpmDir, "xpm_store"),
-			filepath.Join(xpmDir, "xpm_store_legacy"),
-			filepath.Join(xpmDir, "registry_cache"),
-		}
+		globalLegacies := paths.LegacyStoragePaths()
 		
 		globalFound := []string{}
 		for _, g := range globalLegacies {
@@ -173,15 +166,14 @@ var pruneCmd = &cobra.Command{
 		}
 
 		var toMigrate []string
-		_ = home // already defined
-		xpmStore := filepath.Join(home, ".xpm", "storage")
+		xpmStore := paths.StorageDir()
 		cas, _ := core.NewCas(xpmStore)
 
 		if selected == "MIGRATE ALL" {
 			toMigrate = append(globalFound, roots...)
 		} else if strings.HasPrefix(selected, "[GLOBAL] ") {
 			base := strings.TrimPrefix(selected, "[GLOBAL] ")
-			toMigrate = []string{filepath.Join(xpmDir, base)}
+			toMigrate = []string{filepath.Join(paths.XpmHome(), base)}
 		} else {
 			toMigrate = []string{selected}
 		}
@@ -196,12 +188,12 @@ var pruneCmd = &cobra.Command{
 
 			// Check if it's a project (needs node_modules/.xpm/storage) or a direct path
 			var migratePath string
-			if strings.HasPrefix(item, home) && !strings.Contains(item, "node_modules") {
+			if strings.HasPrefix(item, paths.XpmHome()) {
 				// Global path
 				migratePath = item
 			} else {
 				// Project path
-				migratePath = filepath.Join(item, "node_modules", ".xpm", "storage")
+				migratePath = filepath.Join(paths.LocalXpmDir(item), "storage")
 			}
 
 			err := core.MigratePathToCas(migratePath, cas, func(current, total int, message string) {
@@ -260,8 +252,7 @@ var installCmd = &cobra.Command{
 		var projectRoot string
 		var err error
 		if global {
-			home, _ := os.UserHomeDir()
-			projectRoot = filepath.Join(home, ".xpm", "globals")
+			projectRoot = paths.GlobalsDir()
 			utils.CreateDirAllSecure(projectRoot)
 		} else {
 			projectRoot, err = os.Getwd()
@@ -288,8 +279,7 @@ var installCmd = &cobra.Command{
 				WithDefaultText("What would you like to do?").
 				Show()
 
-			home, _ := os.UserHomeDir()
-			xpmStore := filepath.Join(home, ".xpm", "storage")
+			xpmStore := paths.StorageDir()
 			cas, _ := core.NewCas(xpmStore)
 
 			if selected == options[0] {
@@ -348,22 +338,16 @@ var installCmd = &cobra.Command{
 		force, _ = cmd.Flags().GetBool("force")
 		update, _ = cmd.Flags().GetBool("update")
 
-		var xpmStore string
-		if envStore := os.Getenv("XFPM_STORAGE"); envStore != "" {
-			xpmStore = envStore
-		} else {
-			home, _ := os.UserHomeDir()
-			xpmStore = filepath.Join(home, ".xpm", "storage")
-		}
+		xpmStore := paths.StorageDir()
 		
 		cas, err := core.NewCas(xpmStore)
 		if err != nil {
 			return err
 		}
 
-		xpmDir := filepath.Join(projectRoot, "node_modules", ".xpm")
+		xpmDir := paths.LocalXpmDir(projectRoot)
 		registry := core.NewRegistryClient("", 3)
-		registry.SetCacheDir(filepath.Join(xpmDir, "cache"))
+		registry.SetCacheDir(paths.RegistryCacheDir(xpmDir))
 
 		resolver := core.NewResolver(registry, cas)
 

@@ -14,6 +14,7 @@ import (
 	"strings"
 
 	"github.com/Nehonix-Team/XFMP/internal/core"
+	"github.com/Nehonix-Team/XFMP/internal/paths"
 	"github.com/Nehonix-Team/XFMP/internal/utils"
 	"github.com/pterm/pterm"
 	"github.com/spf13/cobra"
@@ -35,8 +36,7 @@ var uninstallCmd = &cobra.Command{
 		var pkgJsonPath string
 
 		if global {
-			home, _ := os.UserHomeDir()
-			nmRoot = filepath.Join(home, ".xpm", "globals", "node_modules")
+			nmRoot = filepath.Join(paths.GlobalsDir(), "node_modules")
 		} else {
 			nmRoot = filepath.Join(projectRoot, "node_modules")
 			pkgJsonPath = filepath.Join(projectRoot, "package.json")
@@ -76,18 +76,15 @@ var uninstallCmd = &cobra.Command{
 
 				// Clean up binary links from .bin
 				if global {
-					home, _ := os.UserHomeDir()
-					globalRoot := filepath.Join(home, ".xpm")
-					cleanupGlobalBinaries(globalRoot, pkgName)
+					cleanupGlobalBinaries(paths.XpmHome(), pkgName)
 				} else {
 					cleanupBinaries(nmRoot, pkgName)
 				}
 
 				// Clean up from virtual store (deep clean matching version)
-				vstoreRoot := filepath.Join(projectRoot, "node_modules", ".xpm", "vstore")
+				vstoreRoot := paths.LocalVStoreDir(projectRoot)
 				if global {
-					home, _ := os.UserHomeDir()
-					vstoreRoot = filepath.Join(home, ".xpm", "globals", "node_modules", ".xpm", "vstore")
+					vstoreRoot = paths.GlobalVStoreDir()
 				}
 				cleanupVirtualStore(vstoreRoot, pkgName, resolvedVersion)
 

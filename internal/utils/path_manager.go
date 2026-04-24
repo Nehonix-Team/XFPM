@@ -7,22 +7,20 @@ import (
 	"path/filepath"
 	"runtime"
 	"strings"
+
+	"github.com/Nehonix-Team/XFMP/internal/paths"
 )
 
 const pathMarker = "# XFPM PATH (auto-generated)"
 
 func EnsurePathInShell() error {
-	home, err := os.UserHomeDir()
-	if err != nil {
-		return fmt.Errorf("could not determine home directory: %w", err)
-	}
-
-	binPath := filepath.Join(home, ".xpm", "bin")
+	binPath := paths.BinDir()
 
 	switch runtime.GOOS {
 	case "windows":
 		return setupWindowsPath(binPath)
 	case "darwin", "linux":
+		home, _ := os.UserHomeDir()
 		return setupUnixPath(home, binPath)
 	default:
 		return fmt.Errorf("unsupported OS: %s", runtime.GOOS)

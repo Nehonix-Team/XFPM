@@ -12,6 +12,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/Nehonix-Team/XFMP/internal/paths"
 	"github.com/Nehonix-Team/XFMP/internal/utils"
 )
 
@@ -112,32 +113,30 @@ func (r *ScriptRunner) executeSandboxed(ctx context.Context, task ScriptTask) er
 }
 
 func (r *ScriptRunner) buildPath(packageDir string) string {
-	paths := []string{}
+	envPaths := []string{}
 
 	// 1. Package's .bin
 	packageBin := filepath.Join(filepath.Dir(packageDir), ".bin")
 	if _, err := os.Stat(packageBin); err == nil {
-		paths = append(paths, packageBin)
+		envPaths = append(envPaths, packageBin)
 	}
 
 	// 2. Project's .bin
-	projectBin := filepath.Join(r.projectRoot, "node_modules", ".bin")
+	projectBin := filepath.Join(paths.LocalXpmDir(r.projectRoot), ".bin")
 	if _, err := os.Stat(projectBin); err == nil {
-		paths = append(paths, projectBin)
+		envPaths = append(envPaths, projectBin)
 	}
 
 	// 3. Global XPM bin
-	if home, err := os.UserHomeDir(); err == nil {
-		globalBin := filepath.Join(home, ".xpm", "bin")
-		if _, err := os.Stat(globalBin); err == nil {
-			paths = append(paths, globalBin)
-		}
+	globalBin := paths.BinDir()
+	if _, err := os.Stat(globalBin); err == nil {
+		envPaths = append(envPaths, globalBin)
 	}
 
 	// 4. System PATH
-	paths = append(paths, os.Getenv("PATH"))
+	envPaths = append(envPaths, os.Getenv("PATH"))
 
-	return strings.Join(paths, string(os.PathListSeparator))
+	return strings.Join(envPaths, string(os.PathListSeparator))
 }
 
 func (r *ScriptRunner) buildEnv(pathVal string) []string {
@@ -147,9 +146,9 @@ func (r *ScriptRunner) buildEnv(pathVal string) []string {
 		"NODE_ENV":                      "production",
 		"CI":                            "true",
 		"npm_config_foreground_scripts": "true",
-		"TMPDIR":                        filepath.Join(r.projectRoot, "node_modules", ".xpm", "tmp"),
-		"TEMP":                          filepath.Join(r.projectRoot, "node_modules", ".xpm", "tmp"),
-		"TMP":                           filepath.Join(r.projectRoot, "node_modules", ".xpm", "tmp"),
+		"TMPDIR":                        paths.LocalTmpDir(r.projectRoot),
+		"TEMP":                          paths.LocalTmpDir(r.projectRoot),
+		"TMP":                           paths.LocalTmpDir(r.projectRoot),
 	}
 
 	// 1. NODE_PATH addition
