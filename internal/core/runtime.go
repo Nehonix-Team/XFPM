@@ -94,7 +94,7 @@ func DownloadAndInstallBun() error {
 
 	// 3. Resolve @oven/bun
 	resolver := NewResolver(registry, cas)
-	rootDeps := map[string]string{"@oven/bun": "latest"}
+	rootDeps := map[string]string{"bun": "latest"}
 	
 	resolved, rootVersions, err := resolver.ResolveTree(ctx, rootDeps)
 	if err != nil {

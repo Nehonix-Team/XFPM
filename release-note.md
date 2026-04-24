@@ -22,13 +22,9 @@
 
 - **Internal Structure**: All CLI command definitions have been moved from `main.go` and various root files to `cmd/xfpm/cmd/`.
 
-## [G0.1.152] - 2026-04-24
-
-### Added
-
 - **XFPM Runtime Orchestrator**: Automatic detection and installation of Bun runtime using the internal XFPM engine.
 - **Command**: `xfpm runtime rm bun` for easy runtime uninstallation.
-- **DRY Refactoring**: Bootstrapper now uses the core installer/resolver stack for @oven/bun.
+- **DRY Refactoring**: Bootstrapper now uses the core installer/resolver stack for bun.
 
 # XFPM - vG0.1.151
 
