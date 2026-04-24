@@ -77,8 +77,67 @@ func MigratePathToCas(sourceDir string, cas *Cas, callback ProgressCallback) err
 	return os.RemoveAll(sourceDir)
 }
 
+// MigrateLegacyHome moves binaries, globals and storage from .xpm to .xfpm
+func MigrateLegacyHome(oldHome, newHome string, cas *Cas, callback ProgressCallback) error {
+	// 1. Migrate bin
+	oldBin := filepath.Join(oldHome, "bin")
+	newBin := filepath.Join(newHome, "bin")
+	if err := migrateDirContents(oldBin, newBin); err != nil {
+		return fmt.Errorf("failed to migrate binaries: %w", err)
+	}
+
+	// 2. Migrate globals
+	oldGlobals := filepath.Join(oldHome, "globals")
+	newGlobals := filepath.Join(newHome, "globals")
+	if err := migrateDirContents(oldGlobals, newGlobals); err != nil {
+		return fmt.Errorf("failed to migrate globals: %w", err)
+	}
+
+	// 3. Migrate storage
+	oldStorage := filepath.Join(oldHome, "storage")
+	if fi, err := os.Stat(oldStorage); err == nil && fi.IsDir() {
+		if err := MigratePathToCas(oldStorage, cas, callback); err != nil {
+			return err
+		}
+	}
+
+	// 4. Final Cleanup (remove what's left in old home)
+	return os.RemoveAll(oldHome)
+}
+
+// migrateDirContents moves all entries from source to destination, merging if needed.
+func migrateDirContents(src, dst string) error {
+	if _, err := os.Stat(src); os.IsNotExist(err) {
+		return nil
+	}
+
+	if err := os.MkdirAll(dst, 0755); err != nil {
+		return err
+	}
+
+	entries, err := os.ReadDir(src)
+	if err != nil {
+		return err
+	}
+
+	for _, entry := range entries {
+		srcPath := filepath.Join(src, entry.Name())
+		dstPath := filepath.Join(dst, entry.Name())
+
+		// If destination already exists, remove it first (overwrite)
+		if _, err := os.Stat(dstPath); err == nil {
+			os.RemoveAll(dstPath)
+		}
+
+		if err := os.Rename(srcPath, dstPath); err != nil {
+			// Fallback: simple copy if rename fails
+			return err
+		}
+	}
+	return nil
+}
+
 // FindLegacyStorages recursively finds legacy XFPM storage directories.
-// optimized for speed.
 func FindLegacyStorages(root string) []string {
 	var found []string
 	
@@ -93,7 +152,7 @@ func FindLegacyStorages(root string) []string {
 		"temp":         true,
 		"tmp":          true,
 		"cache":        true,
-		"node_modules": false, // we want to enter node_modules but not its children
+		"node_modules": false, 
 	}
 
 	filepath.Walk(root, func(path string, info os.FileInfo, err error) error {
@@ -113,9 +172,9 @@ func FindLegacyStorages(root string) []string {
 		if name == "node_modules" {
 			legacyPath := filepath.Join(path, ".xpm", "storage")
 			if fi, err := os.Stat(legacyPath); err == nil && fi.IsDir() {
-				found = append(found, filepath.Dir(path)) // return project root
+				found = append(found, filepath.Dir(path)) 
 			}
-			return filepath.SkipDir // don't go deeper into node_modules
+			return filepath.SkipDir 
 		}
 
 		return nil
