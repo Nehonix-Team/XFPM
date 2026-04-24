@@ -10,6 +10,7 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"runtime"
 	"strings"
@@ -30,18 +31,26 @@ func EnsureRuntime() error {
 		bunName = "bun.exe"
 	}
 
-	bunPath := filepath.Join(binDir, bunName)
-
-	if _, err := os.Stat(bunPath); err == nil {
-		return nil // Bun is already there
+	installedPath, lookErr := exec.LookPath(bunName)
+	
+	// Case 1: Already managed by XFPM
+	if lookErr == nil && strings.HasPrefix(installedPath, binDir) {
+		return nil
 	}
 
-	// Not found, trigger auto-install
-	utils.Premium("RUNTIME", "XyPriss requires the Bun runtime to execute scripts and servers.")
-	
-	pterm.Printf("   %s %s\n", 
-		pterm.FgYellow.Sprint("?"), 
-		pterm.Bold.Sprint("Would you like XFPM to automatically install Bun for you? (y/N)"))
+	// Case 2: Found elsewhere on the system
+	if lookErr == nil {
+		utils.Premium("RUNTIME", fmt.Sprintf("Bun is installed at %s but is not managed by XFPM.", installedPath))
+		pterm.Printf("   %s %s\n", 
+			pterm.FgYellow.Sprint("?"), 
+			pterm.Bold.Sprint("For some reasons, we need to uninstall your actual bun binary to reinstall it manually; do u agree? (y/N)"))
+	} else {
+		// Case 3: Not found at all
+		utils.Premium("RUNTIME", "XyPriss requires the Bun runtime to execute scripts and servers.")
+		pterm.Printf("   %s %s\n", 
+			pterm.FgYellow.Sprint("?"), 
+			pterm.Bold.Sprint("Would you like XFPM to automatically install Bun for you? (y/N)"))
+	}
 	
 	fmt.Printf("   %s ", pterm.FgCyan.Sprint(">"))
 	
@@ -49,6 +58,10 @@ func EnsureRuntime() error {
 	fmt.Scanln(&input)
 
 	if strings.ToLower(input) != "y" {
+		if lookErr == nil {
+			utils.Info("Using existing Bun at %s. Some features may be unstable.", installedPath)
+			return nil
+		}
 		utils.Warn("XyPriss may not function correctly without Bun. You can install it later with 'xfpm i -g bun'.")
 		return nil
 	}
