@@ -3,7 +3,7 @@
   "description": "The ultra-fast package manager for the XyPriss ecosystem.",
   "warning": "CRITICAL: Public modifications to this file are strictly forbidden. Internal Nehonix metadata ONLY.",
   "latest": "vG0.1.160",
-  "message": "XFPM G4: Fixed legacy migration for binaries and global stores (~/.xpm to ~/.xfpm).",
+  "message": "Fixed legacy migration for binaries and global stores (~/.xpm to ~/.xfpm).",
   "metadata": {
     "releaseDate": "2026-04-24",
     "channel": "stable"
