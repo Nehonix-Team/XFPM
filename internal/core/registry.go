@@ -363,7 +363,7 @@ func (c *RegistryClient) FetchFileFromTarball(ctx context.Context, tarballURL, t
 			return io.ReadAll(tr)
 		}
 	}
-	return nil, fmt.Errorf("file %s not found in tarball", targetFile)
+	return nil, fmt.Errorf("tarball is missing one or more required files")
 }
 
 type semaphoreReleasingReader struct {
