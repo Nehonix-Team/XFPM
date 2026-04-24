@@ -1,5 +1,13 @@
 # XFPM - Release Notes
 
+## [G0.1.156] - 2026-04-24
+
+### Improved
+
+- **Hardened Runtime Verification**: Refactored `EnsureRuntime` to use robust system-wide detection via `exec.LookPath`.
+- **Managed Runtime Prompt**: Added an intelligent prompt to detect and offer managed reinstallation of "shadow" Bun instances (binaries found outside the XFPM environment), ensuring ecosystem consistency.
+- **Ecosystem Sync**: Updated core libraries for better alignment with the latest XHSC Hyper-System features.
+
 ## [G0.1.155] - 2026-04-24
 
 ### Added
