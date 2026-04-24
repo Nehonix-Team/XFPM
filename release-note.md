@@ -1,5 +1,18 @@
 # XFPM - Release Notes
 
+## [G0.1.155] - 2026-04-24
+
+### Added
+
+- **Modular CLI Architecture**: Completely refactored the `xfpm` entry point into a dedicated `cmd` package. Subcommands are now isolated in their own modules, improving maintainability and scalability.
+- **Centralized Path Management**: Introduced a unified `internal/paths` module to manage all XFPM system paths. This ensures cross-platform consistency and eliminates hardcoded paths in the core engine.
+- **Improved UX - Path Standarization**: Renamed the base system directory from `.xpm` to `.xfpm` for consistency with the CLI name.
+- **Automatic Home Migration**: Implemented a seamless migration logic that automatically renames legacy `~/.xpm` directories to the new `~/.xfpm` standard on the first run.
+
+### Changed
+
+- **Internal Structure**: All CLI command definitions have been moved from `main.go` and various root files to `cmd/xfpm/cmd/`.
+
 ## [G0.1.152] - 2026-04-24
 
 ### Added

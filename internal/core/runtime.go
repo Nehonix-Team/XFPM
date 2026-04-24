@@ -20,9 +20,10 @@ import (
 )
 
 // EnsureRuntime checks if the required JS runtime (Bun) is available.
-// If missing, it prompts the user and installs it into ~/.xpm/bin/
-// using XFPM's internal installation engine.
 func EnsureRuntime() error {
+	// First, check if we need to migrate from .xpm to .xfpm
+	MigrateHome()
+
 	binDir := paths.BinDir()
 	bunName := "bun"
 	if runtime.GOOS == "windows" {
@@ -122,4 +123,24 @@ func RemoveRuntime() error {
 
 	utils.Success("Bun runtime has been uninstalled.")
 	return nil
+}
+
+// MigrateHome handles the transition from the old .xpm directory to the new .xfpm standard.
+// It performs a simple directory rename if the old directory exists and the new one doesn't.
+func MigrateHome() {
+	home, _ := os.UserHomeDir()
+	oldXpm := filepath.Join(home, ".xpm")
+	newXfpm := paths.XpmHome()
+
+	if _, err := os.Stat(newXfpm); os.IsNotExist(err) {
+		if _, err := os.Stat(oldXpm); err == nil {
+			utils.Info("Detected legacy home directory: %s", oldXpm)
+			utils.Info("Migrating to new standard: %s...", newXfpm)
+			if err := os.Rename(oldXpm, newXfpm); err != nil {
+				utils.Error("Failed to auto-migrate home directory: %v", err)
+			} else {
+				utils.Success("Home directory migrated successfully.")
+			}
+		}
+	}
 }
