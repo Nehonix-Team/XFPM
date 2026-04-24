@@ -5,10 +5,12 @@ import (
 	"path/filepath"
 )
 
-// XpmHome returns the base XFPM directory, usually ~/.xpm
+var xfpmPath string = ".xfpm"
+
+// XpmHome returns the base XFPM directory, usually ~/.xfpm
 func XpmHome() string {
 	home, _ := os.UserHomeDir()
-	return filepath.Join(home, ".xpm")
+	return filepath.Join(home, xfpmPath)
 }
 
 // BinDir returns the directory for global binaries
@@ -37,7 +39,7 @@ func GlobalCacheDir() string {
 
 // LocalXpmDir returns the project-local .xpm directory
 func LocalXpmDir(projectRoot string) string {
-	return filepath.Join(projectRoot, "node_modules", ".xpm")
+	return filepath.Join(projectRoot, "node_modules", xfpmPath)
 }
 
 // LocalVStoreDir returns the project-local virtual store directory
@@ -71,7 +73,7 @@ func ConfigPath(projectRoot string) string {
 
 // GlobalVStoreDir returns the global virtual store directory
 func GlobalVStoreDir() string {
-	return filepath.Join(GlobalsDir(), "node_modules", ".xpm", "vstore")
+	return filepath.Join(GlobalsDir(), "node_modules", xfpmPath, "vstore")
 }
 
 // EphemeralCacheDir returns a temporary directory for ephemeral operations
@@ -83,9 +85,11 @@ func EphemeralCacheDir() string {
 func LegacyStoragePaths() []string {
 	home := XpmHome()
 	return []string{
-		filepath.Join(home, "xpm_global_storage"),
+		filepath.Join(home, "xpm_global"),
 		filepath.Join(home, "xpm_store"),
 		filepath.Join(home, "xpm_store_legacy"),
 		filepath.Join(home, "registry_cache"),
+		filepath.Join(home, "xpm_cache"),
+		filepath.Join(os.Getenv("HOME"), ".xpm"),
 	}
 }
