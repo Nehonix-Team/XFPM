@@ -1,5 +1,11 @@
 # XFPM - Release Notes
 
+## [G0.1.160] - 2026-04-24
+
+### Fixed
+
+- **Legacy Home Migration**: Significantly improved `store prune --legacy` to handle full `~/.xpm` to `~/.xfpm` transitions, including binaries, globals, and storage merging.
+
 ## [G0.1.159] - 2026-04-24
 
 ### Added
