@@ -8,6 +8,7 @@
 - **Centralized Path Management**: Introduced a unified `internal/paths` module to manage all XFPM system paths. This ensures cross-platform consistency and eliminates hardcoded paths in the core engine.
 - **Improved UX - Path Standarization**: Renamed the base system directory from `.xpm` to `.xfpm` for consistency with the CLI name.
 - **Automatic Home Migration**: Implemented a seamless migration logic that automatically renames legacy `~/.xpm` directories to the new `~/.xfpm` standard on the first run.
+- **Fix: Internal Directory Leaks**: Hardened the CAS engine to prevent internal XFPM folders (`files`, `indices`, etc.) from being created in the project root by defaulting to global storage.
 
 ### Changed
 

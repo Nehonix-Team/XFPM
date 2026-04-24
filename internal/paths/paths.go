@@ -87,6 +87,7 @@ func LegacyStoragePaths() []string {
 	return []string{
 		filepath.Join(home, "xpm_global"),
 		filepath.Join(home, "xpm_store"),
+		filepath.Join(home, "virtual_store"),
 		filepath.Join(home, "xpm_store_legacy"),
 		filepath.Join(home, "registry_cache"),
 		filepath.Join(home, "xpm_cache"),

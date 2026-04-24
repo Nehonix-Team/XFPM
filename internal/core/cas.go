@@ -10,6 +10,7 @@ import (
 	"runtime"
 	"sync"
 
+	"github.com/Nehonix-Team/XFMP/internal/paths"
 	"github.com/Nehonix-Team/XFMP/internal/utils"
 	"github.com/google/uuid"
 	"github.com/zeebo/blake3"
@@ -21,6 +22,10 @@ type Cas struct {
 }
 
 func NewCas(basePath string) (*Cas, error) {
+	if basePath == "" {
+		basePath = paths.StorageDir()
+	}
+
 	if !filepath.IsAbs(basePath) {
 		cwd, _ := os.Getwd()
 		basePath = filepath.Join(cwd, basePath)
