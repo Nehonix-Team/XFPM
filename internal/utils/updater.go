@@ -26,26 +26,39 @@ const (
 )
 
 // CheckForUpdates fetches the latest version from Nehonix GitHub and proposes an update if needed.
-func CheckForUpdates() {
-	// Skip if explicitly disabled or in a CI environment
-	if os.Getenv("XPM_NO_UPDATE") != "" || os.Getenv("CI") != "" {
-		return
+// Returns true if an update was found and handled (or if up-to-date in forced mode).
+func CheckForUpdates(forced bool) bool {
+	// Skip if explicitly disabled or in a CI environment (unless forced)
+	if !forced && (os.Getenv("XPM_NO_UPDATE") != "" || os.Getenv("CI") != "") {
+		return false
 	}
 
 	// Use a background check would be better but the user asked for it at launch.
 	// We use a very short timeout to avoid blocking the user if network is slow.
+	timeout := 1500 * time.Millisecond
+	if forced {
+		timeout = 5 * time.Second
+		Info("Checking for XFPM updates...")
+	}
+
 	client := http.Client{
-		Timeout: 1500 * time.Millisecond,
+		Timeout: timeout,
 	}
 
 	resp, err := client.Get(VersionCheckURL)
 	if err != nil {
-		return // Fail silently
+		if forced {
+			Error("Failed to check for updates: %v", err)
+		}
+		return false
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
-		return
+		if forced {
+			Error("Registry returned status: %s", resp.Status)
+		}
+		return false
 	}
 
 	var data struct {
@@ -53,7 +66,10 @@ func CheckForUpdates() {
 	}
 
 	if err := json.NewDecoder(resp.Body).Decode(&data); err != nil {
-		return
+		if forced {
+			Error("Failed to parse registry response: %v", err)
+		}
+		return false
 	}
 
 	if data.Latest != "" && data.Latest != BinVersion {
@@ -63,7 +79,10 @@ func CheckForUpdates() {
 		cleanLocal := strings.TrimPrefix(BinVersion, "v")
 
 		if cleanRemote < cleanLocal {
-			return 
+			if forced {
+				Success("You are ahead of the stable release! (v%s > v%s)", cleanLocal, cleanRemote)
+			}
+			return true 
 		}
 
 		pterm.Println()
@@ -80,11 +99,18 @@ func CheckForUpdates() {
 		var input string
 		fmt.Scanln(&input)
 
-		if input == "y" || input == "Y" {
+		if strings.ToLower(input) == "y" {
 			PerformSelfUpdate()
+			return true
 		}
 		pterm.Println()
+		return true
 	}
+
+	if forced {
+		Success("XFPM is already up to date (v%s).", BinVersion)
+	}
+	return true
 }
 
 // PerformSelfUpdate runs the official installation script according to the current platform.

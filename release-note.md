@@ -1,5 +1,12 @@
 # XFPM - Release Notes
 
+## [G0.1.158] - 2026-04-24
+
+### Added
+
+- **Self-Upgrade Command**: Introduced `xfpm upgrade` for manual, forced updates against the Nehonix GitHub registry.
+- **Refined Updater**: Improved terminal feedback and increased timeouts for forced update checks.
+
 ## [G0.1.157] - 2026-04-24
 
 ### Fixed
