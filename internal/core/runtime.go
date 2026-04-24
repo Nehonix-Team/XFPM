@@ -52,7 +52,7 @@ func EnsureRuntime() error {
 	fmt.Scanln(&input)
 
 	if strings.ToLower(input) != "y" {
-		utils.Warn("XyPriss may not function correctly without Bun. You can install it later with 'xfpm i -g @oven/bun'.")
+		utils.Warn("XyPriss may not function correctly without Bun. You can install it later with 'xfpm i -g bun'.")
 		return nil
 	}
 
