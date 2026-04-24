@@ -55,6 +55,11 @@ var (
 				}
 			}
 
+			// Automated JS Runtime Check (Bun)
+			if err := core.EnsureRuntime(); err != nil {
+				utils.Error("Runtime verification failed: %v", err)
+			}
+
 			utils.CheckForUpdates()
 			return nil
 		},
@@ -74,6 +79,7 @@ func init() {
 	rootCmd.AddCommand(signCmd)
 	rootCmd.AddCommand(infoCmd)
 	rootCmd.AddCommand(pluginCmd)
+	rootCmd.AddCommand(rmCmd)
 	storeCmd.AddCommand(pruneCmd)
 
 	rootCmd.PersistentFlags().StringP("cwd", "C", "", "Change work directory")
@@ -215,6 +221,24 @@ var pruneCmd = &cobra.Command{
 		}
 
 		return nil
+	},
+}
+
+var rmCmd = &cobra.Command{
+	Use:   "rm [target]",
+	Short: "Remove XFPM components or runtimes",
+	RunE: func(cmd *cobra.Command, args []string) error {
+		if len(args) == 0 {
+			return fmt.Errorf("missing target to remove (e.g., 'xfpm rm bun')")
+		}
+
+		target := strings.ToLower(args[0])
+		switch target {
+		case "bun":
+			return core.RemoveRuntime()
+		default:
+			return fmt.Errorf("unknown removal target: %s", target)
+		}
 	},
 }
 
