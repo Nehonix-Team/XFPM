@@ -16,6 +16,7 @@ import (
 	"strings"
 
 	"github.com/Nehonix-Team/XFMP/internal/core"
+	"github.com/Nehonix-Team/XFMP/internal/paths"
 	"github.com/Nehonix-Team/XFMP/internal/utils"
 	"github.com/spf13/cobra"
 )
@@ -57,11 +58,7 @@ var createCmd = &cobra.Command{
 		utils.Matrix(fmt.Sprintf("Spinning up initializer: %s", pkgName))
 
 		// 2. Setup internal components
-		home, _ := os.UserHomeDir()
-		xpmStore := filepath.Join(home, ".xpm", "storage")
-		if envStore := os.Getenv("XFPM_STORAGE"); envStore != "" {
-			xpmStore = envStore
-		}
+		xpmStore := paths.StorageDir()
 
 		cas, err := core.NewCas(xpmStore)
 		if err != nil {
@@ -69,11 +66,11 @@ var createCmd = &cobra.Command{
 		}
 
 		// Use a dedicated ephemeral root for creates
-		tempRoot := filepath.Join(home, ".xpm", "cache", "ephemeral")
+		tempRoot := paths.EphemeralCacheDir()
 		os.MkdirAll(tempRoot, 0755)
 
 		registry := core.NewRegistryClient("", 3)
-		registry.SetCacheDir(filepath.Join(tempRoot, ".xpm", "cache"))
+		registry.SetCacheDir(paths.RegistryCacheDir(tempRoot))
 		
 		resolver := core.NewResolver(registry, cas)
 		
@@ -95,7 +92,7 @@ var createCmd = &cobra.Command{
 		// We expect exactly one direct package
 		realVersion := rootVersions[pkgName]
 		pkgVStoreName := strings.ReplaceAll(pkgName, "/", "+") + "@" + realVersion
-		pkgDir := filepath.Join(tempRoot, "node_modules", ".xpm", "vstore", pkgVStoreName, "node_modules", pkgName)
+		pkgDir := filepath.Join(paths.LocalVStoreDir(tempRoot), pkgVStoreName, "node_modules", pkgName)
 
 		pkgJson, err := core.LoadPackageJson(filepath.Join(pkgDir, "package.json"))
 		if err != nil {

@@ -10,6 +10,7 @@ import (
 	"sync"
 
 	"github.com/Nehonix-Team/XFMP/internal/core"
+	"github.com/Nehonix-Team/XFMP/internal/paths"
 	"github.com/Nehonix-Team/XFMP/internal/utils"
 	"github.com/pterm/pterm"
 	"github.com/spf13/cobra"
@@ -30,7 +31,7 @@ var pluginVerifyCmd = &cobra.Command{
 	RunE: func(cmd *cobra.Command, args []string) error {
 		noInteract, _ := cmd.Flags().GetBool("no-interact")
 		projectRoot, _ := os.Getwd()
-		pendingPath := filepath.Join(projectRoot, "node_modules", ".xpm", "pending_plugins.json")
+		pendingPath := filepath.Join(paths.LocalXpmDir(projectRoot), "pending_plugins.json")
 
 		if _, err := os.Stat(pendingPath); os.IsNotExist(err) {
 			utils.Info("No pending plugins to verify.")
@@ -48,7 +49,7 @@ var pluginVerifyCmd = &cobra.Command{
 			return nil
 		}
 
-		cas, _ := core.NewCas(filepath.Join(os.Getenv("HOME"), ".xpm", "storage"))
+		cas, _ := core.NewCas(paths.StorageDir())
 		registry := core.NewRegistryClient("https://registry.npmjs.org", 8)
 		installer := core.NewInstaller(cas, registry, projectRoot)
 		installer.NoInteract = noInteract
@@ -59,7 +60,7 @@ var pluginVerifyCmd = &cobra.Command{
 			pkgVer := p["version"]
 			pkg := &core.ResolvedPackage{Name: pkgName, Version: pkgVer}
 			pkgVStoreName := strings.ReplaceAll(pkgName, "/", "+") + "@" + pkgVer
-			pkgDir := filepath.Join(projectRoot, "node_modules", ".xpm", "vstore", pkgVStoreName, "node_modules", pkgName)
+			pkgDir := filepath.Join(paths.LocalVStoreDir(projectRoot), pkgVStoreName, "node_modules", pkgName)
 			sigPath := filepath.Join(pkgDir, "xypriss.plugin.xsig")
 
 			index, err := cas.GetIndex(pkgName, pkgVer)
@@ -153,7 +154,7 @@ var pluginListCmd = &cobra.Command{
 				
 				// 2. fallback: check if already in vstore
 				pkgVStoreName := strings.ReplaceAll(n, "/", "+") + "@" + resolvedVer
-				pkgDir := filepath.Join(projectRoot, "node_modules", ".xpm", "vstore", pkgVStoreName, "node_modules", n)
+				pkgDir := filepath.Join(paths.LocalVStoreDir(projectRoot), pkgVStoreName, "node_modules", n)
 				sigPath := filepath.Join(pkgDir, "xypriss.plugin.xsig")
 
 				if !isPlugin {
@@ -177,10 +178,7 @@ var pluginListCmd = &cobra.Command{
 					}
 
 					// Get pinned key from config
-					configPath := filepath.Join(projectRoot, "xypriss.config.jsonc")
-					if _, err := os.Stat(configPath); os.IsNotExist(err) {
-						configPath = filepath.Join(projectRoot, "xypriss.config.json")
-					}
+					configPath := paths.ConfigPath(projectRoot)
 					if cfgBytes, err := os.ReadFile(configPath); err == nil {
 						lines := strings.Split(string(cfgBytes), "\n")
 						var cleanLines []string
@@ -239,10 +237,7 @@ var pluginTrustCmd = &cobra.Command{
 		authorKey := args[1]
 
 		// We reuse the logic but we need a specific helper or just do it here
-		configPath := filepath.Join(projectRoot, "xypriss.config.jsonc")
-		if _, err := os.Stat(configPath); os.IsNotExist(err) {
-			configPath = filepath.Join(projectRoot, "xypriss.config.json")
-		}
+		configPath := paths.ConfigPath(projectRoot)
 
 		var config map[string]interface{}
 		if cfgBytes, err := os.ReadFile(configPath); err == nil {
@@ -294,10 +289,7 @@ var pluginRevokeCmd = &cobra.Command{
 		projectRoot, _ := os.Getwd()
 		pkgName := args[0]
 
-		configPath := filepath.Join(projectRoot, "xypriss.config.jsonc")
-		if _, err := os.Stat(configPath); os.IsNotExist(err) {
-			configPath = filepath.Join(projectRoot, "xypriss.config.json")
-		}
+		configPath := paths.ConfigPath(projectRoot)
 
 		b, err := os.ReadFile(configPath)
 		if err != nil { return err }
@@ -395,7 +387,7 @@ var pluginIDCmd = &cobra.Command{
 						version = pj.Version
 						description = pj.Description
 						pkgVStoreName := strings.ReplaceAll(pkgName, "/", "+") + "@" + version
-						sigPath = filepath.Join(projectRoot, "node_modules", ".xpm", "vstore", pkgVStoreName, "node_modules", pkgName, "xypriss.plugin.xsig")
+						sigPath = filepath.Join(paths.LocalVStoreDir(projectRoot), pkgVStoreName, "node_modules", pkgName, "xypriss.plugin.xsig")
 					}
 				} else {
 					pj, _ := core.LoadPackageJson(filepath.Join(pkgDir, "package.json"))

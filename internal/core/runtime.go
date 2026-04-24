@@ -14,6 +14,7 @@ import (
 	"runtime"
 	"strings"
 
+	"github.com/Nehonix-Team/XFMP/internal/paths"
 	"github.com/Nehonix-Team/XFMP/internal/utils"
 	"github.com/pterm/pterm"
 )
@@ -22,12 +23,7 @@ import (
 // If missing, it prompts the user and installs it into ~/.xpm/bin/
 // using XFPM's internal installation engine.
 func EnsureRuntime() error {
-	home, err := os.UserHomeDir()
-	if err != nil {
-		return fmt.Errorf("failed to get home directory: %w", err)
-	}
-
-	binDir := filepath.Join(home, ".xpm", "bin")
+	binDir := paths.BinDir()
 	bunName := "bun"
 	if runtime.GOOS == "windows" {
 		bunName = "bun.exe"
@@ -63,18 +59,12 @@ func EnsureRuntime() error {
 // to perform a silent global installation of @oven/bun.
 func DownloadAndInstallBun() error {
 	ctx := context.Background()
-	home, _ := os.UserHomeDir()
 	
 	// 1. Setup Environment
-	projectRoot := filepath.Join(home, ".xpm", "globals")
+	projectRoot := paths.GlobalsDir()
 	utils.CreateDirAllSecure(projectRoot)
 
-	var xpmStore string
-	if envStore := os.Getenv("XFPM_STORAGE"); envStore != "" {
-		xpmStore = envStore
-	} else {
-		xpmStore = filepath.Join(home, ".xpm", "storage")
-	}
+	xpmStore := paths.StorageDir()
 
 	// 2. Initialize Internal Stack
 	cas, err := NewCas(xpmStore)
@@ -82,9 +72,9 @@ func DownloadAndInstallBun() error {
 		return fmt.Errorf("failed to init storage: %w", err)
 	}
 
-	xpmDir := filepath.Join(projectRoot, "node_modules", ".xpm")
+	xpmDir := paths.LocalXpmDir(projectRoot)
 	registry := NewRegistryClient("", 3)
-	registry.SetCacheDir(filepath.Join(xpmDir, "cache"))
+	registry.SetCacheDir(paths.RegistryCacheDir(xpmDir))
 
 	utils.Info("Bootstrapping Bun runtime via XFPM engine...")
 
@@ -113,8 +103,7 @@ func DownloadAndInstallBun() error {
 
 // RemoveRuntime deletes the Bun runtime from the global .xpm/bin directory
 func RemoveRuntime() error {
-	home, _ := os.UserHomeDir()
-	binDir := filepath.Join(home, ".xpm", "bin")
+	binDir := paths.BinDir()
 	
 	bunName := "bun"
 	if runtime.GOOS == "windows" {

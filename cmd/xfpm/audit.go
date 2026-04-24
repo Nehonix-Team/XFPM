@@ -25,6 +25,7 @@ import (
 	"time"
 
 	"github.com/Nehonix-Team/XFMP/internal/core"
+	"github.com/Nehonix-Team/XFMP/internal/paths"
 	"github.com/Nehonix-Team/XFMP/internal/utils"
 	"github.com/pterm/pterm"
 	"github.com/pterm/pterm/putils"
@@ -60,8 +61,7 @@ var auditCmd = &cobra.Command{
 		spinner, _ := pterm.DefaultSpinner.Start("Analyzing dependency graph...")
 
 		registry := core.NewRegistryClient("", 3)
-		home, _ := os.UserHomeDir()
-		registry.SetCacheDir(filepath.Join(home, ".xpm", "cache"))
+		registry.SetCacheDir(paths.GlobalCacheDir())
 
 		cas, err := core.NewCas("")
 		if err != nil {
@@ -196,10 +196,10 @@ func displayVulnerabilityTree(allPackages []*core.ResolvedPackage, vulns []Detec
 
 	for _, v := range vulns {
 		pterm.Println(pterm.FgRed.Sprintf("\n  Dependency paths for %s (%s):", v.Package, v.ID))
-		paths := findPathsTo(allPackages, v.Package)
+		vPaths := findPathsTo(allPackages, v.Package)
 
 		treeData := pterm.LeveledList{}
-		for _, path := range paths {
+		for _, path := range vPaths {
 			for level, node := range path {
 				treeData = append(treeData, pterm.LeveledListItem{
 					Level: level,
@@ -212,7 +212,7 @@ func displayVulnerabilityTree(allPackages []*core.ResolvedPackage, vulns []Detec
 }
 
 func findPathsTo(allPackages []*core.ResolvedPackage, target string) [][]string {
-	var paths [][]string
+	var resultPaths [][]string
 	visited := make(map[string]bool)
 
 	// Build a reverse dependency map
@@ -234,7 +234,7 @@ func findPathsTo(allPackages []*core.ResolvedPackage, target string) [][]string 
 		newPath := append([]string{current}, currentPath...)
 		parents := revDeps[current]
 		if len(parents) == 0 {
-			paths = append(paths, append([]string{"[root]"}, newPath...))
+			resultPaths = append(resultPaths, append([]string{"[root]"}, newPath...))
 			return
 		}
 
@@ -246,11 +246,11 @@ func findPathsTo(allPackages []*core.ResolvedPackage, target string) [][]string 
 	dfs(target, nil)
 
 	// Limit to top 5 paths to avoid performance issues in UI
-	if len(paths) > 5 {
-		return paths[:5]
+	if len(resultPaths) > 5 {
+		return resultPaths[:5]
 	}
 
-	return paths
+	return resultPaths
 }
 
 // GraphNode represents a node in the dependency graph for JSON serialization.
@@ -608,9 +608,8 @@ var auditFixCmd = &cobra.Command{
 		spinner, _ := pterm.DefaultSpinner.Start("Checking for fixable vulnerabilities...")
 
 		registry := core.NewRegistryClient("", 3)
-		home, _ := os.UserHomeDir()
-		registry.SetCacheDir(filepath.Join(projectRoot, "node_modules", ".xpm", "cache"))
-		cas, _ := core.NewCas(filepath.Join(home, ".xpm", "storage"))
+		registry.SetCacheDir(paths.RegistryCacheDir(paths.LocalXpmDir(projectRoot)))
+		cas, _ := core.NewCas(paths.StorageDir())
 		resolver := core.NewResolver(registry, cas)
 
 		ctx := context.Background()

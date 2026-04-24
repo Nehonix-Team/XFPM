@@ -13,6 +13,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/Nehonix-Team/XFMP/internal/paths"
 	"github.com/Nehonix-Team/XFMP/internal/utils"
 	"github.com/pterm/pterm"
 	"github.com/spf13/cobra"
@@ -30,8 +31,7 @@ var listCmd = &cobra.Command{
 		var pkgJsonPath string
 
 		if global {
-			home, _ := os.UserHomeDir()
-			nmRoot = filepath.Join(home, ".xpm", "globals", "node_modules")
+			nmRoot = filepath.Join(paths.GlobalsDir(), "node_modules")
 		} else {
 			nmRoot = filepath.Join(projectRoot, "node_modules")
 			pkgJsonPath = filepath.Join(projectRoot, "package.json")
