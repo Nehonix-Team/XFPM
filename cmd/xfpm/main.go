@@ -79,7 +79,7 @@ func init() {
 	rootCmd.AddCommand(signCmd)
 	rootCmd.AddCommand(infoCmd)
 	rootCmd.AddCommand(pluginCmd)
-	rootCmd.AddCommand(rmCmd)
+	rootCmd.AddCommand(runtimeCmd)
 	storeCmd.AddCommand(pruneCmd)
 
 	rootCmd.PersistentFlags().StringP("cwd", "C", "", "Change work directory")
@@ -224,20 +224,26 @@ var pruneCmd = &cobra.Command{
 	},
 }
 
-var rmCmd = &cobra.Command{
-	Use:   "rm [target]",
-	Short: "Remove XFPM components or runtimes",
+var runtimeCmd = &cobra.Command{
+	Use:   "runtime [action] [target]",
+	Short: "Manage XFPM execution runtimes (Bun)",
 	RunE: func(cmd *cobra.Command, args []string) error {
-		if len(args) == 0 {
-			return fmt.Errorf("missing target to remove (e.g., 'xfpm rm bun')")
+		if len(args) < 2 {
+			return fmt.Errorf("missing action or target (e.g., 'xfpm runtime rm bun')")
 		}
 
-		target := strings.ToLower(args[0])
+		action := strings.ToLower(args[0])
+		target := strings.ToLower(args[1])
+
+		if action != "rm" && action != "remove" {
+			return fmt.Errorf("unknown action: %s", action)
+		}
+
 		switch target {
 		case "bun":
 			return core.RemoveRuntime()
 		default:
-			return fmt.Errorf("unknown removal target: %s", target)
+			return fmt.Errorf("unknown runtime target: %s", target)
 		}
 	},
 }
