@@ -13,6 +13,12 @@ func XpmHome() string {
 	return filepath.Join(home, xfpmPath)
 }
 
+// LegacyHome returns the old base XPM directory, usually ~/.xpm
+func LegacyHome() string {
+	home, _ := os.UserHomeDir()
+	return filepath.Join(home, ".xpm")
+}
+
 // BinDir returns the directory for global binaries
 func BinDir() string {
 	return filepath.Join(XpmHome(), "bin")
