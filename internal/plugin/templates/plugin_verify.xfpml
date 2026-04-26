@@ -193,6 +193,13 @@
     }
     .btn-modal-confirm:hover { background: rgba(255, 77, 77, 0.2); }
 
+    .btn-install { 
+      background: rgba(0, 212, 255, 0.1); color: var(--cyan); border: 1px solid rgba(0, 212, 255, 0.2);
+      border-radius: 6px; font-size: 13px; font-weight: 600; cursor: pointer; padding: 6px 14px;
+      transition: all .2s;
+    }
+    .btn-install:hover { background: rgba(0, 212, 255, 0.2); box-shadow: 0 0 10px rgba(0, 212, 255, 0.2); }
+
     .card-meta { flex: 1; min-width: 0; }
     .card-name {
       font-size: 18px; font-weight: 700;
@@ -463,15 +470,20 @@
               <span class="dev-id">{{.Identity}}</span>
             </div>
           </div>
-          <div class="trust-wrap">
+          <div class="trust-wrap" id="action-wrap-{{.Name}}">
             {{if eq .Status "authorized"}}
             <button type="button" class="btn-revoke" onclick="showRevokeModal('{{.Name}}')">Revoke</button>
             {{end}}
-            <span class="trust-lbl">Trust</span>
-            <label class="toggle">
-              <input type="checkbox" id="trust-{{.Name}}" name="trust-{{.Name}}" {{if or (eq .Status "authorized") (not $.IsReview)}}checked{{end}} />
-              <span class="tslider"></span>
-            </label>
+            
+            {{if eq .Status "NOT_INSTALLED"}}
+              <button type="button" class="btn-install" id="install-btn-{{.Name}}" onclick="installPlugin('{{.Name}}', '{{.Version}}')">Install</button>
+            {{else}}
+              <span class="trust-lbl">Trust</span>
+              <label class="toggle">
+                <input type="checkbox" id="trust-{{.Name}}" name="trust-{{.Name}}" {{if or (eq .Status "authorized") (not $.IsReview)}}checked{{end}} />
+                <span class="tslider"></span>
+              </label>
+            {{end}}
           </div>
         </div>
 
@@ -585,6 +597,43 @@
     function closeRevokeModal() {
       document.getElementById('revoke-modal').style.display = 'none';
       pluginToRevoke = null;
+    }
+
+    async function installPlugin(name, version) {
+      if (!confirm(`Do you want to fetch and install "${name}@${version}"?`)) return;
+      const btn = document.getElementById('install-btn-' + name);
+      if(btn) { btn.innerText = 'Installing...'; btn.disabled = true; }
+
+      try {
+        const body = new URLSearchParams();
+        body.append('package', name);
+        body.append('version', version);
+
+        const r = await fetch('/install', { method: 'POST', body: body });
+        if (r.ok) {
+          const wrap = document.getElementById('action-wrap-' + name);
+          if (wrap) {
+            wrap.innerHTML = `
+              <span class="trust-lbl">Trust</span>
+              <label class="toggle">
+                <input type="checkbox" id="trust-${name}" name="trust-${name}" />
+                <span class="tslider"></span>
+              </label>
+            `;
+          }
+          const card = document.querySelector('.plugin-card input[name="trust-' + name + '"]').closest('.plugin-card');
+          if (card) {
+            const nameEl = card.querySelector('.card-name');
+            nameEl.innerHTML = name + ' <span class="status-badge status-pending">Pending</span>';
+          }
+        } else {
+          alert('Failed to install plugin. Server returned: ' + r.status + '\\n' + await r.text());
+          if(btn) { btn.innerText = 'Install'; btn.disabled = false; }
+        }
+      } catch(e) {
+        alert('Install error: ' + e);
+        if(btn) { btn.innerText = 'Install'; btn.disabled = false; }
+      }
     }
 
     document.getElementById('btn-confirm-revoke').onclick = async () => {
