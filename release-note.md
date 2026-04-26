@@ -1,5 +1,11 @@
 # XFPM - Release Notes
 
+## [G0.1.167] - 2026-04-26
+
+### Added
+
+- **Permissions Hardening**: Added robust duplication validation inside `xfpm sign` and a built-in `--fix` flag capable of auto-correcting any duplicates inside `package.json` dynamically.
+
 ## [G0.1.166] - 2026-04-26
 
 ### Fixed
