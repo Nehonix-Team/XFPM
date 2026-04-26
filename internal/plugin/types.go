@@ -11,6 +11,7 @@ type WebPerm struct {
 	Name        string `json:"name"`
 	Action      string `json:"action"`
 	Description string `json:"description"`
+	Approved    bool   `json:"approved"`
 }
 
 type WebPlugin struct {

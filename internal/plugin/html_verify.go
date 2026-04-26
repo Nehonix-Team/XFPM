@@ -21,7 +21,7 @@ import (
 //go:embed templates/plugin_verify.xfpml
 var pluginVerifyTmpl string
 
-func HandleHtmlVerify(projectRoot string, pending []PendingReq, config map[string]interface{}, configPath string) {
+func HandleHtmlVerify(projectRoot string, pending []PendingReq, config map[string]interface{}, configPath string, isReview bool) {
 	// Fetch master permissions for descriptions
 	utils.Matrix("Fetching permission descriptions...")
 	resp, err := http.Get("https://raw.githubusercontent.com/Nehonix-Team/XyPriss/master/.data/base/permissions.json")
@@ -41,6 +41,27 @@ func HandleHtmlVerify(projectRoot string, pending []PendingReq, config map[strin
 			Name:     p.Name,
 			Identity: p.Identity,
 		}
+
+		// Get current permissions if in review mode
+		currentPerms := make(map[string]bool)
+		if internal, ok := config["$internal"].(map[string]interface{}); ok {
+			if pluginCfg, ok := internal[p.Name].(map[string]interface{}); ok {
+				if permCfg, ok := pluginCfg["permissions"].(map[string]interface{}); ok {
+					if allowed, ok := permCfg["allowedHooks"].([]interface{}); ok {
+						for _, a := range allowed {
+							if s, ok := a.(string); ok {
+								currentPerms[s] = true
+							}
+						}
+					} else if allowed, ok := permCfg["allowedHooks"].([]string); ok {
+						for _, a := range allowed {
+							currentPerms[a] = true
+						}
+					}
+				}
+			}
+		}
+
 		if p.Privileges != "" && p.Privileges != "none" {
 			for _, id := range strings.Split(p.Privileges, ",") {
 				id = strings.TrimSpace(id)
@@ -50,6 +71,7 @@ func HandleHtmlVerify(projectRoot string, pending []PendingReq, config map[strin
 					Name:        detail.Name,
 					Action:      detail.Action,
 					Description: detail.Description,
+					Approved:    currentPerms[id] || !isReview, // Auto-approve if not review mode (pending list)
 				})
 			}
 		}
@@ -73,7 +95,13 @@ func HandleHtmlVerify(projectRoot string, pending []PendingReq, config map[strin
 
 	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 		tmpl, _ := template.New("verify").Parse(pluginVerifyTmpl)
-		tmpl.Execute(w, struct{ Plugins []WebPlugin }{Plugins: plugins})
+		tmpl.Execute(w, struct {
+			Plugins  []WebPlugin
+			IsReview bool
+		}{
+			Plugins:  plugins,
+			IsReview: isReview,
+		})
 	})
 
 	http.HandleFunc("/apply", func(w http.ResponseWriter, r *http.Request) {

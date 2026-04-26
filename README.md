@@ -138,23 +138,31 @@ The `audit fix` command performs a multi-step remediation:
 
 Use `--yes` and `--force-remove` for fully automated security enforcement in CI environments.
 
-### Inspect Dependencies
+### Manage Plugins & Security
+
+XFPM provides a robust suite of tools for managing project plugins and their cryptographic trust status within the Zero-Trust G3 architecture.
 
 ```bash
-# List all direct dependencies
-xfpm list
-
-# List specific packages and their dependents
-xfpm list <package...>
-
 # List all plugins and their trust status
 xfpm plugin list
 
+# Advanced scan: identify all potential plugins in dependencies
+# (Checks registry metadata and local installations)
+xfpm plugin list --local   # Only check node_modules/vstore (offline)
+xfpm plugin list --review  # Open web dashboard to review/update permissions
+
+# Verify and authorize pending plugins
+xfpm plugin verify
+xfpm plugin verify --html  # Use beautiful interactive web dashboard
+
 # Get detailed Developer Identity & Metadata for a plugin
-# (Fetches online by default, includes description and version)
 xfpm plugin get <package...>
 xfpm plugin id <package...>
 xfpm plugin info <package...>
+
+# Revoke trust and retire permissions
+xfpm plugin revoke <package>
+xfpm plugin revoke <package> --no-pending  # Clean removal without re-queueing
 ```
 
 ### Security & Signing (Zero-Trust G3)
@@ -200,9 +208,15 @@ This hashes all production files and embeds your securely validated `Privileges`
 
 #### 4. Authorization & Interactive Verification
 
-During the installation of a new plugin, XFPM defers validation to a batched interactive **Trust On First Use** flow triggered via `xfpm plugin verify`.
+During the installation of a new plugin, XFPM defers validation to a batched interactive **Trust On First Use** (TOFU) flow triggered via `xfpm plugin verify`.
 
-This process evaluates all installed pending plugins across the dependency graph. The administrator is presented with a consolidated verification dashboard previewing each Developer ID and the required system Privileges for explicit approval before they are pinned in the project's configuration file.
+XFPM features a premium, web-based **Plugin Verification Dashboard** (`xfpm plugin verify --html`). This dashboard provides a beautiful and intuitive interface for:
+
+- **Identity Verification**: Confirming the cryptographic Developer ID.
+- **Granular Authorization**: Reviewing and selectively approving every requested system Privilege.
+- **Bulk Management**: Processing dozens of plugins simultaneously with a responsive, high-performance UI.
+
+Once approved, trust is pinned in the project's configuration file, and system hooks are securely activated.
 
 #### 5. Manual Trust (CI/Automated)
 
