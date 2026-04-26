@@ -124,9 +124,12 @@ func HandleHtmlVerify(projectRoot string, pending []PendingReq, config map[strin
 		for _, p := range pending {
 			// In review mode, if trust checkbox was UNCHECKED, it means REVOKE
 			if result["trust-"+p.Name] != "on" {
-				if isReview {
+				if isReview && p.Status == "authorized" {
+					err := RevokeTrust(projectRoot, p.Name, false)
+					if err != nil {
+						utils.Error("Failed to revoke trust for %s: %v", p.Name, err)
+					}
 					delete(internal, p.Name)
-					utils.Info("Revoked trust for %s via dashboard.", p.Name)
 				}
 				continue
 			}
@@ -184,6 +187,34 @@ func HandleHtmlVerify(projectRoot string, pending []PendingReq, config map[strin
 		}
 		w.WriteHeader(200)
 		done <- true
+	})
+
+	http.HandleFunc("/revoke", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != "POST" {
+			w.WriteHeader(405)
+			return
+		}
+		
+		err := r.ParseForm()
+		if err != nil {
+			w.WriteHeader(400)
+			return
+		}
+
+		pkgName := r.FormValue("package")
+		if pkgName == "" {
+			w.WriteHeader(400)
+			return
+		}
+
+		err = RevokeTrust(projectRoot, pkgName, false)
+		if err != nil {
+			utils.Error("Failed to remotely revoke %s: %v", pkgName, err)
+			w.WriteHeader(500)
+			return
+		}
+		// Write 200 OK
+		w.WriteHeader(200)
 	})
 
 	http.HandleFunc("/cancel", func(w http.ResponseWriter, r *http.Request) {
