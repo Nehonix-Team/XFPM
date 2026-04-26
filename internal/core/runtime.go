@@ -31,13 +31,14 @@ func EnsureRuntime() error {
 		bunName = "bun.exe"
 	}
 
-	installedPath, lookErr := exec.LookPath(bunName)
-	
-	// Case 1: Already managed by XFPM
-	if lookErr == nil && strings.HasPrefix(installedPath, binDir) {
+	// Check if already managed by XFPM
+	globalBunPath := filepath.Join(binDir, bunName)
+	if _, err := os.Stat(globalBunPath); err == nil {
 		return nil
 	}
 
+	installedPath, lookErr := exec.LookPath(bunName)
+	
 	// Case 2: Found elsewhere on the system
 	if lookErr == nil {
 		utils.Premium("RUNTIME", fmt.Sprintf("Bun is installed at %s but is not managed by XFPM.", installedPath))
