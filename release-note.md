@@ -1,5 +1,13 @@
 # XFPM - Release Notes
 
+## [G0.1.168] - 2026-04-26
+
+### Added
+
+- **Plugin Verification Dashboard**: Massive UI overhaul. Added a beautiful, interactive web-based dashboard (`--html` or `-w`) for granular project plugin authorization.
+- **Interactive Terminal UI**: Fallback verification now uses an interactive multi-select menu for better UX.
+- **Shared Utilities**: Centralized `OpenBrowser` logic into a shared internal utility for consistent cross-platform behavior.
+
 ## [G0.1.167] - 2026-04-26
 
 ### Added
