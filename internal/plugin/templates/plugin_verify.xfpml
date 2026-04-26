@@ -505,18 +505,34 @@
         fetch('/cancel', { method: 'POST' }).then(() => window.close());
     }
 
-    function revokePlugin(name) {
+    async function revokePlugin(name) {
       if (confirm(`Are you sure you want to revoke trust for "${name}"? This will remove it from authorized plugins.`)) {
-        const toggle = document.getElementById('trust-' + name);
-        if (toggle) {
-          toggle.checked = false;
-          // Optionally auto-submit or just visually indicate
-          const card = toggle.closest('.plugin-card');
-          if (card) {
-            card.style.opacity = '0.5';
-            card.style.filter = 'grayscale(1)';
-            card.style.pointerEvents = 'none';
+        try {
+          const body = new URLSearchParams();
+          body.append('package', name);
+          
+          const r = await fetch('/revoke', {
+            method: 'POST',
+            body: body
+          });
+          
+          if (r.ok) {
+            const toggle = document.getElementById('trust-' + name);
+            if (toggle) toggle.checked = false;
+            
+            const card = document.querySelector('.plugin-card input[name="trust-' + name + '"]').closest('.plugin-card');
+            if (card) {
+              card.style.opacity = '0.4';
+              card.style.filter = 'grayscale(1)';
+              card.style.pointerEvents = 'none';
+              const nameEl = card.querySelector('.card-name');
+              nameEl.innerHTML = name + ' <span class="status-badge status-pending" style="background: rgba(255, 77, 77, 0.1); color: #ff4d4d; border-color: rgba(255, 77, 77, 0.2);">Revoked</span>';
+            }
+          } else {
+            alert('Revocation failed. Server returned: ' + r.status);
           }
+        } catch(e) {
+          alert('Failed to revoke plugin: ' + e);
         }
       }
     }

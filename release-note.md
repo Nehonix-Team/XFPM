@@ -1,5 +1,12 @@
 # XFPM - Release Notes
 
+## [G0.1.175] - 2026-04-26
+
+### Fixed
+
+- **Unified Revocation Logic**: The "Revoke" button in the web dashboard is no longer a UI mock. It now triggers a dedicated `/revoke` endpoint that leverages the exact same algorithmic backend as the `xfpm plugin revoke` CLI command, ensuring that the plugin is securely removed from the configuration and correctly re-queued in `pending.plugins.json`.
+- **Accurate Revoke Button Visibility**: The web dashboard's "Revoke" button now strictly appears _only_ if a plugin is genuinely authorized.
+
 ## [G0.1.174] - 2026-04-26
 
 ### Fixed
