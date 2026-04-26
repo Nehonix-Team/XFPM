@@ -1,5 +1,13 @@
 # XFPM - Release Notes
 
+## [G0.1.176] - 2026-04-26
+
+### Security & UI
+
+- **Strict Dashboard Trust**: The "Trust" toggle in the web dashboard now executes identical validation routines as the `xfpm plugin trust` CLI command. It actively verifies that the plugin is properly synced locally and possesses a valid `.xsig` signature before authorizing it, ensuring total Zero-Trust alignment.
+- **Advanced Revocation UX**: Introduced a custom HTML modal overlay for the Revocation action, replacing basic prompts. It grants the user the explicit choice between re-queueing to pending list or completely uninstalling (`--no-pending`) the plugin from the local `node_modules` structure.
+- **Pending Plugins UI**: Plugins flagged as `PENDING` in the review dashboard now default to a transparent and desaturated grey aesthetic to accurately convey their unauthorized operational state, whilst remaining interactive.
+
 ## [G0.1.175] - 2026-04-26
 
 ### Fixed

@@ -134,6 +134,15 @@ func HandleHtmlVerify(projectRoot string, pending []PendingReq, config map[strin
 				continue
 			}
 
+			if result["trust-"+p.Name] == "on" {
+				// Validate trust using the same backend logic
+				err := TrustPlugin(projectRoot, p.Name, p.Identity)
+				if err != nil {
+					utils.Error("Failed integrity check for %s. Skipping: %v", p.Name, err)
+					continue
+				}
+			}
+
 			pluginCfgRaw, ok := internal[p.Name]
 			if !ok {
 				pluginCfgRaw = make(map[string]interface{})
@@ -143,17 +152,9 @@ func HandleHtmlVerify(projectRoot string, pending []PendingReq, config map[strin
 				pluginCfg = make(map[string]interface{})
 			}
 
-			sigCfgRaw, ok := pluginCfg["signature"]
-			if !ok {
-				sigCfgRaw = make(map[string]interface{})
-			}
-			sigCfg, ok := sigCfgRaw.(map[string]interface{})
-			if !ok {
-				sigCfg = make(map[string]interface{})
-			}
-			sigCfg["author_key"] = p.Identity
-			pluginCfg["signature"] = sigCfg
-
+			// Signature is already handled by TrustPlugin if we just activated it.
+			// But for pre-authorized cases where we're just updating permissions, 
+			// the signature is already in `$internal`.
 			// Permissions: "perm-<plugin>-<id>"
 			var approved []string
 			if p.Privileges != "" && p.Privileges != "none" {
@@ -207,7 +208,9 @@ func HandleHtmlVerify(projectRoot string, pending []PendingReq, config map[strin
 			return
 		}
 
-		err = RevokeTrust(projectRoot, pkgName, false)
+		noPending := r.FormValue("noPending") == "true"
+
+		err = RevokeTrust(projectRoot, pkgName, noPending)
 		if err != nil {
 			utils.Error("Failed to remotely revoke %s: %v", pkgName, err)
 			w.WriteHeader(500)

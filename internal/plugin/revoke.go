@@ -84,6 +84,11 @@ func RevokeTrust(projectRoot string, pkgName string, noPending bool) error {
 				utils.Info("Plugin %s@%s moved back to pending list.", pkgName, pkgVer)
 			}
 		}
+	} else {
+		err := os.RemoveAll(pkgDir)
+		if err == nil {
+			utils.Info("Plugin symlink %s has been physically uninstalled.", pkgName)
+		}
 	}
 
 	return nil

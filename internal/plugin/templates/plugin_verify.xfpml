@@ -150,6 +150,49 @@
       box-shadow: 0 0 14px rgba(0,212,255,.18);
     }
 
+    .pending-card {
+      opacity: 0.6;
+      filter: grayscale(0.8);
+      transition: all 0.3s;
+    }
+    .pending-card:hover {
+      opacity: 0.8;
+      filter: grayscale(0.2);
+    }
+
+    /* custom modal */
+    #revoke-modal {
+      display: none; position: fixed; inset: 0; z-index: 9999;
+      background: rgba(10,14,23,.85); backdrop-filter: blur(4px);
+      align-items: center; justify-content: center;
+    }
+    .modal-box {
+      background: var(--card); border: 1px solid var(--border);
+      border-radius: 12px; padding: 24px; width: 400px;
+      box-shadow: 0 12px 32px rgba(0,0,0,.6);
+      animation: fadeUp .2s ease both;
+    }
+    .modal-title { font-size: 18px; font-weight: 700; color: #fff; margin-bottom: 8px; }
+    .modal-desc  { font-size: 13px; color: var(--sub); margin-bottom: 18px; line-height: 1.5; }
+    
+    .modal-opts { display: flex; flex-direction: column; gap: 12px; margin-bottom: 24px; }
+    .modal-opt { display: flex; gap: 10px; align-items: flex-start; cursor: pointer; }
+    .modal-opt input { margin-top: 3px; accent-color: var(--cyan); }
+    .modal-opt div { font-size: 13px; color: #dde6f0; }
+    .modal-opt div span { display: block; font-size: 11px; color: var(--sub); margin-top: 2px; }
+
+    .modal-actions { display: flex; justify-content: flex-end; gap: 10px; }
+    .btn-modal-cancel { 
+      background: transparent; color: var(--sub); border: none; 
+      font-size: 13px; font-weight: 600; cursor: pointer; padding: 8px 16px; 
+    }
+    .btn-modal-confirm { 
+      background: rgba(255, 77, 77, 0.1); color: #ff4d4d; border: 1px solid rgba(255, 77, 77, 0.2);
+      border-radius: 6px; font-size: 13px; font-weight: 600; cursor: pointer; padding: 8px 16px;
+      transition: all .2s;
+    }
+    .btn-modal-confirm:hover { background: rgba(255, 77, 77, 0.2); }
+
     .card-meta { flex: 1; min-width: 0; }
     .card-name {
       font-size: 18px; font-weight: 700;
@@ -401,7 +444,7 @@
       </div>
 
       {{range $i, $p := .Plugins}}
-      <div class="plugin-card">
+      <div class="plugin-card{{if ne .Status "authorized"}} pending-card{{end}}">
 
         <!-- top row -->
         <div class="card-top">
@@ -421,8 +464,8 @@
             </div>
           </div>
           <div class="trust-wrap">
-            {{if $.IsReview}}
-            <button type="button" class="btn-revoke" onclick="revokePlugin('{{.Name}}')">Revoke</button>
+            {{if eq .Status "authorized"}}
+            <button type="button" class="btn-revoke" onclick="showRevokeModal('{{.Name}}')">Revoke</button>
             {{end}}
             <span class="trust-lbl">Trust</span>
             <label class="toggle">
@@ -468,7 +511,33 @@
     </form>
   </div><!-- /wrap -->
 
+  <!-- Revoke Modal -->
+  <div id="revoke-modal">
+    <div class="modal-box">
+      <div class="modal-title">Revoke Trust</div>
+      <div class="modal-desc" id="revoke-desc">Are you sure you want to revoke trust for this plugin? It will be removed from authorized plugins.</div>
+      
+      <div class="modal-opts">
+        <label class="modal-opt">
+          <input type="radio" name="revoke-opt" value="false" checked>
+          <div>Move to pending list<span>Keeps the installation but requires re-authorization.</span></div>
+        </label>
+        <label class="modal-opt">
+          <input type="radio" name="revoke-opt" value="true">
+          <div>Completely uninstall (--no-pending)<span>Physically uninstalls the plugin and breaks symlinks.</span></div>
+        </label>
+      </div>
+
+      <div class="modal-actions">
+        <button type="button" class="btn-modal-cancel" onclick="closeRevokeModal()">Cancel</button>
+        <button type="button" class="btn-modal-confirm" id="btn-confirm-revoke">Revoke</button>
+      </div>
+    </div>
+  </div>
+
   <script>
+    let pluginToRevoke = null;
+
     document.getElementById('vform').onsubmit = async (e) => {
       e.preventDefault();
       const result = {};
@@ -489,7 +558,7 @@
                     <path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7"/>
                   </svg>
                 </div>
-                <h2 style="font-size:20px;font-weight:800;margin-bottom:6px;color:#dde6f0;">{{if .IsReview}}Configuration updated{{else}}Authorization complete{{end}}</h2>
+                <h2 style="font-size:20px;font-weight:800;margin-bottom:6px;color:#dde6f0;">Configuration updated</h2>
                 <p style="font-size:13px;color:#4e6280;">You can now return to your terminal.</p>
               </div>
             </div>
@@ -505,37 +574,63 @@
         fetch('/cancel', { method: 'POST' }).then(() => window.close());
     }
 
-    async function revokePlugin(name) {
-      if (confirm(`Are you sure you want to revoke trust for "${name}"? This will remove it from authorized plugins.`)) {
-        try {
-          const body = new URLSearchParams();
-          body.append('package', name);
-          
-          const r = await fetch('/revoke', {
-            method: 'POST',
-            body: body
-          });
-          
-          if (r.ok) {
-            const toggle = document.getElementById('trust-' + name);
-            if (toggle) toggle.checked = false;
-            
-            const card = document.querySelector('.plugin-card input[name="trust-' + name + '"]').closest('.plugin-card');
-            if (card) {
-              card.style.opacity = '0.4';
-              card.style.filter = 'grayscale(1)';
-              card.style.pointerEvents = 'none';
-              const nameEl = card.querySelector('.card-name');
-              nameEl.innerHTML = name + ' <span class="status-badge status-pending" style="background: rgba(255, 77, 77, 0.1); color: #ff4d4d; border-color: rgba(255, 77, 77, 0.2);">Revoked</span>';
-            }
-          } else {
-            alert('Revocation failed. Server returned: ' + r.status);
-          }
-        } catch(e) {
-          alert('Failed to revoke plugin: ' + e);
-        }
-      }
+    function showRevokeModal(name) {
+      pluginToRevoke = name;
+      document.getElementById('revoke-desc').innerText = `Are you sure you want to revoke trust for "${name}"? It will be removed from authorized plugins.`;
+      document.getElementById('revoke-modal').style.display = 'flex';
+      // Reset radios
+      document.querySelector('input[name="revoke-opt"][value="false"]').checked = true;
     }
+
+    function closeRevokeModal() {
+      document.getElementById('revoke-modal').style.display = 'none';
+      pluginToRevoke = null;
+    }
+
+    document.getElementById('btn-confirm-revoke').onclick = async () => {
+      if (!pluginToRevoke) return;
+      const noPending = document.querySelector('input[name="revoke-opt"]:checked').value === "true";
+      
+      const name = pluginToRevoke;
+      const btn = document.getElementById('btn-confirm-revoke');
+      const originalText = btn.innerText;
+      btn.innerText = 'Revoking...';
+      btn.style.pointerEvents = 'none';
+
+      try {
+        const body = new URLSearchParams();
+        body.append('package', name);
+        body.append('noPending', noPending);
+        
+        const r = await fetch('/revoke', {
+          method: 'POST',
+          body: body
+        });
+        
+        if (r.ok) {
+          closeRevokeModal();
+          const toggle = document.getElementById('trust-' + name);
+          if (toggle) toggle.checked = false;
+          
+          const card = document.querySelector('.plugin-card input[name="trust-' + name + '"]').closest('.plugin-card');
+          if (card) {
+            card.style.opacity = '0.4';
+            card.style.filter = 'grayscale(1)';
+            card.style.pointerEvents = 'none';
+            const nameEl = card.querySelector('.card-name');
+            nameEl.innerHTML = name + ' <span class="status-badge status-pending" style="background: rgba(255, 77, 77, 0.1); color: #ff4d4d; border-color: rgba(255, 77, 77, 0.2);">Revoked</span>';
+          }
+        } else {
+          alert('Revocation failed. Server returned: ' + r.status);
+        }
+      } catch(e) {
+        alert('Failed to revoke plugin: ' + e);
+      } finally {
+        btn.innerText = originalText;
+        btn.style.pointerEvents = 'auto';
+        closeRevokeModal();
+      }
+    };
   </script>
 </body>
 </html>
