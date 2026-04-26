@@ -1,0 +1,483 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>XFPM · Plugin Verification</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
+
+  <style>
+    /* ── Base ─────────────────────────────────────────── */
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --c:   #06080f;          /* canvas */
+      --s1:  #0d1120;          /* surface 1 */
+      --s2:  #111827;          /* surface 2 */
+      --cyan: #00d4ff;
+      --blue: #1e6bff;
+      --cyan2: #00aacc;
+      --border: rgba(0,212,255,.15);
+      --border2: rgba(0,212,255,.3);
+      --txt:  #dde6f0;
+      --sub:  #6a7c93;         /* Slightly brighter subtext for readability */
+      --em:   #10b981;
+    }
+
+    html, body {
+      min-height: 100vh;
+      background: var(--c);
+      font-family: 'Outfit', sans-serif;
+      color: var(--txt);
+      overflow-x: hidden;
+      line-height: 1.6;        /* Better reading rhythm */
+    }
+
+    /* ── Ambient background ───────────────────────────── */
+    .bg-glow {
+      position: fixed; inset: 0; pointer-events: none; z-index: 0;
+      background:
+        radial-gradient(ellipse 800px 500px at 50% -100px,  rgba(0,212,255,.08) 0%, transparent 70%),
+        radial-gradient(ellipse 500px 400px at 90% 80%,    rgba(30,107,255,.07) 0%, transparent 60%),
+        radial-gradient(ellipse 400px 300px at 10%  80%,    rgba(0,212,255,.05) 0%, transparent 60%);
+    }
+
+    /* ── Layout wrapper ───────────────────────────────── */
+    .wrap {
+      position: relative; z-index: 1;
+      width: 100%; max-width: 860px;   /* Increased from 680px */
+      margin: 0 auto;
+      padding: 60px 24px 140px;        /* More breathing room */
+    }
+
+    /* ── Header ───────────────────────────────────────── */
+    .hdr { text-align: center; margin-bottom: 48px; }
+
+    .logo-row {
+      display: inline-flex; align-items: center; gap: 10px;
+      margin-bottom: 16px;
+    }
+    .logo-badge {
+      display: flex; align-items: center; justify-content: center;
+      width: 38px; height: 38px;
+      background: linear-gradient(135deg, rgba(0,212,255,.15), rgba(30,107,255,.18));
+      border: 1px solid var(--border2);
+      border-radius: 10px;
+      box-shadow: 0 0 16px rgba(0,212,255,.22);
+    }
+    .logo-name {
+      font-size: 13px; font-weight: 800;
+      letter-spacing: .25em; text-transform: uppercase;
+      color: var(--sub);
+    }
+
+    .hdr h1 {
+      font-size: 34px; font-weight: 800; letter-spacing: -.025em;
+      background: linear-gradient(90deg, var(--cyan) 0%, #60b8ff 55%, var(--cyan) 100%);
+      background-size: 200% auto;
+      -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+      background-clip: text;
+      animation: shimmer 4s linear infinite;
+      margin-bottom: 8px;
+    }
+    @keyframes shimmer { to { background-position: 200% center; } }
+
+    .hdr p {
+      font-size: 16px; color: var(--sub);
+      line-height: 1.6;
+      max-width: 500px; margin: 0 auto;
+    }
+
+    .hdr-divider {
+      margin-top: 36px; height: 1px;
+      background: linear-gradient(90deg, transparent, var(--cyan) 40%, var(--blue) 60%, transparent);
+      opacity: .25;
+    }
+
+    /* ── Plugin count pill ────────────────────────────── */
+    .count-pill {
+      display: inline-flex; align-items: center; gap: 8px;
+      margin-bottom: 24px;
+      padding: 6px 16px;
+      background: rgba(0,212,255,.08);
+      border: 1px solid var(--border);
+      border-radius: 24px;
+      font-size: 12px; font-weight: 600; letter-spacing: .06em;
+      color: var(--sub);
+      font-family: 'JetBrains Mono', monospace;
+    }
+    .count-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--cyan); animation: blink 2s ease infinite; }
+    @keyframes blink { 0%,100%{opacity:1} 50%{opacity:.3} }
+
+    /* ── Plugin card ──────────────────────────────────── */
+    .plugin-card {
+      background: var(--s1);
+      border: 1px solid var(--border);
+      border-radius: 18px;
+      overflow: hidden;
+      margin-bottom: 18px;
+      transition: border-color .25s, box-shadow .25s;
+      animation: fadeUp .35s ease both;
+    }
+    .plugin-card:hover {
+      border-color: var(--border2);
+      box-shadow: 0 0 32px rgba(0,212,255,.1), 0 4px 20px rgba(0,0,0,.4);
+    }
+    .plugin-card:nth-child(1){animation-delay:.04s}
+    .plugin-card:nth-child(2){animation-delay:.09s}
+    .plugin-card:nth-child(3){animation-delay:.14s}
+    .plugin-card:nth-child(4){animation-delay:.19s}
+    @keyframes fadeUp { from{opacity:0;transform:translateY(18px)} to{opacity:1;transform:none} }
+
+    /* card top row */
+    .card-top {
+      display: flex; align-items: center; gap: 16px;
+      padding: 20px 24px;
+      border-bottom: 1px solid rgba(255,255,255,.05);
+      background: linear-gradient(135deg, rgba(30,107,255,.08), rgba(0,212,255,.04));
+    }
+
+    /* avatar hex */
+    .avatar {
+      flex-shrink: 0;
+      width: 48px; height: 48px;
+      background: linear-gradient(135deg, rgba(0,212,255,.2), rgba(30,107,255,.25));
+      border: 1.5px solid rgba(0,212,255,.35);
+      border-radius: 12px;
+      display: flex; align-items: center; justify-content: center;
+      font-weight: 800; font-size: 18px; color: var(--cyan);
+      box-shadow: 0 0 14px rgba(0,212,255,.18);
+    }
+
+    .card-meta { flex: 1; min-width: 0; }
+    .card-name {
+      font-size: 18px; font-weight: 700;
+      color: #fff; letter-spacing: -.01em;
+      white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    }
+    .card-dev {
+      display: flex; align-items: center; gap: 6px;
+      margin-top: 4px;
+      font-family: 'JetBrains Mono', monospace; font-size: 11px;
+    }
+    .dev-label { color: var(--sub); font-weight: 600; }
+    .dev-id    { color: var(--cyan2); opacity: .85; }
+
+    /* trust toggle */
+    .trust-wrap { display: flex; align-items: center; gap: 10px; flex-shrink: 0; }
+    .trust-lbl  { font-size: 13px; font-weight: 500; color: var(--sub); }
+
+    .toggle { position: relative; width: 44px; height: 24px; }
+    .toggle input { opacity:0; width:0; height:0; }
+    .tslider {
+      position:absolute; inset:0; cursor:pointer;
+      background: rgba(255,255,255,.09);
+      border: 1px solid rgba(255,255,255,.12);
+      border-radius: 24px;
+      transition: all .28s;
+    }
+    .tslider::before {
+      content:'';
+      position:absolute; width:18px; height:18px;
+      left:2px; top:2px;
+      background: #4e6280; border-radius:50%;
+      transition: all .28s;
+    }
+    .toggle input:checked + .tslider { background: rgba(0,212,255,.22); border-color: var(--cyan); }
+    .toggle input:checked + .tslider::before { transform:translateX(20px); background:var(--cyan); box-shadow:0 0 10px var(--cyan); }
+
+    /* privileges section */
+    .privs { padding: 18px 24px; }
+
+    .privs-label {
+      font-size: 11px; font-weight: 700; letter-spacing: .16em;
+      text-transform: uppercase; color: var(--sub);
+      margin-bottom: 16px;
+      display: flex; align-items: center; gap: 10px;
+    }
+    .privs-label::after { content:''; flex:1; height:1px; background:rgba(255,255,255,.06); }
+
+    .priv-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); /* Wider items */
+      gap: 12px;
+    }
+
+    .priv-item {
+      display: flex; gap: 14px; align-items: flex-start;
+      padding: 14px 18px;
+      background: rgba(255,255,255,.025);
+      border: 1px solid rgba(255,255,255,.06);
+      border-radius: 12px;
+      cursor: pointer;
+      transition: background .2s, border-color .2s, transform .2s;
+    }
+    .priv-item:hover { 
+      background: rgba(0,212,255,.05); 
+      border-color: rgba(0,212,255,.18);
+      transform: translateY(-2px);
+    }
+
+    /* custom checkbox */
+    .xchk {
+      appearance:none; flex-shrink:0;
+      width:18px; height:18px; margin-top:3px;
+      border: 1.5px solid rgba(0,212,255,.4);
+      border-radius: 5px;
+      background: rgba(0,212,255,.08);
+      cursor: pointer;
+      position: relative;
+      transition: all .2s;
+    }
+    .xchk:checked {
+      background: linear-gradient(135deg, var(--blue), var(--cyan));
+      border-color: var(--cyan);
+    }
+    .xchk:checked::after {
+      content:''; position:absolute;
+      left:5px; top:1px; width:6px; height:11px;
+      border: 2px solid #fff; border-top:none; border-left:none;
+      transform: rotate(45deg);
+    }
+    .xchk:focus { outline:none; box-shadow:0 0 0 3px rgba(0,212,255,.25); }
+
+    .priv-body { flex:1; min-width:0; }
+    .priv-name {
+      font-size: 14px; font-weight: 600; color: #fff;
+      margin-bottom: 5px; line-height: 1.3;
+    }
+    .priv-desc {
+      font-size: 13px; color: var(--sub); line-height: 1.55;
+      margin-bottom: 10px;
+    }
+    .priv-id {
+      display: inline-block;
+      font-family: 'JetBrains Mono', monospace; font-size: 10px;
+      padding: 3px 10px;
+      background: rgba(0,212,255,.09);
+      border: 1px solid rgba(0,212,255,.22);
+      border-radius: 5px;
+      color: var(--cyan); letter-spacing: .08em; text-transform: uppercase;
+      font-weight: 500;
+    }
+
+    .no-privs {
+      grid-column: 1/-1; padding: 24px;
+      text-align: center; font-size: 14px; color: var(--sub);
+      font-style: italic;
+    }
+
+    /* ── Sticky action bar ────────────────────────────── */
+    .action-wrap {
+      position: fixed; bottom: 0; left: 0; right: 0;
+      display: flex; justify-content: center;
+      padding: 24px 24px 32px;
+      background: linear-gradient(to top, var(--c) 65%, transparent);
+      z-index: 100;
+      pointer-events: none;
+    }
+    .action-bar-inner { pointer-events: auto; }
+
+    .action-bar {
+      display: inline-flex; align-items: center; gap: 10px;
+      padding: 10px 10px 10px 24px;
+      background: rgba(10,13,22,.95);
+      backdrop-filter: blur(24px);
+      border: 1px solid var(--border);
+      border-radius: 60px;
+      box-shadow: 0 12px 48px rgba(0,0,0,.6), 0 0 0 1px rgba(0,212,255,.06);
+    }
+
+    .ready-dot {
+      display: flex; align-items: center; gap: 8px;
+      font-size: 13px; color: var(--sub);
+      font-family: 'JetBrains Mono', monospace;
+      margin-right: 12px;
+      font-weight: 500;
+    }
+    .ready-dot span { width:8px;height:8px;border-radius:50%;background:var(--cyan);animation:blink 2s ease infinite; }
+
+    .btn-cancel {
+      padding: 10px 20px; border-radius: 40px;
+      font-family: 'Outfit', sans-serif; font-size: 15px; font-weight: 500;
+      color: var(--sub); background: transparent; border: none; cursor: pointer;
+      transition: color .2s, transform .2s;
+    }
+    .btn-cancel:hover { color: var(--txt); transform: translateX(-2px); }
+
+    .btn-auth {
+      padding: 12px 32px; border-radius: 40px;
+      font-family: 'Outfit', sans-serif; font-size: 13px; font-weight: 700;
+      letter-spacing: .08em; text-transform: uppercase;
+      color: #fff;
+      background: linear-gradient(135deg, var(--blue) 0%, var(--cyan) 100%);
+      border: none; cursor: pointer;
+      position: relative; overflow: hidden;
+      transition: transform .2s, box-shadow .2s;
+      box-shadow: 0 0 20px rgba(0,212,255,.25);
+    }
+    .btn-auth::before {
+      content:''; position:absolute; inset:0;
+      background: linear-gradient(135deg, rgba(255,255,255,.18), transparent 55%);
+      opacity:0; transition: opacity .2s;
+    }
+    .btn-auth:hover { transform: scale(1.05); box-shadow: 0 0 32px rgba(0,212,255,.45); }
+    .btn-auth:hover::before { opacity:1; }
+    .btn-auth:active { transform: scale(.97); }
+
+    /* ── Success ──────────────────────────────────────── */
+    .success-wrap {
+      min-height: 100vh; display:flex; align-items:center; justify-content:center;
+      background: var(--c); font-family: 'Outfit', sans-serif;
+    }
+    .success-icon {
+      width:80px;height:80px;border-radius:50%;margin:0 auto 28px;
+      background:rgba(16,185,129,.1); border:1px solid rgba(16,185,129,.3);
+      display:flex;align-items:center;justify-content:center;
+      animation: pulseG 2s ease infinite;
+    }
+    @keyframes pulseG {
+      0%,100%{box-shadow:0 0 0 0 rgba(16,185,129,.3)}
+      50%{box-shadow:0 0 0 12px rgba(16,185,129,0)}
+    }
+  </style>
+</head>
+<body>
+
+  <div class="bg-glow"></div>
+
+  <div class="wrap">
+
+    <!-- ── Header ── -->
+    <header class="hdr">
+      <div class="logo-row">
+        <div class="logo-badge">
+          <svg width="16" height="16" viewBox="0 0 20 20" fill="none">
+            <polygon points="10,1 18,5.5 18,14.5 10,19 2,14.5 2,5.5"
+              fill="none" stroke="url(#lg)" stroke-width="1.4"/>
+            <defs>
+              <linearGradient id="lg" x1="0%" y1="0%" x2="100%" y2="100%">
+                <stop offset="0%" stop-color="#00d4ff"/>
+                <stop offset="100%" stop-color="#1e6bff"/>
+              </linearGradient>
+            </defs>
+            <path d="M7 10l2 2 4-4" stroke="#00d4ff" stroke-width="1.3"
+              stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
+        </div>
+        <span class="logo-name">XFPM</span>
+      </div>
+      <h1>Plugin Verification</h1>
+      <p>Review and authorize privileges for each plugin<br>before they become active on your system.</p>
+      <div class="hdr-divider"></div>
+    </header>
+
+    <!-- ── Plugin list ── -->
+    <form id="vform">
+
+      <!-- count pill -->
+      <div style="text-align:center;margin-bottom:18px;">
+        <span class="count-pill">
+          <span class="count-dot"></span>
+          {{len .Plugins}} plugin(s) pending
+        </span>
+      </div>
+
+      {{range $i, $p := .Plugins}}
+      <div class="plugin-card">
+
+        <!-- top row -->
+        <div class="card-top">
+          <div class="avatar">{{slice .Name 0 1}}</div>
+          <div class="card-meta">
+            <div class="card-name">{{.Name}}</div>
+            <div class="card-dev">
+              <span class="dev-label">DEV</span>
+              <span class="dev-id">{{.Identity}}</span>
+            </div>
+          </div>
+          <div class="trust-wrap">
+            <span class="trust-lbl">Trust</span>
+            <label class="toggle">
+              <input type="checkbox" id="trust-{{.Name}}" name="trust-{{.Name}}" checked />
+              <span class="tslider"></span>
+            </label>
+          </div>
+        </div>
+
+        <!-- privileges -->
+        <div class="privs">
+          <div class="privs-label">Requested privileges</div>
+          <div class="priv-grid">
+            {{range .RequestedPrivileges}}
+            <label class="priv-item">
+              <input type="checkbox" name="perm-{{$p.Name}}-{{.ID}}" class="xchk" checked />
+              <div class="priv-body">
+                <div class="priv-name">{{.Name}}</div>
+                <div class="priv-desc">{{.Description}}</div>
+                <span class="priv-id">{{.ID}}</span>
+              </div>
+            </label>
+            {{else}}
+            <div class="no-privs">No special privileges requested.</div>
+            {{end}}
+          </div>
+        </div>
+
+      </div>
+      {{end}}
+
+      <!-- ── Action bar ── -->
+      <div class="action-wrap">
+        <div class="action-bar-inner">
+          <div class="action-bar">
+            <div class="ready-dot"><span></span>ready</div>
+            <button type="button" class="btn-cancel" onclick="doCancel()">Cancel</button>
+            <button type="submit" class="btn-auth">Authorize Selected</button>
+          </div>
+        </div>
+      </div>
+
+    </form>
+  </div><!-- /wrap -->
+
+  <script>
+    document.getElementById('vform').onsubmit = async (e) => {
+      e.preventDefault();
+      const result = {};
+      for (const [k, v] of new FormData(e.target).entries()) result[k] = v;
+
+      try {
+        const r = await fetch('/apply', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(result)
+        });
+        if (r.ok) {
+          document.body.innerHTML = `
+            <div class="success-wrap">
+              <div style="text-align:center;animation:fadeUp .45s ease both">
+                <div class="success-icon">
+                  <svg width="26" height="26" fill="none" stroke="#10b981" stroke-width="2.5" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7"/>
+                  </svg>
+                </div>
+                <h2 style="font-size:20px;font-weight:800;margin-bottom:6px;color:#dde6f0;">Authorization complete</h2>
+                <p style="font-size:13px;color:#4e6280;">You can now return to your terminal.</p>
+              </div>
+            </div>
+            <style>@keyframes fadeUp{from{opacity:0;transform:translateY(12px)}to{opacity:1;transform:none}}</style>
+          `;
+          setTimeout(() => window.close(), 2500);
+        }
+      } catch (err) { alert('Error: ' + err); }
+    };
+
+    function doCancel() {
+      if (confirm('Cancel plugin verification?'))
+        fetch('/cancel', { method: 'POST' }).then(() => window.close());
+    }
+  </script>
+</body>
+</html>
