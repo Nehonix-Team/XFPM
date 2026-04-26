@@ -2,10 +2,10 @@
   "name": "XFPM (XyPriss Package Manager)",
   "description": "The ultra-fast package manager for the XyPriss ecosystem.",
   "warning": "CRITICAL: Public modifications to this file are strictly forbidden. Internal Nehonix metadata ONLY.",
-  "latest": "vG0.1.168",
-  "message": "Major UI Release: Integrated an interactive, web-based Plugin Verification Dashboard for granular G3 permission management.",
+  "latest": "vG0.1.169",
+  "message": "Architectural Refinement: Modularized plugin management engine and overhalued Verification UI for G3 compliance.",
   "metadata": {
-    "releaseDate": "2026-04-24",
+    "releaseDate": "2026-04-26",
     "channel": "stable"
   }
 }
