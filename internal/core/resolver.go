@@ -635,6 +635,11 @@ func (r *Resolver) parseAlias(name, req string) (string, string) {
 		currentReq = "latest"
 	}
 
+	// 4. file: protocol
+	if strings.HasPrefix(currentReq, "file:") {
+		currentReq = "latest"
+	}
+
 	return currentName, currentReq
 }
 

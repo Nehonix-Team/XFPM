@@ -1,5 +1,20 @@
 # XFPM - Release Notes
 
+## [G0.1.165] - 2026-04-26
+
+### Added
+
+- **Interactive Privilege Authorization (TOFU)**: Redesigned the security enrollment engine. `xfpm plugin verify` now surfaces a beautiful, batched interactive UI across all pending plugins, presenting required System Privileges requested by the author for your explicit consent, before persisting them securely to configuration.
+- **Maintainer Privilege Declaration**: Maintainers can now explicitly list essential hooks via the `xfpm.permissions` array in `package.json`, which are validated via fetching the master registry during signing (`xfpm sign`).
+- **Configuration-Based Bypassing**: Introduced `xfpm.trustedPlugins` array. Declare trusted libraries in your project settings to securely dodge the interactive Trust-On-First-Use prompts in non-interactive CI lines securely.
+
+### Improved
+
+- **Targeted Lifecycle Execution**: Redesigned script extraction limits hook execution solely to explicitly requested packages during a targeted transaction (e.g., `xfpm install <pkg>`), vastly mitigating ambient root-level hook collateral clutter.
+- **Robust Local Protocol**: Re-engineered resolution handling of the native `file:` protocol. The engine now reliably strips absolute prefixes and correctly parses local dependency nested `package.json` configurations without crashing SemVer evaluations.
+- **Trailing Comma Resiliency**: The XHS JSONC payload configuration parser now flawlessly tolerates trailing commas syntax natively, increasing resilience against hand-written errors.
+- **Centralized Pathing**: Refactored CLI path definitions out from root scope into a generalized `paths` module to reinforce modular integrity and DRY limits.
+
 ## [G0.1.160] - 2026-04-24
 
 ### Fixed

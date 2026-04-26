@@ -11,6 +11,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"regexp"
 	"runtime"
 	"strings"
 	"sync"
@@ -45,6 +46,7 @@ type Installer struct {
 	lpMu            sync.Mutex
 	AutoVerify      bool
 	NoInteract      bool
+	TargetPackages  map[string]bool
 }
 
 func NewInstaller(cas *Cas, registry *RegistryClient, projectRoot string) *Installer {
@@ -474,6 +476,9 @@ func (i *Installer) runLifecycleScripts(ctx context.Context, packages []*Resolve
 	lifecycleOrder := []string{"preinstall", "install", "postinstall"}
 	
 	for _, pkg := range packages {
+		if i.TargetPackages != nil && !i.TargetPackages[pkg.Name] {
+			continue
+		}
 		cacheKey := pkg.Name + "@" + pkg.Version
 		if _, wasChanged := i.changedPackages.Load(cacheKey); !wasChanged { continue }
 		
@@ -651,7 +656,10 @@ func (i *Installer) IsPluginTrustedDirect(pkgName string) bool {
 	}
 
 	var config map[string]interface{}
-	if err := json.Unmarshal([]byte(strings.Join(cleanLines, "\n")), &config); err != nil { return false }
+	configStr := strings.Join(cleanLines, "\n")
+	re := regexp.MustCompile(`,(\s*[}\]])`)
+	configStr = re.ReplaceAllString(configStr, "$1")
+	if err := json.Unmarshal([]byte(configStr), &config); err != nil { return false }
 
 	internal, ok := config["$internal"].(map[string]interface{})
 	if !ok { return false }
@@ -693,7 +701,8 @@ func (i *Installer) VerifySignatureInternal(sigPath string, pkg *ResolvedPackage
 	}
 	
 	var sigData struct {
-		AuthorKey string `json:"author_key"`
+		AuthorKey  string `json:"author_key"`
+		Privileges string `json:"privileges"`
 	}
 
 	sigStr := string(sigBytes)
@@ -734,6 +743,7 @@ func (i *Installer) VerifySignatureInternal(sigPath string, pkg *ResolvedPackage
 		}
 
 		identity, ok := headers["Identity"]
+		privileges, _ := headers["Privileges"]
 		if !ok || proofBase64 == "" {
 			return fmt.Errorf("security: invalid or corrupted G3 signature in package %s", pkg.Name)
 		}
@@ -757,6 +767,7 @@ func (i *Installer) VerifySignatureInternal(sigPath string, pkg *ResolvedPackage
 		}
 
 		sigData.AuthorKey = identity
+		sigData.Privileges = privileges
 	} else {
 		// Legacy JSON format
 		if err := json.Unmarshal(sigBytes, &sigData); err != nil || sigData.AuthorKey == "" {
@@ -776,7 +787,10 @@ func (i *Installer) VerifySignatureInternal(sigPath string, pkg *ResolvedPackage
 			}
 			cleanLines = append(cleanLines, line)
 		}
-		json.Unmarshal([]byte(strings.Join(cleanLines, "\n")), &config)
+		configStr := strings.Join(cleanLines, "\n")
+		re := regexp.MustCompile(`,(\s*[}\]])`)
+		configStr = re.ReplaceAllString(configStr, "$1")
+		json.Unmarshal([]byte(configStr), &config)
 	}
 
 	if config == nil { config = make(map[string]interface{}) }
@@ -793,18 +807,41 @@ func (i *Installer) VerifySignatureInternal(sigPath string, pkg *ResolvedPackage
 	}
 
 	pterm.Println()
+	privStr := ""
+	if sigData.Privileges != "" && sigData.Privileges != "none" {
+		privStr = fmt.Sprintf("\n\nREQUESTED PRIVILEGES:\n%s", strings.ReplaceAll(sigData.Privileges, ",", "\n"))
+	}
+	
 	pterm.DefaultBox.WithTitle("[SECURITY] New plugin author detected: " + pkg.Name).Println(
-		fmt.Sprintf("Package: %s\n\nACTION REQUIRED:\nThis plugin has never been trusted before.\nVerify the Developer ID from the official README:\nhttps://npmjs.com/package/%s\n\nThen paste the Developer ID below to confirm trust.", pkg.Name, pkg.Name),
+		fmt.Sprintf("Package: %s\n\nACTION REQUIRED:\nThis plugin has never been trusted before.\nVerify the Developer ID from the official README:\nhttps://npmjs.com/package/%s%s\n\nThen paste the Developer ID below to confirm trust (and authorize all privileges).", pkg.Name, pkg.Name, privStr),
 	)
 
+	// Check package.json for trustedPlugins
+	isTrustedInPkgJson := false
+	if pkgJson, err := LoadPackageJson(filepath.Join(i.projectRoot, "package.json")); err == nil && pkgJson != nil {
+		if pkgJson.Xfpm != nil {
+			for _, item := range pkgJson.Xfpm.TrustedPlugins {
+				if item == pkg.Name {
+					isTrustedInPkgJson = true
+					break
+				}
+			}
+		}
+	}
+
 	var result string
-	if !i.NoInteract {
+	if i.NoInteract || isTrustedInPkgJson {
+		if isTrustedInPkgJson {
+			utils.Info("Auto-verifying plugin %s (Whitelisted in package.json)...", pkg.Name)
+		}
+		result = sigData.AuthorKey
+	} else if !i.NoInteract {
 		result, _ = pterm.DefaultInteractiveTextInput.
 			WithDefaultText("").
 			Show("Paste the Developer ID to confirm trust, or press Enter to cancel")
 	}
 
-	if i.NoInteract || strings.TrimSpace(result) == sigData.AuthorKey {
+	if i.NoInteract || isTrustedInPkgJson || strings.TrimSpace(result) == sigData.AuthorKey {
 		if i.NoInteract {
 			utils.Info("Auto-verifying plugin %s (Non-interactive mode)...", pkg.Name)
 		}
@@ -820,6 +857,17 @@ func (i *Installer) VerifySignatureInternal(sigPath string, pkg *ResolvedPackage
 
 		sigCfg["author_key"] = sigData.AuthorKey
 		pluginCfg["signature"] = sigCfg
+
+		if sigData.Privileges != "" && sigData.Privileges != "none" {
+			permCfgRaw, ok := pluginCfg["permissions"]
+			if !ok { permCfgRaw = make(map[string]interface{}) }
+			permCfg, ok := permCfgRaw.(map[string]interface{})
+			if !ok { permCfg = make(map[string]interface{}) }
+
+			permCfg["allowedHooks"] = strings.Split(sigData.Privileges, ",")
+			pluginCfg["permissions"] = permCfg
+		}
+
 		internal[pkg.Name] = pluginCfg
 		config["$internal"] = internal
 
@@ -880,9 +928,8 @@ func (i *Installer) SavePendingPlugins() {
 		var stillPending []*ResolvedPackage
 
 		for _, p := range i.PendingPlugins {
-			pkgVStoreName := strings.ReplaceAll(p.Name, "/", "+") + "@" + p.Version
-			pkgDir := filepath.Join(i.projectRoot, "node_modules", ".xpm", "vstore", pkgVStoreName, "node_modules", p.Name)
-			sigPath := filepath.Join(pkgDir, "xypriss.plugin.xsig")
+			pkgDir := paths.PackageVStoreDir(i.projectRoot, p.Name, p.Version)
+			sigPath := paths.PackageSigPath(pkgDir)
 
 			// Load index from CAS to verify
 			index, err := i.cas.GetIndex(p.Name, p.Version)
@@ -911,7 +958,7 @@ func (i *Installer) SavePendingPlugins() {
 		if len(i.PendingPlugins) == 0 { return }
 	}
 
-	pendingPath := filepath.Join(paths.LocalXpmDir(i.projectRoot), "pending_plugins.json")
+	pendingPath := paths.PendingPluginsPath(i.projectRoot)
 	utils.CreateDirAllSecure(filepath.Dir(pendingPath))
 
 	var list []map[string]string
@@ -946,7 +993,10 @@ func (i *Installer) isPluginTrusted(pkg *ResolvedPackage) bool {
 	}
 
 	var config map[string]interface{}
-	json.Unmarshal([]byte(strings.Join(cleanLines, "\n")), &config)
+	configStr := strings.Join(cleanLines, "\n")
+	re := regexp.MustCompile(`,(\s*[}\]])`)
+	configStr = re.ReplaceAllString(configStr, "$1")
+	json.Unmarshal([]byte(configStr), &config)
 
 	if internalRaw, ok := config["$internal"]; ok {
 		if internal, ok := internalRaw.(map[string]interface{}); ok {
