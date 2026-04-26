@@ -4,6 +4,7 @@ type PendingReq struct {
 	Name       string
 	Identity   string
 	Privileges string
+	Status     string
 }
 
 type WebPerm struct {
@@ -18,4 +19,5 @@ type WebPlugin struct {
 	Name                string    `json:"name"`
 	Identity            string    `json:"identity"`
 	RequestedPrivileges []WebPerm `json:"requested_privileges"`
+	Status              string    `json:"status"`
 }

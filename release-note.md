@@ -1,5 +1,12 @@
 # XFPM - Release Notes
 
+## [G0.1.173] - 2026-04-26
+
+### Fixed
+
+- **Robust Detection Fallback**: Implemented direct tarball inspection as a fallback when registry metadata lacks the `Files` array. This ensures all XyPriss plugins (like `xypriss-swagger`) are correctly identified.
+- **Badge Consistency**: Fixed a major UI bug where all plugins in review mode were incorrectly badged as "Authorized". Status badges now accurately reflect the project configuration state.
+
 ## [G0.1.172] - 2026-04-26
 
 ### Fixed

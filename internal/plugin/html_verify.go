@@ -40,9 +40,10 @@ func HandleHtmlVerify(projectRoot string, pending []PendingReq, config map[strin
 		wp := WebPlugin{
 			Name:     p.Name,
 			Identity: p.Identity,
+			Status:   p.Status,
 		}
 
-		// Get current permissions if in review mode
+		// Get current permissions if in review mode or already authorized
 		currentPerms := make(map[string]bool)
 		if internal, ok := config["$internal"].(map[string]interface{}); ok {
 			if pluginCfg, ok := internal[p.Name].(map[string]interface{}); ok {
@@ -71,7 +72,7 @@ func HandleHtmlVerify(projectRoot string, pending []PendingReq, config map[strin
 					Name:        detail.Name,
 					Action:      detail.Action,
 					Description: detail.Description,
-					Approved:    currentPerms[id] || !isReview, // Auto-approve if not review mode (pending list)
+					Approved:    currentPerms[id] || (p.Status != "authorized" && !isReview),
 				})
 			}
 		}
