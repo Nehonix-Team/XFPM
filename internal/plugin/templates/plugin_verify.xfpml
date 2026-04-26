@@ -426,7 +426,7 @@
             {{end}}
             <span class="trust-lbl">Trust</span>
             <label class="toggle">
-              <input type="checkbox" id="trust-{{.Name}}" name="trust-{{.Name}}" checked />
+              <input type="checkbox" id="trust-{{.Name}}" name="trust-{{.Name}}" {{if or (eq .Status "authorized") (not $.IsReview)}}checked{{end}} />
               <span class="tslider"></span>
             </label>
           </div>
