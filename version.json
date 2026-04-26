@@ -2,8 +2,8 @@
   "name": "XFPM (XyPriss Package Manager)",
   "description": "The ultra-fast package manager for the XyPriss ecosystem.",
   "warning": "CRITICAL: Public modifications to this file are strictly forbidden. Internal Nehonix metadata ONLY.",
-  "latest": "vG0.1.165",
-  "message": "Introduced targeted lifecycle scripts, batched TOFU privileges verification UI, config-based verification bypassing, and robust local 'file:' protocol parsing.",
+  "latest": "vG0.1.166",
+  "message": "Fixed runtime path verification where local symlinks incorrectly shadowed global XFPM binaries.",
   "metadata": {
     "releaseDate": "2026-04-24",
     "channel": "stable"

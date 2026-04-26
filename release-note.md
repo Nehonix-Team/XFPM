@@ -1,5 +1,11 @@
 # XFPM - Release Notes
 
+## [G0.1.166] - 2026-04-26
+
+### Fixed
+
+- **Runtime Path Resolution**: Fixed a severe logic regression in `EnsureRuntime` where `exec.LookPath` incorrectly triggered unmanaged installation warnings by detecting the local `node_modules/.bin/bun` symlink injected into PATH by `xfpm run`, shadowing the global `~/.xfpm/bin` installation. The engine now prioritizes exact explicit global checking.
+
 ## [G0.1.165] - 2026-04-26
 
 ### Added
