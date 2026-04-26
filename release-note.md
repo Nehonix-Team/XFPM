@@ -1,12 +1,5 @@
 # XFPM - Release Notes
 
-## [G0.1.170] - 2026-04-26
-
-### Added
-
-- **Plugin Revoke Enhancements**: Revoking trust now automatically re-queues plugins into the pending list for re-verification. Added `--no-pending` flag for clean revocation.
-- **Ignore Pattern Fix**: Corrected `.gitignore` logic that was incorrectly shadowing CLI source files.
-
 ## [G0.1.169] - 2026-04-26
 
 ### Added
