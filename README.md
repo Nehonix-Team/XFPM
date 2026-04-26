@@ -94,6 +94,9 @@ xfpm add <package>
 # Add to devDependencies
 xfpm add -D <package>
 
+# Install from a local path
+xfpm add file:./path/to/my-plugin
+
 # Remove a package
 xfpm rm <package>
 ```
@@ -168,7 +171,24 @@ xfpm gen-key
 
 Your public key fingerprint should be published in your plugin's official README to allow users to verify your identity.
 
-#### 2. Sign Plugin Assets
+#### 2. Declare Privileges (Optional)
+
+If your plugin requires protected system hooks (e.g., HTTP interception, sensitive config reads), you **must** declare them in your `package.json` before signing using the `xfpm.permissions` array. Ensure you use the exact system Privilege IDs.
+
+```json
+{
+  "xfpm": {
+    "permissions": [
+      "XHS.HOOK.HTTP.REQUEST",
+      "XHS.PERM.LOGGING.CONSOLE_INTERCEPT"
+    ]
+  }
+}
+```
+
+During signature generation, XFPM validates these requested privileges against the official XyPriss definitions list. If they are syntactically invalid, signing is aborted.
+
+#### 3. Sign Plugin Assets
 
 Before publication, generate a tamper-proof signature manifest.
 
@@ -176,11 +196,15 @@ Before publication, generate a tamper-proof signature manifest.
 xfpm sign ./ --min-version 1.0.0
 ```
 
-This hashes all production files and creates a `xypriss.plugin.xsig` file required for secure distribution.
+This hashes all production files and embeds your securely validated `Privileges` directly into a `xypriss.plugin.xsig` file required for safe distribution.
 
-During installation of a new plugin, XFPM activates an interactive **Trust On First Use** flow, prompting the administrator to authorize the Developer ID and pin it to the project configuration.
+#### 4. Authorization & Interactive Verification
 
-#### 4. Manual Trust (CI/Automated)
+During the installation of a new plugin, XFPM defers validation to a batched interactive **Trust On First Use** flow triggered via `xfpm plugin verify`.
+
+This process evaluates all installed pending plugins across the dependency graph. The administrator is presented with a consolidated verification dashboard previewing each Developer ID and the required system Privileges for explicit approval before they are pinned in the project's configuration file.
+
+#### 5. Manual Trust (CI/Automated)
 
 For non-interactive environments or manual pinning, use the `trust` subcommand:
 
@@ -188,7 +212,7 @@ For non-interactive environments or manual pinning, use the `trust` subcommand:
 xfpm plugin trust <package> <developer-id>
 ```
 
-#### 5. Non-Interactive Mode (CI & Automation)
+#### 6. Non-Interactive Mode (CI & Automation)
 
 For CI/CD and automation, XFPM supports a **Zero-Prompt** mode. Use the `--no-interact` (or `-n`) flag with `install`, `update`, or `verify`.
 
@@ -207,6 +231,20 @@ Example:
 ```bash
 xfpm plugin trust my-plugin ed25519:adl*******
 ```
+
+#### 7. Configuration-Based Trust (trustedPlugins)
+
+To bypass interactive prompts consistently without relying on the `--no-interact` flag globally, maintainers can whitelist specific plugin packages by declaring them in the project's root `package.json` under an `xfpm.trustedPlugins` array:
+
+```json
+{
+  "xfpm": {
+    "trustedPlugins": ["my-plugin"]
+  }
+}
+```
+
+This ensures a seamless development workflow for known, highly trusted plugins while maintaining strict verification for untrusted third-party additions. Additionally, the XyPriss configuration parser intelligently strips any trailing commas from `xypriss.config.jsonc` out-of-the-box ensuring smooth security configuration parsing.
 
 ### Dependency Audit & Revocation
 
@@ -260,9 +298,9 @@ Every file is hashed and stored once across the entire system within the global 
 
 Dependencies are rigorously stored by exact version under the project-local `node_modules/.xpm/vstore` and symlinked into the project's root `node_modules`. This "Ancestor Hoisting" architecture enforces strict isolation while avoiding ghost dependencies.
 
-### Targeted Resolution
+### Targeted Resolution & Lifecycle Execution
 
-Only the modified portions of the dependency graph are recalculated during updates, minimizing overhead and keeping incremental operations fast.
+Only the modified portions of the dependency graph are recalculated during updates, minimizing overhead and keeping incremental operations fast. Additionally, XFPM invokes lifecycle scripts (e.g., `postinstall`) exclusively for the dependencies targeted in the current transaction, preventing unnecessary execution of ambient project scripts and preserving environment stability.
 
 ---
 

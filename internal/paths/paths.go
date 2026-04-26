@@ -3,6 +3,7 @@ package paths
 import (
 	"os"
 	"path/filepath"
+	"strings"
 )
 
 var xfpmPath string = ".xfpm"
@@ -99,4 +100,20 @@ func LegacyStoragePaths() []string {
 		filepath.Join(home, "xpm_cache"),
 		filepath.Join(os.Getenv("HOME"), ".xpm"),
 	}
+}
+
+// PendingPluginsPath returns the path to the pending plugins verification file
+func PendingPluginsPath(projectRoot string) string {
+	return filepath.Join(LocalXpmDir(projectRoot), "pending_plugins.json")
+}
+
+// PackageVStoreDir returns the absolute directory for a specific package strictly inside the virtual store
+func PackageVStoreDir(projectRoot, pkgName, pkgVersion string) string {
+	importName := strings.ReplaceAll(pkgName, "/", "+") + "@" + pkgVersion
+	return filepath.Join(LocalVStoreDir(projectRoot), importName, "node_modules", pkgName)
+}
+
+// PackageSigPath returns the designated signature file path within the package root
+func PackageSigPath(pkgDir string) string {
+	return filepath.Join(pkgDir, "xypriss.plugin.xsig")
 }
