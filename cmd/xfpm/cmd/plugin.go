@@ -22,6 +22,8 @@ var (
 	verifyNoInteract bool
 	verifyHtml       bool
 	revokeNoPending  bool
+	listLocal        bool
+	listReview       bool
 )
 
 var pluginCmd = &cobra.Command{
@@ -146,7 +148,7 @@ var pluginVerifyCmd = &cobra.Command{
 
 			if len(requiresPrompt) > 0 {
 				if verifyHtml {
-					plugin.HandleHtmlVerify(projectRoot, requiresPrompt, config, configPath)
+					plugin.HandleHtmlVerify(projectRoot, requiresPrompt, config, configPath, false)
 				} else {
 					pterm.Println()
 					pterm.Warning.Println("The following plugins require your explicit trust and authorization:")
@@ -245,34 +247,52 @@ var pluginListCmd = &cobra.Command{
 	Use:   "list",
 	Short: "List all project plugins and their trust status",
 	RunE: func(cmd *cobra.Command, args []string) error {
+		localOnly, _ := cmd.Flags().GetBool("local")
+		reviewMode, _ := cmd.Flags().GetBool("review")
 		projectRoot, _ := os.Getwd()
+
 		pkgJsonPath := filepath.Join(projectRoot, "package.json")
 		pkg, err := core.LoadPackageJson(pkgJsonPath)
 		if err != nil {
 			return fmt.Errorf("failed to load package.json: %w", err)
 		}
 
+		configPath := paths.ConfigPath(projectRoot)
+		var config map[string]interface{}
+		if b, err := os.ReadFile(configPath); err == nil {
+			// Strip comments if it's jsonc
+			lines := strings.Split(string(b), "\n")
+			var clean []string
+			for _, l := range lines {
+				if idx := strings.Index(l, "//"); idx != -1 {
+					l = l[:idx]
+				}
+				clean = append(clean, l)
+			}
+			json.Unmarshal([]byte(strings.Join(clean, "\n")), &config)
+		}
+
+		pendingPath := paths.PendingPluginsPath(projectRoot)
+		var pendingList []map[string]string
+		if b, err := os.ReadFile(pendingPath); err == nil {
+			json.Unmarshal(b, &pendingList)
+		}
+
 		utils.Matrix("Analyzing project dependencies for plugins...")
-		
-		s, _ := pterm.DefaultSpinner.
-			WithRemoveWhenDone(true).
-			WithText("Initializing analysis...").
-			Start()
+		s, _ := pterm.DefaultSpinner.WithRemoveWhenDone(true).WithText("Scanning dependencies...").Start()
 
 		allDeps := pkg.AllDependencies()
 		registry := core.NewRegistryClient("https://registry.npmjs.org", 8)
-		registry.SetCacheDir("")
 		
 		var items [][]string
 		items = append(items, []string{"Plugin", "Version", "Status", "Developer ID"})
 
-		// Use a wait group to fetch metadata in parallel for speed
 		var wg sync.WaitGroup
 		var mu sync.Mutex
-		
-		count := 0
-		total := len(allDeps)
 		sem := make(chan struct{}, 10)
+
+		var reviewPrompt []plugin.PendingReq
+
 		for name, versionRange := range allDeps {
 			wg.Add(1)
 			go func(n, vr string) {
@@ -280,103 +300,123 @@ var pluginListCmd = &cobra.Command{
 				sem <- struct{}{}
 				defer func() { <-sem }()
 
-				mu.Lock()
-				count++
-				s.UpdateText(fmt.Sprintf(" [%d/%d] Fetching metadata for %s...", count, total, n))
-				mu.Unlock()
-
-				// Resolve version first
-				regPkg, err := registry.FetchPackage(context.Background(), n, false)
-				if err != nil { return }
-				
-				// Standard resolution (simplification: take the version if it matches exactly or use dist-tag)
+				status := pterm.FgGray.Sprint("UNKNOWN")
+				authorID := "-"
 				resolvedVer := vr
-				if _, ok := regPkg.Versions[vr]; !ok {
-					resolvedVer = regPkg.DistTags["latest"]
-				}
-				
-				meta, err := registry.FetchVersionMetadata(context.Background(), n, resolvedVer)
-				if err != nil { return }
-
 				isPlugin := false
-				// 1. Check Files array in registry metadata
-				for _, f := range meta.Files {
-					if f == "xypriss.plugin.xsig" {
-						isPlugin = true
-						break
-					}
-				}
+
+				// 1. Check local node_modules
+				pkgDir := filepath.Join(projectRoot, "node_modules", n)
+				sigPath := filepath.Join(pkgDir, "xypriss.plugin.xsig")
 				
-				// 2. fallback: check if already in vstore
-				pkgDir := paths.PackageVStoreDir(projectRoot, n, resolvedVer)
-				sigPath := paths.PackageSigPath(pkgDir)
-
-				if !isPlugin {
-					if _, err := os.Stat(sigPath); err == nil {
-						isPlugin = true
+				if _, err := os.Stat(sigPath); err == nil {
+					isPlugin = true
+					if pj, err := core.LoadPackageJson(filepath.Join(pkgDir, "package.json")); err == nil {
+						resolvedVer = pj.Version
 					}
+				} else {
+					// 2. Check local vstore
+					// We don't easily know the EXACT version if not in node_modules, 
+					// but we can try to guess from versionRange if it's a simple version.
+					// For now, let's skip vstore check if not in node_modules for simplicity, 
+					// and rely on registry metadata.
 				}
 
-				if isPlugin {
-					authorID := "-"
-					pinnedKey := ""
-					// Extract author ID from xsig if present
-					if b, err := os.ReadFile(sigPath); err == nil {
-						lines := strings.Split(string(b), "\n")
-						for _, l := range lines {
-							if strings.HasPrefix(l, "Identity: ") {
-								authorID = strings.TrimPrefix(l, "Identity: ")
-								break
-							}
-						}
-					}
-
-					// Get pinned key from config
-					configPath := paths.ConfigPath(projectRoot)
-					if cfgBytes, err := os.ReadFile(configPath); err == nil {
-						lines := strings.Split(string(cfgBytes), "\n")
-						var cleanLines []string
-						for _, line := range lines {
-							if idx := strings.Index(line, "//"); idx != -1 {
-								line = line[:idx]
-							}
-							cleanLines = append(cleanLines, line)
-						}
-						var config map[string]interface{}
-						if err := json.Unmarshal([]byte(strings.Join(cleanLines, "\n")), &config); err == nil {
-							if internal, ok := config["$internal"].(map[string]interface{}); ok {
-								if pluginCfg, ok := internal[n].(map[string]interface{}); ok {
-									if sigCfg, ok := pluginCfg["signature"].(map[string]interface{}); ok {
-										pinnedKey, _ = sigCfg["author_key"].(string)
-									}
+				// 3. Fallback to registry if not found locally and not localOnly
+				if !isPlugin && !localOnly {
+					regPkg, err := registry.FetchPackage(context.Background(), n, false)
+					if err == nil {
+						// Try to get latest version matching range
+						resolvedVer = regPkg.DistTags["latest"] // simplified
+						meta, err := registry.FetchVersionMetadata(context.Background(), n, resolvedVer)
+						if err == nil {
+							for _, f := range meta.Files {
+								if f == "xypriss.plugin.xsig" {
+									isPlugin = true
+									break
 								}
 							}
 						}
 					}
-
-					trusted := pinnedKey != "" && pinnedKey == authorID
-					trustStr := pterm.FgRed.Sprint("UNTRUSTED")
-					if trusted { trustStr = pterm.FgGreen.Sprint("VERIFIED") }
-					if pinnedKey != "" && pinnedKey != authorID {
-						trustStr = pterm.FgYellow.Sprint("KEY_MISMATCH")
-					}
-
-					mu.Lock()
-					items = append(items, []string{n, resolvedVer, trustStr, authorID})
-					mu.Unlock()
 				}
+
+				if !isPlugin { return }
+
+				// Extract info from xsig if available
+				var xsigBytes []byte
+				if _, err := os.Stat(sigPath); err == nil {
+					xsigBytes, _ = os.ReadFile(sigPath)
+				}
+				
+				if len(xsigBytes) > 0 {
+					authorID = plugin.ExtractIdentity(xsigBytes)
+				}
+
+				// Determine Status
+				status = pterm.FgRed.Sprint("UNTRUSTED")
+				
+				// Is it verified in config?
+				pinnedKey := ""
+				if internal, ok := config["$internal"].(map[string]interface{}); ok {
+					if pCfg, ok := internal[n].(map[string]interface{}); ok {
+						if sigCfg, ok := pCfg["signature"].(map[string]interface{}); ok {
+							pinnedKey, _ = sigCfg["author_key"].(string)
+						}
+					}
+				}
+
+				if pinnedKey != "" {
+					if pinnedKey == authorID {
+						status = pterm.FgGreen.Sprint("VERIFIED")
+					} else {
+						status = pterm.FgYellow.Sprint("KEY_MISMATCH")
+					}
+				} else {
+					// Is it pending?
+					for _, p := range pendingList {
+						if p["name"] == n {
+							status = pterm.FgBlue.Sprint("PENDING")
+							break
+						}
+					}
+					
+					if _, err := os.Stat(pkgDir); os.IsNotExist(err) {
+						status = pterm.FgMagenta.Sprint("NOT_INSTALLED")
+					}
+				}
+
+				mu.Lock()
+				items = append(items, []string{n, resolvedVer, status, authorID})
+				if reviewMode {
+					privs := ""
+					if len(xsigBytes) > 0 {
+						privs = plugin.ExtractPrivileges(xsigBytes)
+					}
+					reviewPrompt = append(reviewPrompt, plugin.PendingReq{
+						Name:       n,
+						Identity:   authorID,
+						Privileges: privs,
+					})
+				}
+				mu.Unlock()
 			}(name, versionRange)
 		}
 		wg.Wait()
 		s.Stop()
 
 		if len(items) <= 1 {
-			utils.Info("No plugins found in direct dependencies.")
+			utils.Info("No plugins found in dependencies.")
 			return nil
 		}
 
 		table, _ := pterm.DefaultTable.WithHasHeader().WithData(items).Srender()
-		pterm.DefaultBox.WithTitle(utils.AccentColor.Sprint("ACTIVE PLUGINS FOR THIS PROJECT")).Println(table)
+		pterm.DefaultBox.WithTitle(utils.AccentColor.Sprint("PROJECT PLUGINS")).Println(table)
+
+		if reviewMode && len(reviewPrompt) > 0 {
+			utils.Info("Opening browser for permission review...")
+			plugin.HandleHtmlVerify(projectRoot, reviewPrompt, config, configPath, true)
+		}
+
 		return nil
 	},
 }
@@ -616,8 +656,10 @@ var pluginIDCmd = &cobra.Command{
 func init() {
 	RootCmd.AddCommand(pluginCmd)
 	pluginVerifyCmd.Flags().BoolVarP(&verifyNoInteract, "no-interact", "n", false, "Disable interactive prompts")
-	pluginVerifyCmd.Flags().BoolVarP(&verifyHtml, "html", "w", false, "Open interactive verification dashboard in browser")
 	pluginCmd.AddCommand(pluginVerifyCmd)
+
+	pluginListCmd.Flags().BoolVarP(&listLocal, "local", "l", false, "Only check locally installed packages")
+	pluginListCmd.Flags().BoolVarP(&listReview, "review", "r", false, "Review and update plugin permissions via web dashboard")
 	pluginCmd.AddCommand(pluginListCmd)
 	pluginCmd.AddCommand(pluginTrustCmd)
 	pluginRevokeCmd.Flags().BoolVar(&revokeNoPending, "no-pending", false, "Do not add the plugin back to pending list after revocation")

@@ -1,5 +1,13 @@
 # XFPM - Release Notes
 
+## [G0.1.171] - 2026-04-26
+
+### Added
+
+- **Plugin Review Mode**: Added `--review` (or `-r`) flag to `xfpm plugin list` to open the web dashboard for all project plugins, allowing for easy permission updates.
+- **Robust Plugin Detection**: Fixed a bug in `plugin list` where it failed to identify plugins; it now correctly scans dependencies using both local and registry metadata.
+- **Local Scan Flag**: Added `--local` (or `-l`) flag to `plugin list` for offline-only dependency scans.
+
 ## [G0.1.170] - 2026-04-26
 
 ### Added

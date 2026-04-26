@@ -368,7 +368,7 @@
         </div>
         <span class="logo-name">XFPM</span>
       </div>
-      <h1>Plugin Verification</h1>
+      <h1>{{if .IsReview}}Plugin Review{{else}}Plugin Verification{{end}}</h1>
       <p>Review and authorize privileges for each plugin<br>before they become active on your system.</p>
       <div class="hdr-divider"></div>
     </header>
@@ -380,7 +380,7 @@
       <div style="text-align:center;margin-bottom:18px;">
         <span class="count-pill">
           <span class="count-dot"></span>
-          {{len .Plugins}} plugin(s) pending
+          {{len .Plugins}} plugin(s) {{if .IsReview}}under review{{else}}pending{{end}}
         </span>
       </div>
 
@@ -412,7 +412,7 @@
           <div class="priv-grid">
             {{range .RequestedPrivileges}}
             <label class="priv-item">
-              <input type="checkbox" name="perm-{{$p.Name}}-{{.ID}}" class="xchk" checked />
+              <input type="checkbox" name="perm-{{$p.Name}}-{{.ID}}" class="xchk" {{if .Approved}}checked{{end}} />
               <div class="priv-body">
                 <div class="priv-name">{{.Name}}</div>
                 <div class="priv-desc">{{.Description}}</div>
@@ -434,7 +434,7 @@
           <div class="action-bar">
             <div class="ready-dot"><span></span>ready</div>
             <button type="button" class="btn-cancel" onclick="doCancel()">Cancel</button>
-            <button type="submit" class="btn-auth">Authorize Selected</button>
+            <button type="submit" class="btn-auth">{{if .IsReview}}Update Configuration{{else}}Authorize Selected{{end}}</button>
           </div>
         </div>
       </div>
@@ -463,7 +463,7 @@
                     <path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7"/>
                   </svg>
                 </div>
-                <h2 style="font-size:20px;font-weight:800;margin-bottom:6px;color:#dde6f0;">Authorization complete</h2>
+                <h2 style="font-size:20px;font-weight:800;margin-bottom:6px;color:#dde6f0;">{{if .IsReview}}Configuration updated{{else}}Authorization complete{{end}}</h2>
                 <p style="font-size:13px;color:#4e6280;">You can now return to your terminal.</p>
               </div>
             </div>
