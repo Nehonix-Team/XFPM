@@ -2,10 +2,29 @@ package utils
 
 import (
 	"context"
+	"fmt"
 	"os/exec"
 	"runtime"
 	"strings"
 )
+
+// OpenBrowser opens the specified URL in the default system browser.
+func OpenBrowser(url string) {
+	var err error
+	switch runtime.GOOS {
+	case "linux":
+		err = exec.Command("xdg-open", url).Start()
+	case "windows":
+		err = exec.Command("rundll32", "url.dll,FileProtocolHandler", url).Start()
+	case "darwin":
+		err = exec.Command("open", url).Start()
+	default:
+		err = fmt.Errorf("unsupported platform")
+	}
+	if err != nil {
+		fmt.Printf(" [!] Warning: Could not open browser: %v\n", err)
+	}
+}
 
 // GetShellCommand returns an exec.Cmd configured with the appropriate shell for the current OS.
 func GetShellCommand(ctx context.Context, command string) *exec.Cmd {
