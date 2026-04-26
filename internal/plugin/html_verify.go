@@ -216,7 +216,33 @@ func HandleHtmlVerify(projectRoot string, pending []PendingReq, config map[strin
 			w.WriteHeader(500)
 			return
 		}
-		// Write 200 OK
+		w.WriteHeader(200)
+	})
+
+	http.HandleFunc("/install", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != "POST" {
+			w.WriteHeader(405)
+			return
+		}
+		if err := r.ParseForm(); err != nil {
+			w.WriteHeader(400)
+			return
+		}
+
+		pkgName := r.FormValue("package")
+		pkgVer := r.FormValue("version")
+		if pkgName == "" || pkgVer == "" {
+			w.WriteHeader(400)
+			return
+		}
+
+		if err := InstallPendingPlugin(projectRoot, pkgName, pkgVer); err != nil {
+			utils.Error("Remote installation failed for %s@%s: %v", pkgName, pkgVer, err)
+			w.WriteHeader(500)
+			w.Write([]byte(err.Error()))
+			return
+		}
+
 		w.WriteHeader(200)
 	})
 
