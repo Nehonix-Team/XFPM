@@ -386,8 +386,19 @@ var pluginListCmd = &cobra.Command{
 				// Determine Status
 				status = pterm.FgRed.Sprint("UNTRUSTED")
 				
+				isMissingLocally := false
+				if _, err := os.Stat(pkgDir); os.IsNotExist(err) {
+					isMissingLocally = true
+				}
+
 				if pinnedKey != "" {
-					if authorID != "-" && pinnedKey != authorID {
+					if authorID == "-" {
+						if isMissingLocally {
+							status = pterm.FgMagenta.Sprint("NOT_INSTALLED")
+						} else {
+							status = pterm.FgYellow.Sprint("KEY_MISMATCH") // We have a pinned key but couldn't verify it locally
+						}
+					} else if pinnedKey != authorID {
 						status = pterm.FgYellow.Sprint("KEY_MISMATCH")
 					} else {
 						status = pterm.FgGreen.Sprint("VERIFIED")
@@ -401,7 +412,7 @@ var pluginListCmd = &cobra.Command{
 						}
 					}
 					
-					if _, err := os.Stat(pkgDir); os.IsNotExist(err) && !localOnly {
+					if isMissingLocally && !localOnly {
 						status = pterm.FgMagenta.Sprint("NOT_INSTALLED")
 					}
 				}

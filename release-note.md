@@ -1,5 +1,12 @@
 # XFPM - Release Notes
 
+## [G0.1.174] - 2026-04-26
+
+### Fixed
+
+- **CLI Status Accuracy**: Fixed a bug where a plugin lacking a local installation or signature was incorrectly marked as `VERIFIED` if a config entry existed. It now properly reports as `NOT_INSTALLED` or `KEY_MISMATCH`.
+- **UI Toggle State**: Fixed Web UI to accurately leave the `Trust` toggle unchecked for plugins that are still in the `PENDING` state, even in Review Mode.
+
 ## [G0.1.173] - 2026-04-26
 
 ### Fixed
