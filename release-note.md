@@ -1,5 +1,16 @@
 # XFPM - Release Notes
 
+## [G0.1.172] - 2026-04-26
+
+### Fixed
+
+- **Verify Shorthand Fix**: Restored missing `-w` and `--html` flags in `xfpm plugin verify` that were accidentally removed during modularization.
+- **Dependency Scan Fix**: Fixed `plugin list` to correctly scan both `dependencies` and `devDependencies`, ensuring all plugins are identified.
+
+### Added
+
+- **Interactive Revocation**: The Permission Review Dashboard (`-r`) now features a "Revoke" button to instantly retire trust and permissions for any plugin directly from the UI.
+
 ## [G0.1.171] - 2026-04-26
 
 ### Added

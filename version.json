@@ -2,8 +2,8 @@
   "name": "XFPM (XyPriss Package Manager)",
   "description": "The ultra-fast package manager for the XyPriss ecosystem.",
   "warning": "CRITICAL: Public modifications to this file are strictly forbidden. Internal Nehonix metadata ONLY.",
-  "latest": "vG0.1.171",
-  "message": "Major Release: Overhauled Plugin List detection logic and added interactive Permission Review Mode.",
+  "latest": "vG0.1.172",
+  "message": "Major Release: Restored broken verify flags, enhanced plugin detection, and implemented interactive revocation in Dashboard.",
   "metadata": {
     "releaseDate": "2026-04-26",
     "channel": "stable"

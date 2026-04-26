@@ -121,8 +121,12 @@ func HandleHtmlVerify(projectRoot string, pending []PendingReq, config map[strin
 		}
 
 		for _, p := range pending {
-			// Check if trust checkbox was checked: "trust-<name>"
+			// In review mode, if trust checkbox was UNCHECKED, it means REVOKE
 			if result["trust-"+p.Name] != "on" {
+				if isReview {
+					delete(internal, p.Name)
+					utils.Info("Revoked trust for %s via dashboard.", p.Name)
+				}
 				continue
 			}
 
@@ -157,18 +161,18 @@ func HandleHtmlVerify(projectRoot string, pending []PendingReq, config map[strin
 				}
 			}
 
-			if len(approved) > 0 {
-				permCfgRaw, ok := pluginCfg["permissions"]
-				if !ok {
-					permCfgRaw = make(map[string]interface{})
-				}
-				permCfg, ok := permCfgRaw.(map[string]interface{})
-				if !ok {
-					permCfg = make(map[string]interface{})
-				}
-				permCfg["allowedHooks"] = approved
-				pluginCfg["permissions"] = permCfg
+			// In review mode, we ALWAYS update the permissions block, even if empty
+			permCfgRaw, ok := pluginCfg["permissions"]
+			if !ok {
+				permCfgRaw = make(map[string]interface{})
 			}
+			permCfg, ok := permCfgRaw.(map[string]interface{})
+			if !ok {
+				permCfg = make(map[string]interface{})
+			}
+			permCfg["allowedHooks"] = approved
+			pluginCfg["permissions"] = permCfg
+			
 			internal[p.Name] = pluginCfg
 		}
 		config["$internal"] = internal
