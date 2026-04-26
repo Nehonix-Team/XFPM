@@ -326,7 +326,23 @@
     .btn-auth:hover::before { opacity:1; }
     .btn-auth:active { transform: scale(.97); }
 
-    /* ── Success ──────────────────────────────────────── */
+    .btn-revoke {
+      padding: 6px 14px; border-radius: 8px;
+      font-size: 11px; font-weight: 700; letter-spacing: .05em;
+      text-transform: uppercase; color: #ff4d4d;
+      background: rgba(255, 77, 77, 0.08);
+      border: 1px solid rgba(255, 77, 77, 0.2);
+      cursor: pointer; transition: all .2s;
+    }
+    .btn-revoke:hover { background: rgba(255, 77, 77, 0.15); border-color: rgba(255, 77, 77, 0.4); transform: translateY(-1px); }
+
+    .status-badge {
+      font-size: 10px; font-weight: 700; padding: 2px 8px; border-radius: 4px; text-transform: uppercase;
+      letter-spacing: .05em; margin-left: 8px; vertical-align: middle;
+    }
+    .status-authorized { background: rgba(16, 185, 129, 0.1); color: #10b981; border: 1px solid rgba(16, 185, 129, 0.2); }
+    .status-pending { background: rgba(30, 107, 255, 0.1); color: var(--blue); border: 1px solid rgba(30, 107, 255, 0.2); }
+
     .success-wrap {
       min-height: 100vh; display:flex; align-items:center; justify-content:center;
       background: var(--c); font-family: 'Outfit', sans-serif;
@@ -391,13 +407,23 @@
         <div class="card-top">
           <div class="avatar">{{slice .Name 0 1}}</div>
           <div class="card-meta">
-            <div class="card-name">{{.Name}}</div>
+            <div class="card-name">
+              {{.Name}}
+              {{if $.IsReview}}
+                <span class="status-badge status-authorized">Authorized</span>
+              {{else}}
+                <span class="status-badge status-pending">Pending</span>
+              {{end}}
+            </div>
             <div class="card-dev">
               <span class="dev-label">DEV</span>
               <span class="dev-id">{{.Identity}}</span>
             </div>
           </div>
           <div class="trust-wrap">
+            {{if $.IsReview}}
+            <button type="button" class="btn-revoke" onclick="revokePlugin('{{.Name}}')">Revoke</button>
+            {{end}}
             <span class="trust-lbl">Trust</span>
             <label class="toggle">
               <input type="checkbox" id="trust-{{.Name}}" name="trust-{{.Name}}" checked />
@@ -475,8 +501,24 @@
     };
 
     function doCancel() {
-      if (confirm('Cancel plugin verification?'))
+      if (confirm('Cancel plugin management?'))
         fetch('/cancel', { method: 'POST' }).then(() => window.close());
+    }
+
+    function revokePlugin(name) {
+      if (confirm(`Are you sure you want to revoke trust for "${name}"? This will remove it from authorized plugins.`)) {
+        const toggle = document.getElementById('trust-' + name);
+        if (toggle) {
+          toggle.checked = false;
+          // Optionally auto-submit or just visually indicate
+          const card = toggle.closest('.plugin-card');
+          if (card) {
+            card.style.opacity = '0.5';
+            card.style.filter = 'grayscale(1)';
+            card.style.pointerEvents = 'none';
+          }
+        }
+      }
     }
   </script>
 </body>

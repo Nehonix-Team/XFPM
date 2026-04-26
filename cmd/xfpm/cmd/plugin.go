@@ -271,6 +271,7 @@ var pluginListCmd = &cobra.Command{
 			}
 			json.Unmarshal([]byte(strings.Join(clean, "\n")), &config)
 		}
+		if config == nil { config = make(map[string]interface{}) }
 
 		pendingPath := paths.PendingPluginsPath(projectRoot)
 		var pendingList []map[string]string
@@ -281,7 +282,22 @@ var pluginListCmd = &cobra.Command{
 		utils.Matrix("Analyzing project dependencies for plugins...")
 		s, _ := pterm.DefaultSpinner.WithRemoveWhenDone(true).WithText("Scanning dependencies...").Start()
 
-		allDeps := pkg.AllDependencies()
+		allDeps := make(map[string]string)
+		// Include both dependencies and devDependencies
+		for k, v := range pkg.Dependencies { allDeps[k] = v }
+		for k, v := range pkg.DevDependencies { allDeps[k] = v }
+
+		// In review mode, also include orphans present in config
+		if reviewMode {
+			if internal, ok := config["$internal"].(map[string]interface{}); ok {
+				for name := range internal {
+					if _, exists := allDeps[name]; !exists {
+						allDeps[name] = "latest" // unknown version range, use latest
+					}
+				}
+			}
+		}
+
 		registry := core.NewRegistryClient("https://registry.npmjs.org", 8)
 		
 		var items [][]string
@@ -305,57 +321,7 @@ var pluginListCmd = &cobra.Command{
 				resolvedVer := vr
 				isPlugin := false
 
-				// 1. Check local node_modules
-				pkgDir := filepath.Join(projectRoot, "node_modules", n)
-				sigPath := filepath.Join(pkgDir, "xypriss.plugin.xsig")
-				
-				if _, err := os.Stat(sigPath); err == nil {
-					isPlugin = true
-					if pj, err := core.LoadPackageJson(filepath.Join(pkgDir, "package.json")); err == nil {
-						resolvedVer = pj.Version
-					}
-				} else {
-					// 2. Check local vstore
-					// We don't easily know the EXACT version if not in node_modules, 
-					// but we can try to guess from versionRange if it's a simple version.
-					// For now, let's skip vstore check if not in node_modules for simplicity, 
-					// and rely on registry metadata.
-				}
-
-				// 3. Fallback to registry if not found locally and not localOnly
-				if !isPlugin && !localOnly {
-					regPkg, err := registry.FetchPackage(context.Background(), n, false)
-					if err == nil {
-						// Try to get latest version matching range
-						resolvedVer = regPkg.DistTags["latest"] // simplified
-						meta, err := registry.FetchVersionMetadata(context.Background(), n, resolvedVer)
-						if err == nil {
-							for _, f := range meta.Files {
-								if f == "xypriss.plugin.xsig" {
-									isPlugin = true
-									break
-								}
-							}
-						}
-					}
-				}
-
-				if !isPlugin { return }
-
-				// Extract info from xsig if available
-				var xsigBytes []byte
-				if _, err := os.Stat(sigPath); err == nil {
-					xsigBytes, _ = os.ReadFile(sigPath)
-				}
-				
-				if len(xsigBytes) > 0 {
-					authorID = plugin.ExtractIdentity(xsigBytes)
-				}
-
-				// Determine Status
-				status = pterm.FgRed.Sprint("UNTRUSTED")
-				
-				// Is it verified in config?
+				// Detect if it is already verified in config
 				pinnedKey := ""
 				if internal, ok := config["$internal"].(map[string]interface{}); ok {
 					if pCfg, ok := internal[n].(map[string]interface{}); ok {
@@ -365,11 +331,55 @@ var pluginListCmd = &cobra.Command{
 					}
 				}
 
+				// 1. Check local node_modules
+				pkgDir := filepath.Join(projectRoot, "node_modules", n)
+				sigPath := filepath.Join(pkgDir, "xypriss.plugin.xsig")
+				
+				var xsigBytes []byte
+				if _, err := os.Stat(sigPath); err == nil {
+					isPlugin = true
+					if pj, err := core.LoadPackageJson(filepath.Join(pkgDir, "package.json")); err == nil {
+						resolvedVer = pj.Version
+					}
+					xsigBytes, _ = os.ReadFile(sigPath)
+				}
+				
+				// 2. Fallback to registry if not found locally and not localOnly
+				// But ONLY if not already known to be a plugin from config
+				if !isPlugin && pinnedKey == "" && !localOnly {
+					regPkg, err := registry.FetchPackage(context.Background(), n, false)
+					if err == nil {
+						resolvedVer = regPkg.DistTags["latest"]
+						meta, err := registry.FetchVersionMetadata(context.Background(), n, resolvedVer)
+						if err == nil {
+							for _, f := range meta.Files {
+								if f == "xypriss.plugin.xsig" {
+									isPlugin = true
+									// Fetch signature to get author ID if possible (optional but good for 'list')
+									xsigBytes, _ = registry.FetchFileFromTarball(context.Background(), meta.Dist.Tarball, "xypriss.plugin.xsig")
+									break
+								}
+							}
+						}
+					}
+				} else if pinnedKey != "" {
+					isPlugin = true // Definitely a plugin since it's in config
+				}
+
+				if !isPlugin { return }
+
+				if len(xsigBytes) > 0 {
+					authorID = plugin.ExtractIdentity(xsigBytes)
+				}
+
+				// Determine Status
+				status = pterm.FgRed.Sprint("UNTRUSTED")
+				
 				if pinnedKey != "" {
-					if pinnedKey == authorID {
-						status = pterm.FgGreen.Sprint("VERIFIED")
-					} else {
+					if authorID != "-" && pinnedKey != authorID {
 						status = pterm.FgYellow.Sprint("KEY_MISMATCH")
+					} else {
+						status = pterm.FgGreen.Sprint("VERIFIED")
 					}
 				} else {
 					// Is it pending?
@@ -380,7 +390,7 @@ var pluginListCmd = &cobra.Command{
 						}
 					}
 					
-					if _, err := os.Stat(pkgDir); os.IsNotExist(err) {
+					if _, err := os.Stat(pkgDir); os.IsNotExist(err) && !localOnly {
 						status = pterm.FgMagenta.Sprint("NOT_INSTALLED")
 					}
 				}
@@ -656,6 +666,7 @@ var pluginIDCmd = &cobra.Command{
 func init() {
 	RootCmd.AddCommand(pluginCmd)
 	pluginVerifyCmd.Flags().BoolVarP(&verifyNoInteract, "no-interact", "n", false, "Disable interactive prompts")
+	pluginVerifyCmd.Flags().BoolVarP(&verifyHtml, "html", "w", false, "Open interactive verification dashboard in browser")
 	pluginCmd.AddCommand(pluginVerifyCmd)
 
 	pluginListCmd.Flags().BoolVarP(&listLocal, "local", "l", false, "Only check locally installed packages")
