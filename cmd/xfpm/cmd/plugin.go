@@ -142,6 +142,7 @@ var pluginVerifyCmd = &cobra.Command{
 						Name:       pkgName,
 						Identity:   identity,
 						Privileges: privs,
+						Status:     "pending",
 					})
 				}
 			}
@@ -352,12 +353,22 @@ var pluginListCmd = &cobra.Command{
 						resolvedVer = regPkg.DistTags["latest"]
 						meta, err := registry.FetchVersionMetadata(context.Background(), n, resolvedVer)
 						if err == nil {
+							inFiles := false
 							for _, f := range meta.Files {
 								if f == "xypriss.plugin.xsig" {
-									isPlugin = true
-									// Fetch signature to get author ID if possible (optional but good for 'list')
-									xsigBytes, _ = registry.FetchFileFromTarball(context.Background(), meta.Dist.Tarball, "xypriss.plugin.xsig")
+									inFiles = true
 									break
+								}
+							}
+							
+							if inFiles {
+								isPlugin = true
+								xsigBytes, _ = registry.FetchFileFromTarball(context.Background(), meta.Dist.Tarball, "xypriss.plugin.xsig")
+							} else {
+								// Metadata Files missing or doesn't mention sig - try direct fetch from tarball as ultimate fallback
+								xsigBytes, err = registry.FetchFileFromTarball(context.Background(), meta.Dist.Tarball, "xypriss.plugin.xsig")
+								if err == nil && len(xsigBytes) > 0 {
+									isPlugin = true
 								}
 							}
 						}
@@ -402,10 +413,17 @@ var pluginListCmd = &cobra.Command{
 					if len(xsigBytes) > 0 {
 						privs = plugin.ExtractPrivileges(xsigBytes)
 					}
+					
+					webStatus := "pending"
+					if pinnedKey != "" && pinnedKey == authorID {
+						webStatus = "authorized"
+					}
+
 					reviewPrompt = append(reviewPrompt, plugin.PendingReq{
 						Name:       n,
 						Identity:   authorID,
 						Privileges: privs,
+						Status:     webStatus,
 					})
 				}
 				mu.Unlock()

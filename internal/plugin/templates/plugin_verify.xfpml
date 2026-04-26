@@ -409,7 +409,7 @@
           <div class="card-meta">
             <div class="card-name">
               {{.Name}}
-              {{if $.IsReview}}
+              {{if eq .Status "authorized"}}
                 <span class="status-badge status-authorized">Authorized</span>
               {{else}}
                 <span class="status-badge status-pending">Pending</span>
