@@ -377,11 +377,30 @@ func HandleHtmlVerify(projectRoot string, pending []PendingReq, config map[strin
 			os.WriteFile(configPath, out, 0644)
 		}
 		
-		w.WriteHeader(200)
-
+		// Refresh in-memory plugin list from the new config to sync Approved flags
+		var pReqs []PendingReq
+		for _, p := range currentPlugins {
+			status := p.Status
+			// If it was newly authorized in this loop, ensure we reflect it
+			val, exists := req.Data["trust-"+p.Name]
+			if exists && val == "on" {
+				status = "authorized"
+			}
+			pReqs = append(pReqs, PendingReq{
+				Name:       p.Name,
+				Version:    p.Version,
+				Identity:   p.Identity,
+				Privileges: p.Privileges,
+				Status:     status,
+			})
+		}
+		
 		mu.Lock()
+		plugins = buildWebPlugins(projectRoot, pReqs, config, isReview)
+		w.WriteHeader(200)
 		b, _ := json.Marshal(plugins)
 		mu.Unlock()
+		
 		broadcast(string(b))
 
 		if req.Close {
