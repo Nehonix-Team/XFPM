@@ -57,37 +57,37 @@ func RevokeTrust(projectRoot string, pkgName string, noPending bool) error {
 		utils.Success("Trust revoked and permissions retired for %s.", pkgName)
 	}
 
-	if !noPending {
-		pendingPath := paths.PendingPluginsPath(projectRoot)
-		var pending []map[string]string
-		if data, err := os.ReadFile(pendingPath); err == nil {
-			json.Unmarshal(data, &pending)
-		}
+	// Always add back to pending list so it remains manageable in the UI
+	pendingPath := paths.PendingPluginsPath(projectRoot)
+	var pending []map[string]string
+	if data, err := os.ReadFile(pendingPath); err == nil {
+		json.Unmarshal(data, &pending)
+	}
 
-		// Check if already pending
-		found := false
-		for _, p := range pending {
-			if p["name"] == pkgName && p["version"] == pkgVer {
-				found = true
-				break
-			}
+	found := false
+	for _, p := range pending {
+		if p["name"] == pkgName && p["version"] == pkgVer {
+			found = true
+			break
 		}
+	}
 
-		if !found {
-			pending = append(pending, map[string]string{
-				"name":    pkgName,
-				"version": pkgVer,
-			})
-			if out, err := json.MarshalIndent(pending, "", "  "); err == nil {
-				os.MkdirAll(filepath.Dir(pendingPath), 0755)
-				os.WriteFile(pendingPath, out, 0644)
-				utils.Info("Plugin %s@%s moved back to pending list.", pkgName, pkgVer)
-			}
+	if !found {
+		pending = append(pending, map[string]string{
+			"name":    pkgName,
+			"version": pkgVer,
+		})
+		if out, err := json.MarshalIndent(pending, "", "  "); err == nil {
+			os.MkdirAll(filepath.Dir(pendingPath), 0755)
+			os.WriteFile(pendingPath, out, 0644)
+			utils.Info("Plugin %s@%s moved back to pending list.", pkgName, pkgVer)
 		}
-	} else {
+	}
+
+	if noPending {
 		err := os.RemoveAll(pkgDir)
 		if err == nil {
-			utils.Info("Plugin symlink %s has been physically uninstalled.", pkgName)
+			utils.Info("Plugin symlink %s has been physically uninstalled. It remains in pending list for future re-installation.", pkgName)
 		}
 	}
 
