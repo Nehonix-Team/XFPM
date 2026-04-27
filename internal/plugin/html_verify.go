@@ -293,22 +293,22 @@ func HandleHtmlVerify(projectRoot string, pending []PendingReq, config map[strin
 		revokedCount := 0
 
 		for _, p := range currentPlugins {
-			val, exists := req.Data["trust-"+p.Name]
-			isTrusted := exists && val == "on"
+			trustKey := "trust-" + p.Name
+			val, exists := req.Data[trustKey]
+			
+			// A plugin should be processed if:
+			// 1. It is already authorized (even if trust checkbox is missing from form)
+			// 2. It is newly trusted via the checkbox
+			isNewlyTrusted := exists && val == "on"
+			shouldProcess := p.Status == "authorized" || isNewlyTrusted
 
-			if !isTrusted {
-				if exists && isReview && p.Status == "authorized" {
+			if !shouldProcess {
+				// Handle Revocation if explicitly unchecked in review mode
+				if exists && val != "on" && isReview && p.Status == "authorized" {
 					if err := RevokeTrust(projectRoot, p.Name, false); err != nil {
 						utils.Error("Failed to revoke trust for %s: %v", p.Name, err)
 					}
 					delete(internal, p.Name)
-					mu.Lock()
-					for i, wp := range plugins {
-						if wp.Name == p.Name {
-							plugins[i].Status = "pending"
-						}
-					}
-					mu.Unlock()
 					revokedCount++
 					pterm.Warning.Printf("Plugin %s trust revoked via UI\n", p.Name)
 				}
@@ -316,31 +316,15 @@ func HandleHtmlVerify(projectRoot string, pending []PendingReq, config map[strin
 			}
 
 			pluginCfgRaw, ok := internal[p.Name]
-			if !ok {
-				pluginCfgRaw = make(map[string]interface{})
-			}
+			if !ok { pluginCfgRaw = make(map[string]interface{}) }
 			pluginCfg, ok := pluginCfgRaw.(map[string]interface{})
-			if !ok {
-				pluginCfg = make(map[string]interface{})
-			}
+			if !ok { pluginCfg = make(map[string]interface{}) }
 
 			if p.Identity != "" && p.Identity != "-" {
-				mu.Lock()
-				for i, wp := range plugins {
-					if wp.Name == p.Name {
-						plugins[i].Status = "authorized"
-					}
-				}
-				mu.Unlock()
-
 				sigCfgRaw, ok := pluginCfg["signature"]
-				if !ok {
-					sigCfgRaw = make(map[string]interface{})
-				}
+				if !ok { sigCfgRaw = make(map[string]interface{}) }
 				sigCfg, ok := sigCfgRaw.(map[string]interface{})
-				if !ok {
-					sigCfg = make(map[string]interface{})
-				}
+				if !ok { sigCfg = make(map[string]interface{}) }
 				sigCfg["author_key"] = p.Identity
 				pluginCfg["signature"] = sigCfg
 			}
@@ -349,27 +333,28 @@ func HandleHtmlVerify(projectRoot string, pending []PendingReq, config map[strin
 			if p.Privileges != "" && p.Privileges != "none" {
 				for _, id := range strings.Split(p.Privileges, ",") {
 					id = strings.TrimSpace(id)
-					perm := "perm-" + p.Name + "-" + id
-					if req.Data[perm] == "on" {
+					permKey := "perm-" + p.Name + "-" + id
+					if req.Data[permKey] == "on" {
 						approved = append(approved, id)
 					}
 				}
 			}
 
 			permCfgRaw, ok := pluginCfg["permissions"]
-			if !ok {
-				permCfgRaw = make(map[string]interface{})
-			}
+			if !ok { permCfgRaw = make(map[string]interface{}) }
 			permCfg, ok := permCfgRaw.(map[string]interface{})
-			if !ok {
-				permCfg = make(map[string]interface{})
-			}
+			if !ok { permCfg = make(map[string]interface{}) }
 			permCfg["allowedHooks"] = approved
 			pluginCfg["permissions"] = permCfg
 
 			internal[p.Name] = pluginCfg
 			authorizedCount++
-			pterm.Success.Printf("Plugin %s authorized with %d privileges\n", p.Name, len(approved))
+			
+			if isNewlyTrusted {
+				pterm.Success.Printf("Plugin %s authorized with %d privileges\n", p.Name, len(approved))
+			} else {
+				pterm.Info.Printf("Plugin %s permissions updated: %d hooks allowed\n", p.Name, len(approved))
+			}
 		}
 		config["$internal"] = internal
 
