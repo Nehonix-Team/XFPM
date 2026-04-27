@@ -392,6 +392,7 @@
     }
     .status-authorized { background: rgba(16, 185, 129, 0.1); color: #10b981; border: 1px solid rgba(16, 185, 129, 0.2); }
     .status-pending { background: rgba(30, 107, 255, 0.1); color: var(--blue); border: 1px solid rgba(30, 107, 255, 0.2); }
+    .status-not-installed { background: rgba(232, 121, 249, 0.1); color: #e879f9; border: 1px solid rgba(232, 121, 249, 0.2); }
 
     .success-wrap {
       min-height: 100vh; display:flex; align-items:center; justify-content:center;
@@ -451,7 +452,7 @@
       </div>
 
       {{range $i, $p := .Plugins}}
-      <div class="plugin-card{{if ne .Status "authorized"}} pending-card{{end}}">
+      <div class="plugin-card{{if ne .Status "authorized"}} pending-card{{end}}" id="card-{{.Name}}">
 
         <!-- top row -->
         <div class="card-top">
@@ -459,11 +460,15 @@
           <div class="card-meta">
             <div class="card-name">
               {{.Name}}
+              <span id="status-badge-{{.Name}}">
               {{if eq .Status "authorized"}}
                 <span class="status-badge status-authorized">Authorized</span>
+              {{else if eq .Status "NOT_INSTALLED"}}
+                <span class="status-badge status-not-installed">Not Installed</span>
               {{else}}
                 <span class="status-badge status-pending">Pending</span>
               {{end}}
+              </span>
             </div>
             <div class="card-dev">
               <span class="dev-label">DEV</span>
@@ -680,6 +685,59 @@
         closeRevokeModal();
       }
     };
+
+    // Real-time synchronization
+    const es = new EventSource('/events');
+    es.onmessage = (e) => {
+      try {
+        const plugins = JSON.parse(e.data);
+        updateDashboard(plugins);
+      } catch (err) { console.error('SSE Error:', err); }
+    };
+
+    function updateDashboard(plugins) {
+      plugins.forEach(p => {
+        // Update Card Class
+        const card = document.getElementById('card-' + p.name);
+        if (card) {
+          if (p.status === 'authorized') card.classList.remove('pending-card');
+          else card.classList.add('pending-card');
+        }
+
+        // Update Badge
+        const badgeWrap = document.getElementById('status-badge-' + p.name);
+        if (badgeWrap) {
+          let html = '';
+          if (p.status === 'authorized') html = '<span class="status-badge status-authorized">Authorized</span>';
+          else if (p.status === 'NOT_INSTALLED') html = '<span class="status-badge status-not-installed">Not Installed</span>';
+          else html = '<span class="status-badge status-pending">Pending</span>';
+          badgeWrap.innerHTML = html;
+        }
+
+        // Update Action Wrap
+        const actionWrap = document.getElementById('action-wrap-' + p.name);
+        if (actionWrap) {
+          let html = '';
+          if (p.status === 'authorized') {
+            html += `<button type="button" class="btn-revoke" onclick="showRevokeModal('${p.name}')">Revoke</button>`;
+          }
+          
+          if (p.status === 'NOT_INSTALLED') {
+            html += `<button type="button" class="btn-install" id="install-btn-${p.name}" onclick="installPlugin('${p.name}', '${p.version}')">Install</button>`;
+          } else {
+            const isChecked = (p.status === 'authorized' || !{{.IsReview}});
+            html += `
+              <span class="trust-lbl">Trust</span>
+              <label class="toggle">
+                <input type="checkbox" id="trust-${p.name}" name="trust-${p.name}" ${isChecked ? 'checked' : ''} />
+                <span class="tslider"></span>
+              </label>
+            `;
+          }
+          actionWrap.innerHTML = html;
+        }
+      });
+    }
   </script>
 </body>
 </html>

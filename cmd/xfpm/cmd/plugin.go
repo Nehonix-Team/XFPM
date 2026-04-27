@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
-	"path/filepath"
 	"regexp"
 	"strings"
 	"sync"
@@ -86,7 +85,7 @@ var pluginVerifyCmd = &cobra.Command{
 			if config == nil { config = make(map[string]interface{}) }
 
 			var trustedPlugins []string
-			if pkgJson, err := core.LoadPackageJson(filepath.Join(projectRoot, "package.json")); err == nil && pkgJson != nil {
+			if pkgJson, err := core.LoadPackageJson(paths.PackageJsonPath(projectRoot)); err == nil && pkgJson != nil {
 				if pkgJson.Xfpm != nil {
 					trustedPlugins = pkgJson.Xfpm.TrustedPlugins
 				}
@@ -138,11 +137,18 @@ var pluginVerifyCmd = &cobra.Command{
 				}
 
 				if !trusted && identity != "" {
+					status := "pending"
+					pkgDir := paths.NodeModulesPkgDir(projectRoot, pkgName)
+					if _, err := os.Stat(pkgDir); os.IsNotExist(err) && status != "authorized" {
+						status = "NOT_INSTALLED"
+					}
+
 					requiresPrompt = append(requiresPrompt, plugin.PendingReq{
 						Name:       pkgName,
+						Version:    pkgVer,
 						Identity:   identity,
 						Privileges: privs,
-						Status:     "pending",
+						Status:     status,
 					})
 				}
 			}
@@ -150,6 +156,20 @@ var pluginVerifyCmd = &cobra.Command{
 			if len(requiresPrompt) > 0 {
 				if verifyHtml {
 					plugin.HandleHtmlVerify(projectRoot, requiresPrompt, config, configPath, false)
+					
+					// IMPORTANT: Reload config after web UI session finishes to see updated trust/permissions
+					if b, err := os.ReadFile(configPath); err == nil {
+						lines := strings.Split(string(b), "\n")
+						var cleanLines []string
+						for _, l := range lines {
+							if idx := strings.Index(l, "//"); idx != -1 { l = l[:idx] }
+							cleanLines = append(cleanLines, l)
+						}
+						configStr := strings.Join(cleanLines, "\n")
+						re := regexp.MustCompile(`,(\s*[}\]])`)
+						configStr = re.ReplaceAllString(configStr, "$1")
+						json.Unmarshal([]byte(configStr), &config)
+					}
 				} else {
 					pterm.Println()
 					pterm.Warning.Println("The following plugins require your explicit trust and authorization:")
@@ -233,7 +253,7 @@ var pluginVerifyCmd = &cobra.Command{
 
 			utils.Info("Finalizing installation for %s@%s...", pkgName, pkgVer)
 			installer.LinkFilesToDir(pkgDir, index)
-			rootDest := filepath.Join(projectRoot, "node_modules", pkgName)
+			rootDest := paths.NodeModulesPkgDir(projectRoot, pkgName)
 			utils.LinkDir(pkgDir, rootDest)
 			utils.Success("Plugin %s@%s fully installed.", pkgName, pkgVer)
 		}
@@ -252,7 +272,7 @@ var pluginListCmd = &cobra.Command{
 		reviewMode, _ := cmd.Flags().GetBool("review")
 		projectRoot, _ := os.Getwd()
 
-		pkgJsonPath := filepath.Join(projectRoot, "package.json")
+		pkgJsonPath := paths.PackageJsonPath(projectRoot)
 		pkg, err := core.LoadPackageJson(pkgJsonPath)
 		if err != nil {
 			return fmt.Errorf("failed to load package.json: %w", err)
@@ -306,7 +326,7 @@ var pluginListCmd = &cobra.Command{
 
 		var wg sync.WaitGroup
 		var mu sync.Mutex
-		sem := make(chan struct{}, 10)
+		sem := make(chan struct{}, 32)
 
 		var reviewPrompt []plugin.PendingReq
 
@@ -321,6 +341,19 @@ var pluginListCmd = &cobra.Command{
 				authorID := "-"
 				resolvedVer := vr
 				isPlugin := false
+				isPending := false
+
+				// Check pending list first
+				for _, p := range pendingList {
+					if p["name"] == n {
+						isPlugin = true
+						isPending = true
+						resolvedVer = p["version"]
+						break
+					}
+				}
+
+				utils.Log("Analysis", n)
 
 				// Detect if it is already verified in config
 				pinnedKey := ""
@@ -333,16 +366,28 @@ var pluginListCmd = &cobra.Command{
 				}
 
 				// 1. Check local node_modules
-				pkgDir := filepath.Join(projectRoot, "node_modules", n)
-				sigPath := filepath.Join(pkgDir, "xypriss.plugin.xsig")
+				pkgDir := paths.NodeModulesPkgDir(projectRoot, n)
+				sigPath := paths.PackageSigPath(pkgDir)
 				
 				var xsigBytes []byte
 				if _, err := os.Stat(sigPath); err == nil {
 					isPlugin = true
-					if pj, err := core.LoadPackageJson(filepath.Join(pkgDir, "package.json")); err == nil {
+					isPending = false // Found locally - clear pending flag
+					if pj, err := core.LoadPackageJson(paths.PackageJsonPath(pkgDir)); err == nil {
 						resolvedVer = pj.Version
 					}
 					xsigBytes, _ = os.ReadFile(sigPath)
+				}
+				
+				// 1b. Check virtual store if not found in node_modules
+				if !isPlugin {
+					// Use resolvedVer from pending or try latest from package.json if it exists
+					vStorePath := paths.PackageVStoreDir(projectRoot, n, resolvedVer)
+					sigPath = paths.PackageSigPath(vStorePath)
+					if _, err := os.Stat(sigPath); err == nil {
+						isPlugin = true
+						xsigBytes, _ = os.ReadFile(sigPath)
+					}
 				}
 				
 				// 2. Fallback to registry if not found locally and not localOnly
@@ -351,6 +396,7 @@ var pluginListCmd = &cobra.Command{
 					regPkg, err := registry.FetchPackage(context.Background(), n, false)
 					if err == nil {
 						resolvedVer = regPkg.DistTags["latest"]
+						utils.LiveLog(fmt.Sprintf("Fetching metadata for %s@%s...", n, resolvedVer))
 						meta, err := registry.FetchVersionMetadata(context.Background(), n, resolvedVer)
 						if err == nil {
 							inFiles := false
@@ -363,12 +409,19 @@ var pluginListCmd = &cobra.Command{
 							
 							if inFiles {
 								isPlugin = true
+								utils.LiveLog(fmt.Sprintf("Signature confirmed in metadata for %s", n))
 								xsigBytes, _ = registry.FetchFileFromTarball(context.Background(), meta.Dist.Tarball, "xypriss.plugin.xsig")
 							} else {
-								// Metadata Files missing or doesn't mention sig - try direct fetch from tarball as ultimate fallback
-								xsigBytes, err = registry.FetchFileFromTarball(context.Background(), meta.Dist.Tarball, "xypriss.plugin.xsig")
-								if err == nil && len(xsigBytes) > 0 {
-									isPlugin = true
+								// Metadata Files missing or doesn't mention sig - only download if we have strong reason (e.g. keywords)
+								isSuspect := false
+								if meta.Description != "" && strings.Contains(strings.ToLower(meta.Description), "plugin") { isSuspect = true }
+								
+								if isSuspect {
+									utils.LiveLog(fmt.Sprintf("Searching for signature in %s tarball (description suspect)...", n))
+									xsigBytes, err = registry.FetchFileFromTarball(context.Background(), meta.Dist.Tarball, "xypriss.plugin.xsig")
+									if err == nil && len(xsigBytes) > 0 {
+										isPlugin = true
+									}
 								}
 							}
 						}
@@ -381,6 +434,7 @@ var pluginListCmd = &cobra.Command{
 
 				if len(xsigBytes) > 0 {
 					authorID = plugin.ExtractIdentity(xsigBytes)
+					utils.LiveLog(fmt.Sprintf("Identity verified: %s", authorID))
 				}
 
 				// Determine Status
@@ -391,30 +445,31 @@ var pluginListCmd = &cobra.Command{
 					isMissingLocally = true
 				}
 
+				// Check if plugin has ANY config entry (permissions or signature)
+				hasConfigEntry := false
+				if internal, ok := config["$internal"].(map[string]interface{}); ok {
+					_, hasConfigEntry = internal[n]
+				}
+
 				if pinnedKey != "" {
 					if authorID == "-" {
 						if isMissingLocally {
 							status = pterm.FgMagenta.Sprint("NOT_INSTALLED")
 						} else {
-							status = pterm.FgYellow.Sprint("KEY_MISMATCH") // We have a pinned key but couldn't verify it locally
+							status = pterm.FgYellow.Sprint("KEY_MISMATCH")
 						}
 					} else if pinnedKey != authorID {
 						status = pterm.FgYellow.Sprint("KEY_MISMATCH")
 					} else {
 						status = pterm.FgGreen.Sprint("VERIFIED")
 					}
-				} else {
-					// Is it pending?
-					for _, p := range pendingList {
-						if p["name"] == n {
-							status = pterm.FgBlue.Sprint("PENDING")
-							break
-						}
-					}
-					
-					if isMissingLocally && !localOnly {
-						status = pterm.FgMagenta.Sprint("NOT_INSTALLED")
-					}
+				} else if isPending {
+					status = pterm.FgBlue.Sprint("PENDING")
+				} else if isMissingLocally && !localOnly {
+					status = pterm.FgMagenta.Sprint("NOT_INSTALLED")
+				} else if hasConfigEntry {
+					// Plugin has a config entry with permissions but no signature yet -> UNTRUSTED (needs trust)
+					status = pterm.FgRed.Sprint("UNTRUSTED")
 				}
 
 				mu.Lock()
@@ -428,10 +483,15 @@ var pluginListCmd = &cobra.Command{
 					webStatus := "pending"
 					if pinnedKey != "" && pinnedKey == authorID {
 						webStatus = "authorized"
+					} else if isMissingLocally {
+						webStatus = "NOT_INSTALLED"
+					} else if isPending {
+						webStatus = "pending"
 					}
 
 					reviewPrompt = append(reviewPrompt, plugin.PendingReq{
 						Name:       n,
+						Version:    resolvedVer,
 						Identity:   authorID,
 						Privileges: privs,
 						Status:     webStatus,
@@ -544,21 +604,20 @@ var pluginIDCmd = &cobra.Command{
 			} else {
 				source = "Local"
 				// Try to find in node_modules
-				pkgDir := filepath.Join(projectRoot, "node_modules", pkgName)
-				sigPath := filepath.Join(pkgDir, "xypriss.plugin.xsig")
+				pkgDir := paths.NodeModulesPkgDir(projectRoot, pkgName)
+				sigPath := paths.PackageSigPath(pkgDir)
 
 				if _, err := os.Stat(sigPath); os.IsNotExist(err) {
 					// Try to find in vstore (might be a different version)
 					// This is a bit more complex as we need to find the installed version
-					pkgJsonPath := filepath.Join(pkgDir, "package.json")
-					pj, err := core.LoadPackageJson(pkgJsonPath)
+					pj, err := core.LoadPackageJson(paths.PackageJsonPath(pkgDir))
 					if err == nil {
 						version = pj.Version
 						description = pj.Description
 						sigPath = paths.PackageSigPath(paths.PackageVStoreDir(projectRoot, pkgName, version))
 					}
 				} else {
-					pj, _ := core.LoadPackageJson(filepath.Join(pkgDir, "package.json"))
+					pj, _ := core.LoadPackageJson(paths.PackageJsonPath(pkgDir))
 					if pj != nil {
 						version = pj.Version
 						description = pj.Description
