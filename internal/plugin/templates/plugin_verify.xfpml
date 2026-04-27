@@ -348,9 +348,9 @@
     <div class="discovery-box">
       <div class="loader-ring"></div>
       <h2 style="font-size:24px; font-weight:800; color:#fff; margin-bottom:8px;">Discovery in Progress</h2>
-      <p style="color:var(--sub); font-size:14px; line-height:1.6; margin-bottom:24px;">New plugins detected. Re-scanning system metadata and verifying signatures...</p>
+      <p id="discovery-msg" style="color:var(--sub); font-size:14px; line-height:1.6; margin-bottom:24px;">New plugins detected. Re-scanning system metadata...</p>
       <div style="height:4px; width:100%; background:rgba(255,255,255,0.05); border-radius:2px; overflow:hidden;">
-        <div id="discovery-progress" style="height:100%; width:0%; background:var(--cyan); transition:width 2s ease;"></div>
+        <div id="discovery-progress" style="height:100%; width:0%; background:var(--cyan); transition:width .3s ease;"></div>
       </div>
     </div>
   </div>
@@ -497,6 +497,9 @@
   </div>
 
   <script>
+    console.log("==================NEHONIX XFPM================")
+    console.log("==================github.com/Nehonix-Team/XFMP================")
+    console.log("==================================")
     // --- Error Management ---
     function showError(msg, details = null) {
       const mgr = document.getElementById('error-manager');
@@ -639,9 +642,7 @@
     }
 
     function showDiscoveryOverlay() {
-        const ov = document.getElementById('discovery-overlay');
-        ov.style.display = 'flex';
-        setTimeout(() => document.getElementById('discovery-progress').style.width = '100%', 100);
+        document.getElementById('discovery-overlay').style.display = 'flex';
     }
 
     function showApplyModal() {
@@ -677,19 +678,22 @@
 
     async function restartSession() {
         const btn = event.currentTarget;
-        btn.classList.add('animate-spin');
+        if (btn) btn.classList.add('animate-spin');
         try {
             await fetch('/restart');
-            showToast('Restarting session...');
         } catch(e) { console.error(e); }
-        finally { setTimeout(() => btn.classList.remove('animate-spin'), 1000); }
+        finally { if (btn) setTimeout(() => btn.classList.remove('animate-spin'), 1000); }
     }
 
     // --- SSE Sync ---
     const es = new EventSource('/events');
     es.addEventListener('reload', () => { window.location.reload(); });
-    es.addEventListener('close', () => { window.close(); document.body.innerHTML = `<div class="flex items-center justify-center min-h-screen"><div class="text-center"><div class="success-icon" style="background:rgba(239,68,68,.1);border-color:rgba(239,68,68,.3)"><svg class="w-8 h-8 text-red-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M6 18L18 6M6 6l12 12"/></svg></div><h2 class="text-xl font-bold text-white">Session Terminated</h2></div></div>`; });
-    es.onmessage = (e) => { try { updateDashboard(JSON.parse(e.data)); } catch(err) { console.error(err); } };
+    es.addEventListener('progress', (e) => {
+        const data = JSON.parse(e.data);
+        showDiscoveryOverlay();
+        document.getElementById('discovery-progress').style.width = data.percent + '%';
+        document.getElementById('discovery-msg').innerText = data.msg;
+    });
 
     function updateDashboard(plugins) {
       plugins.forEach(p => {
