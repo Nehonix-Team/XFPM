@@ -1,9 +1,9 @@
 //go:build windows
-// +build windows
 
 package utils
 
 import (
+	"fmt"
 	"os"
 
 	"golang.org/x/sys/windows"
@@ -19,4 +19,8 @@ func initTerminal() {
 	var originalModeErr uint32
 	windows.GetConsoleMode(stderr, &originalModeErr)
 	windows.SetConsoleMode(stderr, originalModeErr|windows.ENABLE_VIRTUAL_TERMINAL_PROCESSING)
+}
+
+func ClearTerminal() {
+	fmt.Print("\033[H\033[2J\033[3J")
 }
