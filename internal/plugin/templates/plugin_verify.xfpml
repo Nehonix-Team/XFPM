@@ -692,12 +692,12 @@
     }
 
     async function restartSession() {
-        const btn = event.currentTarget;
-        if (btn) btn.classList.add('animate-spin');
+        const btn = (typeof event !== 'undefined' && event) ? event.currentTarget : null;
+        if (btn && btn.classList) btn.classList.add('animate-spin');
         try {
             await fetch('/restart');
         } catch(e) { console.error(e); }
-        finally { if (btn) setTimeout(() => btn.classList.remove('animate-spin'), 1000); }
+        finally { if (btn && btn.classList) setTimeout(() => btn.classList.remove('animate-spin'), 1000); }
     }
 
     // --- SSE Sync ---
