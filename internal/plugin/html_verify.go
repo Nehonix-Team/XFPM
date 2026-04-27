@@ -9,10 +9,8 @@ import (
 	"net"
 	"net/http"
 	"os"
-	"os/signal"
 	"strings"
 	"sync"
-	"syscall"
 	"time"
 
 	"github.com/Nehonix-Team/XFMP/internal/paths"
@@ -30,6 +28,8 @@ var (
 
 func broadcast(msg string) {
 	clientsMu.Lock()
+	count := len(clients)
+	fmt.Fprintf(os.Stderr, "[DEBUG][SSE] Broadcasting to %d clients: %s\n", count, strings.ReplaceAll(msg, "\n", "\\n"))
 	defer clientsMu.Unlock()
 	for _, c := range clients {
 		select {
@@ -261,6 +261,7 @@ func HandleHtmlVerify(projectRoot string, pending []PendingReq, config map[strin
 		ch := make(chan string, 1)
 		clientsMu.Lock()
 		clients = append(clients, ch)
+		fmt.Fprintf(os.Stderr, "[DEBUG][SSE] New client connected. Total: %d\n", len(clients))
 		clientsMu.Unlock()
 
 		defer func() {
@@ -277,7 +278,11 @@ func HandleHtmlVerify(projectRoot string, pending []PendingReq, config map[strin
 		for {
 			select {
 			case msg := <-ch:
-				fmt.Fprintf(w, "data: %s\n\n", msg)
+				if strings.HasPrefix(msg, "event:") {
+					fmt.Fprintf(w, "%s\n\n", msg)
+				} else {
+					fmt.Fprintf(w, "data: %s\n\n", msg)
+				}
 				w.(http.Flusher).Flush()
 			case <-r.Context().Done():
 				return
@@ -388,14 +393,19 @@ func HandleHtmlVerify(projectRoot string, pending []PendingReq, config map[strin
 
 	pterm.Info.Println("Press Ctrl+C to cancel and return to terminal...")
 
-	stop := make(chan os.Signal, 1)
-	signal.Notify(stop, os.Interrupt, syscall.SIGTERM)
+	// Subscribe to the global signal manager (registered in main.go at startup)
+	stop := utils.SignalManager.Subscribe()
+	defer utils.SignalManager.Unsubscribe(stop)
 
 	select {
 	case <-stop:
 		pterm.Info.Println("Verification cancelled.")
+		broadcast("event: close\ndata: session-ended")
+		time.Sleep(500 * time.Millisecond)
 	case <-done:
 		// Normal completion
+		broadcast("event: close\ndata: session-ended")
+		time.Sleep(500 * time.Millisecond)
 	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)

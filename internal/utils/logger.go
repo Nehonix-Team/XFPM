@@ -2,10 +2,7 @@ package utils
 
 import (
 	"fmt"
-	"os"
-	"os/signal"
 	"strings"
-	"syscall"
 	"time"
 
 	"github.com/pterm/pterm"
@@ -136,13 +133,6 @@ func PrintFooter(duration time.Duration) {
 func SetupUI() {
 	initTerminal()
 	pterm.EnableColor()
-	c := make(chan os.Signal, 1)
-	signal.Notify(c, os.Interrupt, syscall.SIGTERM)
-	go func() {
-		<-c
-		fmt.Printf("\n\033[?25h")
-		os.Exit(130)
-	}()
 }
 
 func FormatBytes(bytes uint64) string {

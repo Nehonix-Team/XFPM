@@ -626,7 +626,7 @@
               </label>
             `;
           }
-          const card = document.querySelector('.plugin-card input[name="trust-' + name + '"]').closest('.plugin-card');
+          const card = document.getElementById('card-' + name);
           if (card) {
             const nameEl = card.querySelector('.card-name');
             nameEl.innerHTML = name + ' <span class="status-badge status-pending">Pending</span>';
@@ -666,7 +666,7 @@
           const toggle = document.getElementById('trust-' + name);
           if (toggle) toggle.checked = false;
           
-          const card = document.querySelector('.plugin-card input[name="trust-' + name + '"]').closest('.plugin-card');
+          const card = document.getElementById('card-' + name);
           if (card) {
             card.style.opacity = '0.4';
             card.style.filter = 'grayscale(1)';
@@ -688,11 +688,34 @@
 
     // Real-time synchronization
     const es = new EventSource('/events');
+
+    es.addEventListener('close', (e) => {
+      console.log('SSE: Received close signal');
+      window.close();
+      document.body.innerHTML = `
+        <div class="success-wrap">
+          <div style="text-align:center;">
+            <div class="success-icon" style="background:rgba(239,68,68,.1); border-color:rgba(239,68,68,.3)">
+               <svg width="26" height="26" fill="none" stroke="#ef4444" stroke-width="2.5" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"/>
+               </svg>
+            </div>
+            <h2 style="font-size:20px;font-weight:800;margin-bottom:6px;color:#dde6f0;">Session Terminated</h2>
+            <p style="font-size:13px;color:#4e6280;">The terminal session was closed. You can now close this tab.</p>
+          </div>
+        </div>
+      `;
+    });
+
     es.onmessage = (e) => {
       try {
         const plugins = JSON.parse(e.data);
         updateDashboard(plugins);
       } catch (err) { console.error('SSE Error:', err); }
+    };
+    es.onerror = () => {
+      // If connection lost, don't show error immediately as it might be a normal close
+      console.log('SSE connection lost.');
     };
 
     function updateDashboard(plugins) {
