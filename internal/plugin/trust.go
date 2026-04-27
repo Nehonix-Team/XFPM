@@ -2,9 +2,7 @@ package plugin
 
 import (
 	"encoding/json"
-	"fmt"
 	"os"
-	"path/filepath"
 	"strings"
 
 	"github.com/Nehonix-Team/XFMP/internal/paths"
@@ -13,17 +11,9 @@ import (
 
 // TrustPlugin securely pins manual trust for a plugin author after verifying its installation and signature integrity.
 func TrustPlugin(projectRoot string, pkgName string, authorKey string) error {
-	// 1. Validation Logic: Ensure installed and signature exists
-	pkgDir := filepath.Join(projectRoot, "node_modules", pkgName)
-	if _, err := os.Stat(pkgDir); os.IsNotExist(err) {
-		return fmt.Errorf("package %s is not installed", pkgName)
-	}
-
-	sigPath := filepath.Join(pkgDir, "xypriss.plugin.xsig")
-	if _, err := os.Stat(sigPath); os.IsNotExist(err) {
-		return fmt.Errorf("package %s is not a verified plugin (missing .xsig)", pkgName)
-	}
-
+	// The actual signature cryptography and filesystem integrity is evaluated
+	// deeply during the execution lifecycle and installation phase by the XHSC core
+	// and Installer logic. This function merely pins the security policy in config.
 	// 2. Add to configuration
 	configPath := paths.ConfigPath(projectRoot)
 

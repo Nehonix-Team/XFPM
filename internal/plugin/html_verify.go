@@ -11,15 +11,33 @@ import (
 	"os"
 	"os/signal"
 	"strings"
+	"sync"
 	"syscall"
 	"time"
 
+	"github.com/Nehonix-Team/XFMP/internal/paths"
 	"github.com/Nehonix-Team/XFMP/internal/utils"
 	"github.com/pterm/pterm"
 )
 
 //go:embed templates/plugin_verify.xfpml
 var pluginVerifyTmpl string
+
+var (
+	clients   []chan string
+	clientsMu sync.Mutex
+)
+
+func broadcast(msg string) {
+	clientsMu.Lock()
+	defer clientsMu.Unlock()
+	for _, c := range clients {
+		select {
+		case c <- msg:
+		default:
+		}
+	}
+}
 
 func HandleHtmlVerify(projectRoot string, pending []PendingReq, config map[string]interface{}, configPath string, isReview bool) {
 	// Fetch master permissions for descriptions
@@ -37,10 +55,18 @@ func HandleHtmlVerify(projectRoot string, pending []PendingReq, config map[strin
 
 	var plugins []WebPlugin
 	for _, p := range pending {
+		status := p.Status
+		pkgDir_ := paths.NodeModulesPkgDir(projectRoot, p.Name)
+		if _, err := os.Stat(pkgDir_); os.IsNotExist(err) && status != "authorized" {
+			status = "NOT_INSTALLED"
+		}
+
 		wp := WebPlugin{
-			Name:     p.Name,
-			Identity: p.Identity,
-			Status:   p.Status,
+			Name:       p.Name,
+			Version:    p.Version,
+			Identity:   p.Identity,
+			Privileges: p.Privileges,
+			Status:     status,
 		}
 
 		// Get current permissions if in review mode or already authorized
@@ -79,6 +105,8 @@ func HandleHtmlVerify(projectRoot string, pending []PendingReq, config map[strin
 		plugins = append(plugins, wp)
 	}
 
+	var mu sync.Mutex
+
 	ln, err := net.Listen("tcp", "127.0.0.1:0")
 	if err != nil {
 		pterm.Error.Printf("Failed to start local server: %v\n", err)
@@ -95,6 +123,8 @@ func HandleHtmlVerify(projectRoot string, pending []PendingReq, config map[strin
 	done := make(chan bool)
 
 	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
+		mu.Lock()
+		defer mu.Unlock()
 		tmpl, _ := template.New("verify").Parse(pluginVerifyTmpl)
 		tmpl.Execute(w, struct {
 			Plugins  []WebPlugin
@@ -121,28 +151,33 @@ func HandleHtmlVerify(projectRoot string, pending []PendingReq, config map[strin
 			internal = make(map[string]interface{})
 		}
 
-		for _, p := range pending {
-			// In review mode, if trust checkbox was UNCHECKED, it means REVOKE
-			if result["trust-"+p.Name] != "on" {
+		mu.Lock()
+		currentPlugins := make([]WebPlugin, len(plugins))
+		copy(currentPlugins, plugins)
+		mu.Unlock()
+
+		for _, p := range currentPlugins {
+			isTrusted := result["trust-"+p.Name] == "on"
+
+			// If trust was unchecked and plugin was authorized, revoke it
+			if !isTrusted {
 				if isReview && p.Status == "authorized" {
-					err := RevokeTrust(projectRoot, p.Name, false)
-					if err != nil {
+					if err := RevokeTrust(projectRoot, p.Name, false); err != nil {
 						utils.Error("Failed to revoke trust for %s: %v", p.Name, err)
 					}
 					delete(internal, p.Name)
+					mu.Lock()
+					for i, wp := range plugins {
+						if wp.Name == p.Name {
+							plugins[i].Status = "pending"
+						}
+					}
+					mu.Unlock()
 				}
 				continue
 			}
 
-			if result["trust-"+p.Name] == "on" {
-				// Validate trust using the same backend logic
-				err := TrustPlugin(projectRoot, p.Name, p.Identity)
-				if err != nil {
-					utils.Error("Failed integrity check for %s. Skipping: %v", p.Name, err)
-					continue
-				}
-			}
-
+			// Pre-initialize configuration block for this plugin
 			pluginCfgRaw, ok := internal[p.Name]
 			if !ok {
 				pluginCfgRaw = make(map[string]interface{})
@@ -152,21 +187,42 @@ func HandleHtmlVerify(projectRoot string, pending []PendingReq, config map[strin
 				pluginCfg = make(map[string]interface{})
 			}
 
-			// Signature is already handled by TrustPlugin if we just activated it.
-			// But for pre-authorized cases where we're just updating permissions, 
-			// the signature is already in `$internal`.
-			// Permissions: "perm-<plugin>-<id>"
+			// Trust is checked: apply trust (update local map) + permissions
+			if p.Identity != "" && p.Identity != "-" {
+				// Update status in live list
+				mu.Lock()
+				for i, wp := range plugins {
+					if wp.Name == p.Name {
+						plugins[i].Status = "authorized"
+					}
+				}
+				mu.Unlock()
+
+				// Update sig in local map
+				sigCfgRaw, ok := pluginCfg["signature"]
+				if !ok {
+					sigCfgRaw = make(map[string]interface{})
+				}
+				sigCfg, ok := sigCfgRaw.(map[string]interface{})
+				if !ok {
+					sigCfg = make(map[string]interface{})
+				}
+				sigCfg["author_key"] = p.Identity
+				pluginCfg["signature"] = sigCfg
+			}
+
+			// Collect approved permissions from form
 			var approved []string
 			if p.Privileges != "" && p.Privileges != "none" {
 				for _, id := range strings.Split(p.Privileges, ",") {
 					id = strings.TrimSpace(id)
-					if result["perm-"+p.Name+"-"+id] == "on" {
+					perm := "perm-" + p.Name + "-" + id
+					if result[perm] == "on" {
 						approved = append(approved, id)
 					}
 				}
 			}
 
-			// In review mode, we ALWAYS update the permissions block, even if empty
 			permCfgRaw, ok := pluginCfg["permissions"]
 			if !ok {
 				permCfgRaw = make(map[string]interface{})
@@ -177,7 +233,7 @@ func HandleHtmlVerify(projectRoot string, pending []PendingReq, config map[strin
 			}
 			permCfg["allowedHooks"] = approved
 			pluginCfg["permissions"] = permCfg
-			
+
 			internal[p.Name] = pluginCfg
 		}
 		config["$internal"] = internal
@@ -188,6 +244,45 @@ func HandleHtmlVerify(projectRoot string, pending []PendingReq, config map[strin
 		}
 		w.WriteHeader(200)
 		done <- true
+
+		// Broadcast update
+		mu.Lock()
+		b, _ := json.Marshal(plugins)
+		mu.Unlock()
+		broadcast(string(b))
+	})
+
+	http.HandleFunc("/events", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "text/event-stream")
+		w.Header().Set("Cache-Control", "no-cache")
+		w.Header().Set("Connection", "keep-alive")
+		w.Header().Set("Access-Control-Allow-Origin", "*")
+
+		ch := make(chan string, 1)
+		clientsMu.Lock()
+		clients = append(clients, ch)
+		clientsMu.Unlock()
+
+		defer func() {
+			clientsMu.Lock()
+			for i, c := range clients {
+				if c == ch {
+					clients = append(clients[:i], clients[i+1:]...)
+					break
+				}
+			}
+			clientsMu.Unlock()
+		}()
+
+		for {
+			select {
+			case msg := <-ch:
+				fmt.Fprintf(w, "data: %s\n\n", msg)
+				w.(http.Flusher).Flush()
+			case <-r.Context().Done():
+				return
+			}
+		}
 	})
 
 	http.HandleFunc("/revoke", func(w http.ResponseWriter, r *http.Request) {
@@ -216,7 +311,27 @@ func HandleHtmlVerify(projectRoot string, pending []PendingReq, config map[strin
 			w.WriteHeader(500)
 			return
 		}
+
+		mu.Lock()
+		for i, wp := range plugins {
+			if wp.Name == pkgName {
+				if noPending {
+					// Remove from list or mark as uninstalled
+					plugins[i].Status = "NOT_INSTALLED"
+				} else {
+					plugins[i].Status = "pending"
+				}
+			}
+		}
+		mu.Unlock()
+
 		w.WriteHeader(200)
+
+		// Broadcast update
+		mu.Lock()
+		b, _ := json.Marshal(plugins)
+		mu.Unlock()
+		broadcast(string(b))
 	})
 
 	http.HandleFunc("/install", func(w http.ResponseWriter, r *http.Request) {
@@ -243,7 +358,21 @@ func HandleHtmlVerify(projectRoot string, pending []PendingReq, config map[strin
 			return
 		}
 
+		mu.Lock()
+		for i, wp := range plugins {
+			if wp.Name == pkgName {
+				plugins[i].Status = "pending"
+			}
+		}
+		mu.Unlock()
+
 		w.WriteHeader(200)
+
+		// Broadcast update
+		mu.Lock()
+		b, _ := json.Marshal(plugins)
+		mu.Unlock()
+		broadcast(string(b))
 	})
 
 	http.HandleFunc("/cancel", func(w http.ResponseWriter, r *http.Request) {

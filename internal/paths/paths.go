@@ -117,3 +117,13 @@ func PackageVStoreDir(projectRoot, pkgName, pkgVersion string) string {
 func PackageSigPath(pkgDir string) string {
 	return filepath.Join(pkgDir, "xypriss.plugin.xsig")
 }
+
+// NodeModulesPkgDir returns the path to a package within the project's node_modules
+func NodeModulesPkgDir(projectRoot, pkgName string) string {
+	return filepath.Join(projectRoot, "node_modules", pkgName)
+}
+
+// PackageJsonPath returns the path to the project's package.json
+func PackageJsonPath(projectRoot string) string {
+	return filepath.Join(projectRoot, "package.json")
+}

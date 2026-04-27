@@ -2,7 +2,6 @@ package plugin
 
 import (
 	"fmt"
-	"path/filepath"
 
 	"github.com/Nehonix-Team/XFMP/internal/core"
 	"github.com/Nehonix-Team/XFMP/internal/paths"
@@ -33,7 +32,7 @@ func InstallPendingPlugin(projectRoot, pkgName, pkgVer string) error {
 	utils.Info("Finalizing installation for %s@%s...", pkgName, pkgVer)
 	inst.LinkFilesToDir(pkgDir, index)
 	
-	rootDest := filepath.Join(projectRoot, "node_modules", pkgName)
+	rootDest := paths.NodeModulesPkgDir(projectRoot, pkgName)
 	utils.LinkDir(pkgDir, rootDest)
 	
 	utils.Success("Plugin %s@%s successfully linked to project.", pkgName, pkgVer)
