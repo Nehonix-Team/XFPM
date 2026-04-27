@@ -16,7 +16,8 @@ import (
 )
 
 // ScanProjectPlugins performs a full scan of project dependencies to find plugins
-func ScanProjectPlugins(projectRoot string, config map[string]interface{}) ([]PendingReq, [][]string) {
+func ScanProjectPlugins(projectRoot string, config map[string]interface{}, onProgress func(int, string)) ([]PendingReq, [][]string) {
+	if onProgress != nil { onProgress(5, "Initializing scanner") }
 	utils.Matrix("Analyzing project dependencies for plugins...")
 	reg := core.NewRegistryClient("", 3)
 
@@ -27,12 +28,10 @@ func ScanProjectPlugins(projectRoot string, config map[string]interface{}) ([]Pe
 	}
 
 	allDeps := make(map[string]string)
-	for k, v := range pkg.Dependencies {
-		allDeps[k] = v
-	}
-	for k, v := range pkg.DevDependencies {
-		allDeps[k] = v
-	}
+	for k, v := range pkg.Dependencies { allDeps[k] = v }
+	for k, v := range pkg.DevDependencies { allDeps[k] = v }
+
+	if onProgress != nil { onProgress(10, fmt.Sprintf("Scanning %d dependencies", len(allDeps))) }
 
 	pendingPath := paths.PendingPluginsPath(projectRoot)
 	var pendingList []map[string]string
@@ -46,6 +45,9 @@ func ScanProjectPlugins(projectRoot string, config map[string]interface{}) ([]Pe
 	var reviewPrompt []PendingReq
 	var mu sync.Mutex
 	var wg sync.WaitGroup
+	
+	total := len(allDeps)
+	processed := 0
 
 	for name, versionRange := range allDeps {
 		wg.Add(1)
@@ -133,71 +135,78 @@ func ScanProjectPlugins(projectRoot string, config map[string]interface{}) ([]Pe
 				isPlugin = true
 			}
 
-			if !isPlugin {
-				return
-			}
-
-			authorID := "-"
-			if len(xsigBytes) > 0 {
-				authorID = ExtractIdentity(xsigBytes)
-			}
-
-			status := pterm.FgRed.Sprint("UNTRUSTED")
-			isMissingLocally := false
-			if _, err := os.Stat(pkgDir); os.IsNotExist(err) {
-				isMissingLocally = true
-			}
-
-			hasConfigEntry := false
-			if internal, ok := config["$internal"].(map[string]interface{}); ok {
-				_, hasConfigEntry = internal[n]
-			}
-
-			if pinnedKey != "" {
-				if authorID == "-" {
-					if isMissingLocally {
-						status = pterm.FgMagenta.Sprint("NOT_INSTALLED")
-					} else {
-						status = pterm.FgYellow.Sprint("KEY_MISMATCH")
-					}
-				} else if pinnedKey != authorID {
-					status = pterm.FgYellow.Sprint("KEY_MISMATCH")
-				} else {
-					status = pterm.FgGreen.Sprint("VERIFIED")
+			if isPlugin {
+				mu.Lock()
+				authorID := "-"
+				if len(xsigBytes) > 0 {
+					authorID = ExtractIdentity(xsigBytes)
 				}
-			} else if isPending {
-				status = pterm.FgBlue.Sprint("PENDING")
-			} else if isMissingLocally {
-				status = pterm.FgMagenta.Sprint("NOT_INSTALLED")
-			} else if hasConfigEntry {
-				status = pterm.FgRed.Sprint("UNTRUSTED")
-			}
 
+				status := pterm.FgRed.Sprint("UNTRUSTED")
+				isMissingLocally := false
+				if _, err := os.Stat(pkgDir); os.IsNotExist(err) {
+					isMissingLocally = true
+				}
+
+				hasConfigEntry := false
+				if internal, ok := config["$internal"].(map[string]interface{}); ok {
+					_, hasConfigEntry = internal[n]
+				}
+
+				if pinnedKey != "" {
+					if authorID == "-" {
+						if isMissingLocally {
+							status = pterm.FgMagenta.Sprint("NOT_INSTALLED")
+						} else {
+							status = pterm.FgYellow.Sprint("KEY_MISMATCH")
+						}
+					} else if pinnedKey != authorID {
+						status = pterm.FgYellow.Sprint("KEY_MISMATCH")
+					} else {
+						status = pterm.FgGreen.Sprint("VERIFIED")
+					}
+				} else if isPending {
+					status = pterm.FgBlue.Sprint("PENDING")
+				} else if isMissingLocally {
+					status = pterm.FgMagenta.Sprint("NOT_INSTALLED")
+				} else if hasConfigEntry {
+					status = pterm.FgRed.Sprint("UNTRUSTED")
+				}
+
+				items = append(items, []string{n, resolvedVer, status, authorID})
+				privs := ""
+				if len(xsigBytes) > 0 {
+					privs = ExtractPrivileges(xsigBytes)
+				}
+
+				webStatus := "pending"
+				if pinnedKey != "" && pinnedKey == authorID {
+					webStatus = "authorized"
+				} else if isMissingLocally {
+					webStatus = "NOT_INSTALLED"
+				}
+
+				reviewPrompt = append(reviewPrompt, PendingReq{
+					Name:       n,
+					Version:    resolvedVer,
+					Identity:   authorID,
+					Privileges: privs,
+					Status:     webStatus,
+				})
+				mu.Unlock()
+			}
+			
 			mu.Lock()
-			items = append(items, []string{n, resolvedVer, status, authorID})
-			privs := ""
-			if len(xsigBytes) > 0 {
-				privs = ExtractPrivileges(xsigBytes)
+			processed++
+			if onProgress != nil {
+				percent := 10 + int(float64(processed)/float64(total)*85)
+				onProgress(percent, fmt.Sprintf("Analyzing %s", n))
 			}
-
-			webStatus := "pending"
-			if pinnedKey != "" && pinnedKey == authorID {
-				webStatus = "authorized"
-			} else if isMissingLocally {
-				webStatus = "NOT_INSTALLED"
-			}
-
-			reviewPrompt = append(reviewPrompt, PendingReq{
-				Name:       n,
-				Version:    resolvedVer,
-				Identity:   authorID,
-				Privileges: privs,
-				Status:     webStatus,
-			})
 			mu.Unlock()
 		}(name, versionRange)
 	}
 	wg.Wait()
+	if onProgress != nil { onProgress(100, "Discovery complete") }
 
 	return reviewPrompt, items
 }

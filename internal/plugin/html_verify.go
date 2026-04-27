@@ -197,7 +197,14 @@ func HandleHtmlVerify(projectRoot string, pending []PendingReq, config map[strin
 		content, _ := os.ReadFile(configPath)
 		var freshConfig map[string]interface{}
 		json.Unmarshal(content, &freshConfig)
-		pendingPrompt, _ := ScanProjectPlugins(projectRoot, freshConfig)
+		pendingPrompt, _ := ScanProjectPlugins(projectRoot, freshConfig, func(percent int, msg string) {
+			b, _ := json.Marshal(map[string]interface{}{
+				"event":   "progress",
+				"percent": percent,
+				"msg":     msg,
+			})
+			broadcast("event: progress\ndata: " + string(b))
+		})
 
 		// 2. Stop Area FIRST, then clear to ensure no buffer restoration
 		area.Stop()
