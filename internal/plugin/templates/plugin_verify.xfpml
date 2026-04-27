@@ -497,9 +497,24 @@
   </div>
 
   <script>
-    console.log("==================NEHONIX XFPM================")
-    console.log("==================github.com/Nehonix-Team/XFMP================")
-    console.log("==================================")
+    // banner
+    function banner() {
+      const _c = (t, s) => console.log(`%c${t}`, s);
+      const muted = "color:#6B7A99;font-weight:400;font-family:monospace;";
+      const link  = "color:#00C2FF;font-weight:400;font-family:monospace;";
+      const tag   = "color:#7DF9FF;font-weight:400;font-family:monospace;letter-spacing:2px;";
+
+      console.groupCollapsed(
+        "%c NEHONIX %c XFPM ",
+        "background:linear-gradient(90deg,#1B0A3F,#2D1B6E);color:#00C2FF;font-weight:800;padding:3px 10px;border-radius:4px 0 0 4px;font-family:monospace;letter-spacing:1px;border:1px solid #00C2FF44;",
+        "background:linear-gradient(90deg,#0A1628,#0D2044);color:#7DF9FF;font-weight:700;padding:3px 10px;border-radius:0 4px 4px 0;font-family:monospace;letter-spacing:3px;border:1px solid #7DF9FF44;border-left:none;"
+      );
+      _c("  FAST · HIGH-PERFORMANCE · RELIABLE", tag);
+      _c("  ─────────────────────────────────", "color:#1E3A5F;");
+      _c("  github    github.com/Nehonix-Team/XFPM", link);
+      _c("  about     XyPriss Fast Package Manager", muted);
+      console.groupEnd();
+    }
     // --- Error Management ---
     function showError(msg, details = null) {
       const mgr = document.getElementById('error-manager');
@@ -688,6 +703,8 @@
     // --- SSE Sync ---
     const es = new EventSource('/events');
     es.addEventListener('reload', () => { window.location.reload(); });
+    es.addEventListener('close', () => { window.close(); document.body.innerHTML = `<div class="flex items-center justify-center min-h-screen"><div class="text-center"><div class="success-icon" style="background:rgba(239,68,68,.1);border-color:rgba(239,68,68,.3)"><svg class="w-8 h-8 text-red-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M6 18L18 6M6 6l12 12"/></svg></div><h2 class="text-xl font-bold text-white">Session Terminated</h2></div></div>`; });
+    es.onmessage = (e) => { try { updateDashboard(JSON.parse(e.data)); } catch(err) { console.error(err); } };
     es.addEventListener('progress', (e) => {
         const data = JSON.parse(e.data);
         showDiscoveryOverlay();
@@ -736,6 +753,7 @@
       });
       onSelectionChange();
     }
+    banner()
   </script>
 </body>
 </html>
