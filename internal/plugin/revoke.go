@@ -54,7 +54,7 @@ func RevokeTrust(projectRoot string, pkgName string, noPending bool) error {
 	config["$internal"] = internal
 	if out, err := json.MarshalIndent(config, "", "    "); err == nil {
 		os.WriteFile(configPath, out, 0644)
-		utils.Success("Trust revoked and permissions retired for %s.", pkgName)
+		utils.Success("\nTrust revoked and permissions retired for %s.\n", pkgName)
 	}
 
 	// Always add back to pending list so it remains manageable in the UI

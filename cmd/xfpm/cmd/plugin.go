@@ -508,12 +508,12 @@ var pluginListCmd = &cobra.Command{
 			return nil
 		}
 
-		table, _ := pterm.DefaultTable.WithHasHeader().WithData(items).Srender()
-		pterm.DefaultBox.WithTitle(utils.AccentColor.Sprint("PROJECT PLUGINS")).Println(table)
-
 		if reviewMode && len(reviewPrompt) > 0 {
 			utils.Info("Opening browser for permission review...")
 			plugin.HandleHtmlVerify(projectRoot, reviewPrompt, config, configPath, true)
+		} else {
+			table, _ := pterm.DefaultTable.WithHasHeader().WithData(items).Srender()
+			pterm.DefaultBox.WithTitle(utils.AccentColor.Sprint("PROJECT PLUGINS")).Println(table)
 		}
 
 		return nil

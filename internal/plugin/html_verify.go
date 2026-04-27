@@ -22,38 +22,32 @@ import (
 var pluginVerifyTmpl string
 
 var (
-	clients   []chan string
-	clientsMu sync.Mutex
-)
-
-func broadcast(msg string) {
-	clientsMu.Lock()
-	count := len(clients)
-	fmt.Fprintf(os.Stderr, "[DEBUG][SSE] Broadcasting to %d clients: %s\n", count, strings.ReplaceAll(msg, "\n", "\\n"))
-	defer clientsMu.Unlock()
-	for _, c := range clients {
-		select {
-		case c <- msg:
-		default:
-		}
-	}
-}
-
-func HandleHtmlVerify(projectRoot string, pending []PendingReq, config map[string]interface{}, configPath string, isReview bool) {
-	// Fetch master permissions for descriptions
-	utils.Matrix("Fetching permission descriptions...")
-	resp, err := http.Get("https://raw.githubusercontent.com/Nehonix-Team/XyPriss/master/.data/base/permissions.json")
-	var masterPermissions map[string]struct {
+	clients           []chan string
+	clientsMu         sync.Mutex
+	plugins           []WebPlugin
+	mu                sync.Mutex
+	broadcast         func(string)
+	masterPermissions map[string]struct {
 		Name        string `json:"name"`
 		Action      string `json:"action"`
 		Description string `json:"description"`
 	}
+)
+
+func fetchMasterPermissions() {
+	if masterPermissions != nil {
+		return
+	}
+	resp, err := http.Get("https://raw.githubusercontent.com/Nehonix-Team/XyPriss/master/.data/base/permissions.json")
 	if err == nil {
 		defer resp.Body.Close()
 		json.NewDecoder(resp.Body).Decode(&masterPermissions)
 	}
+}
 
-	var plugins []WebPlugin
+func buildWebPlugins(projectRoot string, pending []PendingReq, config map[string]interface{}, isReview bool) []WebPlugin {
+	fetchMasterPermissions()
+	var wps []WebPlugin
 	for _, p := range pending {
 		status := p.Status
 		pkgDir_ := paths.NodeModulesPkgDir(projectRoot, p.Name)
@@ -69,7 +63,6 @@ func HandleHtmlVerify(projectRoot string, pending []PendingReq, config map[strin
 			Status:     status,
 		}
 
-		// Get current permissions if in review mode or already authorized
 		currentPerms := make(map[string]bool)
 		if internal, ok := config["$internal"].(map[string]interface{}); ok {
 			if pluginCfg, ok := internal[p.Name].(map[string]interface{}); ok {
@@ -102,10 +95,50 @@ func HandleHtmlVerify(projectRoot string, pending []PendingReq, config map[strin
 				})
 			}
 		}
-		plugins = append(plugins, wp)
+		wps = append(wps, wp)
+	}
+	return wps
+}
+
+func renderTerminalTable(pList []WebPlugin) string {
+	items := [][]string{
+		{"Plugin", "Version", "Status", "Developer ID"},
 	}
 
-	var mu sync.Mutex
+	for _, p := range pList {
+		status := p.Status
+		var statusStyled string
+		switch status {
+		case "authorized":
+			statusStyled = pterm.Green("VERIFIED")
+		case "NOT_INSTALLED":
+			statusStyled = pterm.Magenta("NOT INSTALLED")
+		default:
+			statusStyled = pterm.Red("UNTRUSTED")
+		}
+
+		idStyled := p.Identity
+		if idStyled == "" {
+			idStyled = "-"
+		}
+
+		items = append(items, []string{
+			p.Name,
+			p.Version,
+			statusStyled,
+			idStyled,
+		})
+	}
+
+	table, _ := pterm.DefaultTable.WithHasHeader().WithData(items).Srender()
+	return pterm.DefaultBox.WithTitle(utils.AccentColor.Sprint("PROJECT PLUGINS")).Sprint(table)
+}
+
+func HandleHtmlVerify(projectRoot string, pending []PendingReq, config map[string]interface{}, configPath string, isReview bool) {
+	utils.Matrix("Initializing verification metadata...")
+	mu.Lock()
+	plugins = buildWebPlugins(projectRoot, pending, config, isReview)
+	mu.Unlock()
 
 	ln, err := net.Listen("tcp", "127.0.0.1:0")
 	if err != nil {
@@ -118,7 +151,29 @@ func HandleHtmlVerify(projectRoot string, pending []PendingReq, config map[strin
 	url := fmt.Sprintf("http://127.0.0.1:%d", port)
 
 	pterm.Success.Printf("Verification dashboard started at %s\n", url)
+	pterm.Info.Println("Press Ctrl+C to cancel and return to terminal...")
 	utils.OpenBrowser(url)
+
+	area, _ := pterm.DefaultArea.Start()
+
+	broadcast = func(msg string) {
+		clientsMu.Lock()
+		for _, ch := range clients {
+			select {
+			case ch <- msg:
+			default:
+			}
+		}
+		clientsMu.Unlock()
+
+		mu.Lock()
+		currentPlugins := make([]WebPlugin, len(plugins))
+		copy(currentPlugins, plugins)
+		mu.Unlock()
+		area.Update(renderTerminalTable(currentPlugins))
+	}
+
+	area.Update(renderTerminalTable(plugins))
 
 	done := make(chan bool)
 
@@ -135,10 +190,81 @@ func HandleHtmlVerify(projectRoot string, pending []PendingReq, config map[strin
 		})
 	})
 
+	http.HandleFunc("/restart", func(w http.ResponseWriter, r *http.Request) {
+		pterm.Info.Print("\nPreparing restart...\n")
+		
+		// 1. Re-scan project state
+		content, _ := os.ReadFile(configPath)
+		var freshConfig map[string]interface{}
+		json.Unmarshal(content, &freshConfig)
+		pendingPrompt, _ := ScanProjectPlugins(projectRoot, freshConfig)
+
+		// 2. Stop Area FIRST, then clear to ensure no buffer restoration
+		area.Stop()
+		utils.ClearTerminal()
+
+		// 3. Spawn a NEW session in parallel
+		// We'll use a channel to get the new port
+		mu.Lock()
+		plugins = buildWebPlugins(projectRoot, pendingPrompt, freshConfig, isReview)
+		mu.Unlock()
+		
+		pterm.Success.Print("\nDeep discovery complete. Dashboard state synchronized.\n")
+		
+		area, _ = pterm.DefaultArea.Start()
+		area.Update(renderTerminalTable(plugins))
+		
+		broadcast("event: reload\ndata: ok")
+		w.WriteHeader(200)
+	})
+
+	http.HandleFunc("/refresh", func(w http.ResponseWriter, r *http.Request) {
+		pterm.Info.Println("Refreshing plugin metadata...")
+		
+		// Re-read config for fresh permissions
+		content, _ := os.ReadFile(configPath)
+		var freshConfig map[string]interface{}
+		json.Unmarshal(content, &freshConfig)
+
+		// Re-build pending requests based on current plugins to preserve their identity/version
+		mu.Lock()
+		var pReqs []PendingReq
+		for _, p := range plugins {
+			pReqs = append(pReqs, PendingReq{
+				Name:       p.Name,
+				Version:    p.Version,
+				Identity:   p.Identity,
+				Privileges: p.Privileges,
+				Status:     p.Status,
+			})
+		}
+		plugins = buildWebPlugins(projectRoot, pReqs, freshConfig, isReview)
+		b, _ := json.Marshal(plugins)
+		mu.Unlock()
+
+		broadcast(string(b))
+		w.WriteHeader(200)
+		pterm.Success.Print("\nMetadata refresh complete.\n")
+	})
+
 	http.HandleFunc("/apply", func(w http.ResponseWriter, r *http.Request) {
-		var result map[string]string
-		if err := json.NewDecoder(r.Body).Decode(&result); err != nil {
+		var req struct {
+			Data  map[string]string `json:"data"`
+			Close bool              `json:"close"`
+		}
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 			http.Error(w, err.Error(), 400)
+			return
+		}
+
+		content, err := os.ReadFile(configPath)
+		if err != nil {
+			http.Error(w, "Could not read config", 500)
+			return
+		}
+		var config map[string]interface{}
+		if err := json.Unmarshal(content, &config); err != nil {
+			http.Error(w, "Could not parse config", 500)
 			return
 		}
 
@@ -156,12 +282,15 @@ func HandleHtmlVerify(projectRoot string, pending []PendingReq, config map[strin
 		copy(currentPlugins, plugins)
 		mu.Unlock()
 
-		for _, p := range currentPlugins {
-			isTrusted := result["trust-"+p.Name] == "on"
+		authorizedCount := 0
+		revokedCount := 0
 
-			// If trust was unchecked and plugin was authorized, revoke it
+		for _, p := range currentPlugins {
+			val, exists := req.Data["trust-"+p.Name]
+			isTrusted := exists && val == "on"
+
 			if !isTrusted {
-				if isReview && p.Status == "authorized" {
+				if exists && isReview && p.Status == "authorized" {
 					if err := RevokeTrust(projectRoot, p.Name, false); err != nil {
 						utils.Error("Failed to revoke trust for %s: %v", p.Name, err)
 					}
@@ -173,11 +302,12 @@ func HandleHtmlVerify(projectRoot string, pending []PendingReq, config map[strin
 						}
 					}
 					mu.Unlock()
+					revokedCount++
+					pterm.Warning.Printf("Plugin %s trust revoked via UI\n", p.Name)
 				}
 				continue
 			}
 
-			// Pre-initialize configuration block for this plugin
 			pluginCfgRaw, ok := internal[p.Name]
 			if !ok {
 				pluginCfgRaw = make(map[string]interface{})
@@ -187,9 +317,7 @@ func HandleHtmlVerify(projectRoot string, pending []PendingReq, config map[strin
 				pluginCfg = make(map[string]interface{})
 			}
 
-			// Trust is checked: apply trust (update local map) + permissions
 			if p.Identity != "" && p.Identity != "-" {
-				// Update status in live list
 				mu.Lock()
 				for i, wp := range plugins {
 					if wp.Name == p.Name {
@@ -198,7 +326,6 @@ func HandleHtmlVerify(projectRoot string, pending []PendingReq, config map[strin
 				}
 				mu.Unlock()
 
-				// Update sig in local map
 				sigCfgRaw, ok := pluginCfg["signature"]
 				if !ok {
 					sigCfgRaw = make(map[string]interface{})
@@ -211,13 +338,12 @@ func HandleHtmlVerify(projectRoot string, pending []PendingReq, config map[strin
 				pluginCfg["signature"] = sigCfg
 			}
 
-			// Collect approved permissions from form
 			var approved []string
 			if p.Privileges != "" && p.Privileges != "none" {
 				for _, id := range strings.Split(p.Privileges, ",") {
 					id = strings.TrimSpace(id)
 					perm := "perm-" + p.Name + "-" + id
-					if result[perm] == "on" {
+					if req.Data[perm] == "on" {
 						approved = append(approved, id)
 					}
 				}
@@ -235,21 +361,25 @@ func HandleHtmlVerify(projectRoot string, pending []PendingReq, config map[strin
 			pluginCfg["permissions"] = permCfg
 
 			internal[p.Name] = pluginCfg
+			authorizedCount++
+			pterm.Success.Printf("Plugin %s authorized with %d privileges\n", p.Name, len(approved))
 		}
 		config["$internal"] = internal
 
 		if out, err := json.MarshalIndent(config, "", "    "); err == nil {
 			os.WriteFile(configPath, out, 0644)
-			utils.Success("Remote authorization successful. Config updated.")
 		}
+		
 		w.WriteHeader(200)
-		done <- true
 
-		// Broadcast update
 		mu.Lock()
 		b, _ := json.Marshal(plugins)
 		mu.Unlock()
 		broadcast(string(b))
+
+		if req.Close {
+			done <- true
+		}
 	})
 
 	http.HandleFunc("/events", func(w http.ResponseWriter, r *http.Request) {
@@ -261,7 +391,6 @@ func HandleHtmlVerify(projectRoot string, pending []PendingReq, config map[strin
 		ch := make(chan string, 1)
 		clientsMu.Lock()
 		clients = append(clients, ch)
-		fmt.Fprintf(os.Stderr, "[DEBUG][SSE] New client connected. Total: %d\n", len(clients))
 		clientsMu.Unlock()
 
 		defer func() {
@@ -272,7 +401,19 @@ func HandleHtmlVerify(projectRoot string, pending []PendingReq, config map[strin
 					break
 				}
 			}
+			remaining := len(clients)
 			clientsMu.Unlock()
+
+			if remaining == 0 {
+				go func() {
+					time.Sleep(3 * time.Second)
+					clientsMu.Lock()
+					if len(clients) == 0 {
+						done <- true
+					}
+					clientsMu.Unlock()
+				}()
+			}
 		}()
 
 		for {
@@ -295,33 +436,26 @@ func HandleHtmlVerify(projectRoot string, pending []PendingReq, config map[strin
 			w.WriteHeader(405)
 			return
 		}
-		
-		err := r.ParseForm()
-		if err != nil {
+		if err := r.ParseForm(); err != nil {
 			w.WriteHeader(400)
 			return
 		}
-
 		pkgName := r.FormValue("package")
 		if pkgName == "" {
 			w.WriteHeader(400)
 			return
 		}
-
 		noPending := r.FormValue("noPending") == "true"
-
 		err = RevokeTrust(projectRoot, pkgName, noPending)
 		if err != nil {
 			utils.Error("Failed to remotely revoke %s: %v", pkgName, err)
 			w.WriteHeader(500)
 			return
 		}
-
 		mu.Lock()
 		for i, wp := range plugins {
 			if wp.Name == pkgName {
 				if noPending {
-					// Remove from list or mark as uninstalled
 					plugins[i].Status = "NOT_INSTALLED"
 				} else {
 					plugins[i].Status = "pending"
@@ -329,10 +463,53 @@ func HandleHtmlVerify(projectRoot string, pending []PendingReq, config map[strin
 			}
 		}
 		mu.Unlock()
-
 		w.WriteHeader(200)
+		pterm.Warning.Printf("Plugin %s revoked (noPending: %v)\n", pkgName, noPending)
+		mu.Lock()
+		b, _ := json.Marshal(plugins)
+		mu.Unlock()
+		broadcast(string(b))
+	})
 
-		// Broadcast update
+	http.HandleFunc("/revoke-batch", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != "POST" {
+			w.WriteHeader(405)
+			return
+		}
+		var req struct {
+			Packages  []string `json:"packages"`
+			NoPending bool     `json:"noPending"`
+		}
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			w.WriteHeader(400)
+			return
+		}
+		mu.Lock()
+		failed := false
+		for _, pkgName := range req.Packages {
+			err := RevokeTrust(projectRoot, pkgName, req.NoPending)
+			if err != nil {
+				utils.Error("Failed to remotely revoke %s: %v", pkgName, err)
+				failed = true
+				continue
+			}
+			for i, wp := range plugins {
+				if wp.Name == pkgName {
+					if req.NoPending {
+						plugins[i].Status = "NOT_INSTALLED"
+					} else {
+						plugins[i].Status = "pending"
+					}
+				}
+			}
+			pterm.Warning.Printf("Plugin %s revoked in batch\n", pkgName)
+		}
+		mu.Unlock()
+		if failed {
+			w.WriteHeader(207)
+		} else {
+			w.WriteHeader(200)
+		}
 		mu.Lock()
 		b, _ := json.Marshal(plugins)
 		mu.Unlock()
@@ -348,14 +525,14 @@ func HandleHtmlVerify(projectRoot string, pending []PendingReq, config map[strin
 			w.WriteHeader(400)
 			return
 		}
-
 		pkgName := r.FormValue("package")
 		pkgVer := r.FormValue("version")
 		if pkgName == "" || pkgVer == "" {
 			w.WriteHeader(400)
 			return
 		}
-
+		
+		pterm.Info.Printf("Installing %s@%s...\n", pkgName, pkgVer)
 		if err := InstallPendingPlugin(projectRoot, pkgName, pkgVer); err != nil {
 			utils.Error("Remote installation failed for %s@%s: %v", pkgName, pkgVer, err)
 			w.WriteHeader(500)
@@ -363,17 +540,98 @@ func HandleHtmlVerify(projectRoot string, pending []PendingReq, config map[strin
 			return
 		}
 
+		// Re-read config for fresh metadata
+		content, _ := os.ReadFile(configPath)
+		var freshConfig map[string]interface{}
+		json.Unmarshal(content, &freshConfig)
+
 		mu.Lock()
-		for i, wp := range plugins {
-			if wp.Name == pkgName {
-				plugins[i].Status = "pending"
+		var pReqs []PendingReq
+		for _, p := range plugins {
+			pReqs = append(pReqs, PendingReq{
+				Name:       p.Name,
+				Version:    p.Version,
+				Identity:   p.Identity,
+				Privileges: p.Privileges,
+				Status:     p.Status,
+			})
+		}
+		// Update status for the installed one first
+		for i, pr := range pReqs {
+			if pr.Name == pkgName {
+				pReqs[i].Status = "pending"
 			}
 		}
+		plugins = buildWebPlugins(projectRoot, pReqs, freshConfig, isReview)
 		mu.Unlock()
 
 		w.WriteHeader(200)
+		pterm.Success.Printf("Installed %s@%s. Metadata refreshed.\n", pkgName, pkgVer)
+		
+		mu.Lock()
+		b, _ := json.Marshal(plugins)
+		mu.Unlock()
+		broadcast(string(b))
+	})
 
-		// Broadcast update
+	http.HandleFunc("/install-batch", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != "POST" {
+			w.WriteHeader(405)
+			return
+		}
+		var req struct {
+			Packages []struct {
+				Name    string `json:"name"`
+				Version string `json:"version"`
+			} `json:"packages"`
+		}
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			w.WriteHeader(400)
+			return
+		}
+		
+		mu.Lock()
+		failed := false
+		for _, p := range req.Packages {
+			pterm.Info.Printf("Installing %s@%s...\n", p.Name, p.Version)
+			if err := InstallPendingPlugin(projectRoot, p.Name, p.Version); err != nil {
+				utils.Error("Remote batch installation failed for %s@%s: %v", p.Name, p.Version, err)
+				failed = true
+				continue
+			}
+			pterm.Success.Printf("Batch installed %s@%s\n", p.Name, p.Version)
+		}
+
+		// Re-read config and refresh all
+		content, _ := os.ReadFile(configPath)
+		var freshConfig map[string]interface{}
+		json.Unmarshal(content, &freshConfig)
+
+		var pReqs []PendingReq
+		for _, p := range plugins {
+			status := p.Status
+			// If it was just installed, mark as pending in the re-scan
+			for _, ip := range req.Packages {
+				if ip.Name == p.Name {
+					status = "pending"
+				}
+			}
+			pReqs = append(pReqs, PendingReq{
+				Name:       p.Name,
+				Version:    p.Version,
+				Identity:   p.Identity,
+				Privileges: p.Privileges,
+				Status:     status,
+			})
+		}
+		plugins = buildWebPlugins(projectRoot, pReqs, freshConfig, isReview)
+		mu.Unlock()
+
+		if failed {
+			w.WriteHeader(207)
+		} else {
+			w.WriteHeader(200)
+		}
 		mu.Lock()
 		b, _ := json.Marshal(plugins)
 		mu.Unlock()
@@ -381,6 +639,7 @@ func HandleHtmlVerify(projectRoot string, pending []PendingReq, config map[strin
 	})
 
 	http.HandleFunc("/cancel", func(w http.ResponseWriter, r *http.Request) {
+		pterm.Info.Println("Manual session termination requested.")
 		done <- true
 	})
 
@@ -391,23 +650,20 @@ func HandleHtmlVerify(projectRoot string, pending []PendingReq, config map[strin
 		}
 	}()
 
-	pterm.Info.Println("Press Ctrl+C to cancel and return to terminal...")
-
-	// Subscribe to the global signal manager (registered in main.go at startup)
 	stop := utils.SignalManager.Subscribe()
 	defer utils.SignalManager.Unsubscribe(stop)
 
 	select {
 	case <-stop:
-		pterm.Info.Println("Verification cancelled.")
+		pterm.Info.Println("Verification cancelled via terminal.")
 		broadcast("event: close\ndata: session-ended")
 		time.Sleep(500 * time.Millisecond)
 	case <-done:
-		// Normal completion
 		broadcast("event: close\ndata: session-ended")
 		time.Sleep(500 * time.Millisecond)
 	}
 
+	area.Stop()
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 	defer cancel()
 	srv.Shutdown(ctx)
