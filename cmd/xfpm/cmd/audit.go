@@ -19,6 +19,7 @@ import (
 	"os/signal"
 	"path/filepath"
 	"strings"
+	"sync"
 	"syscall"
 	"time"
 
@@ -119,7 +120,7 @@ var auditCmd = &cobra.Command{
 			} else if auditHtml {
 				handleHtmlReport(pkgJson.Name, resolved, vulns)
 			} else {
-				options := []string{"View Vulnerability Tree (Terminal)", "Generate Technical Report (HTML)", "Exit"}
+				options := []string{"View Vulnerability Tree (Terminal)", "Generate Technical Report (WEB)", "Exit"}
 				selected, _ := pterm.DefaultInteractiveSelect.WithOptions(options).Show("Select additional view")
 
 				switch selected {
@@ -160,6 +161,57 @@ func handleHtmlReport(projectName string, resolved []*core.ResolvedPackage, vuln
 		http.ServeFile(w, r, reportPath)
 	})
 
+	var clients []chan string
+	var clientsMu sync.Mutex
+
+	broadcast := func(msg string) {
+		clientsMu.Lock()
+		defer clientsMu.Unlock()
+		for _, ch := range clients {
+			select {
+			case ch <- msg:
+			default:
+			}
+		}
+	}
+
+	http.HandleFunc("/events", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "text/event-stream")
+		w.Header().Set("Cache-Control", "no-cache")
+		w.Header().Set("Connection", "keep-alive")
+		w.Header().Set("Access-Control-Allow-Origin", "*")
+
+		ch := make(chan string, 1)
+		clientsMu.Lock()
+		clients = append(clients, ch)
+		clientsMu.Unlock()
+
+		defer func() {
+			clientsMu.Lock()
+			for i, c := range clients {
+				if c == ch {
+					clients = append(clients[:i], clients[i+1:]...)
+					break
+				}
+			}
+			clientsMu.Unlock()
+		}()
+
+		for {
+			select {
+			case msg := <-ch:
+				if strings.HasPrefix(msg, "event:") {
+					fmt.Fprintf(w, "%s\n\n", msg)
+				} else {
+					fmt.Fprintf(w, "data: %s\n\n", msg)
+				}
+				w.(http.Flusher).Flush()
+			case <-r.Context().Done():
+				return
+			}
+		}
+	})
+
 	srv := &http.Server{}
 	go func() {
 		if err := srv.Serve(ln); err != nil && err != http.ErrServerClosed {
@@ -172,6 +224,9 @@ func handleHtmlReport(projectName string, resolved []*core.ResolvedPackage, vuln
 	stop := make(chan os.Signal, 1)
 	signal.Notify(stop, os.Interrupt, syscall.SIGTERM)
 	<-stop
+
+	broadcast("event: close\ndata: session-ended")
+	time.Sleep(500 * time.Millisecond) // Give time for clients to receive the event before shutting down
 
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
