@@ -133,11 +133,32 @@ var signCmd = &cobra.Command{
 		allFilesMap := make(map[string]bool)
 		pkgDir := filepath.Dir(absPkgPath)
 
+		// Strict validation: check if all files listed in package.json exist
+		skipValidation := false
+		for _, arg := range args {
+			if arg == "--" {
+				skipValidation = true
+				break
+			}
+		}
+
 		for _, pattern := range pkg.Files {
+			// Skip validation for the signature file itself
+			if pattern == "xypriss.plugin.xsig" {
+				continue
+			}
+
 			fullPattern := filepath.Join(pkgDir, pattern)
 			
 			// Resolve directory vs file vs glob
 			matches, err := filepath.Glob(fullPattern)
+			
+			if !skipValidation {
+				if err != nil || len(matches) == 0 {
+					return fmt.Errorf("file or directory '%s' listed in package.json does not exist. Use '--' at the end of command to ignore this validation", pattern)
+				}
+			}
+
 			if err != nil {
 				// If glob fails, try direct path
 				matches = []string{fullPattern}
