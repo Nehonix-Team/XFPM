@@ -1,5 +1,12 @@
 # XFPM - Release Notes
 
+## [G0.1.189] - 2026-04-28
+
+### CLI & Security Hardening
+
+- **New `start` Command**: Added `xfpm start` as a direct alias for `xfpm run start`, streamlining the development-to-production workflow.
+- **Strict Signature Validation**: Enforced strict existence checks for all files listed in `package.json` during the signing process. Plugins missing mandatory files will now fail to sign unless bypassed with `--`.
+
 ## [G0.1.188] - 2026-04-27
 
 ### Deep Discovery & Sync
