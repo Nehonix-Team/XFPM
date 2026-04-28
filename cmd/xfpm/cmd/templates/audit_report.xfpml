@@ -8,6 +8,7 @@
     <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600&family=Syne:wght@400;600;700;800&display=swap" rel="stylesheet">
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/d3/7.9.0/d3.min.js"></script>
+    <script src="https://unpkg.com/3d-force-graph"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/marked/9.1.6/marked.min.js"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github-dark.min.css">
     <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
@@ -73,9 +74,18 @@
         .node-root circle { fill: #1d4ed8; stroke: #3b82f6; stroke-width: 2; }
         .node-vuln circle { fill: #7f1d1d; stroke: #ef4444; stroke-width: 2.5; }
         .node-normal circle { fill: #0f2240; stroke: #1e3a5f; stroke-width: 1.5; }
-        .node text { font-size: 10px; fill: #e2eaf5; font-family: 'JetBrains Mono', monospace; font-weight: 600; pointer-events: none; text-shadow: 0 1px 4px rgba(0,0,0,0.8); }
+        .node-path circle { fill: #0f2240; stroke: #fbbf24; stroke-width: 2; }
+        .node-root text, .node-vuln text, .node-normal text, .node-path text { font-size: 10px; fill: #ffffff; font-family: 'JetBrains Mono', monospace; font-weight: 600; pointer-events: none; text-shadow: 0 1px 4px rgba(0,0,0,0.8); }
         .link { stroke: #1e3a5f; stroke-opacity: 0.6; }
         .link-vuln { stroke: #7f1d1d; stroke-opacity: 0.8; }
+        .link-path { stroke: #fbbf24; stroke-opacity: 0.85; }
+        
+        @keyframes marching_ants {
+            from { stroke-dashoffset: 16; }
+            to { stroke-dashoffset: 0; }
+        }
+        .flowing { stroke-dasharray: 4 4; animation: marching_ants 0.8s linear infinite; }
+        
         .graph-tooltip {
             position: absolute; background: #0d1421; border: 1px solid #1e2d45;
             border-radius: 8px; padding: 0.5rem 0.75rem; font-size: 12px;
@@ -259,7 +269,10 @@
                     <div id="m-sev"></div>
                 </div>
             </div>
-            <div class="section-label">Advisory Details</div>
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:1rem">
+                <div class="section-label" style="margin-bottom:0">Advisory Details</div>
+                <button type="button" class="graph-btn" id="copy-details">Copy Text Details</button>
+            </div>
             <div id="modal-details" class="md-content"></div>
 
             <div class="section-label" style="margin-top:2rem">Pulled in by</div>
@@ -329,20 +342,23 @@
         <div id="graph-canvas">
             <div class="graph-tooltip" id="graph-tooltip"></div>
             <div class="graph-controls">
+                <button class="graph-btn" id="flow-btn" onclick="toggleFlow()">Animate Flow</button>
                 <button class="graph-btn" id="expand-btn" onclick="toggleExpand()">Expand</button>
+                <button class="graph-btn" onclick="toggle3D()">3D Mode</button>
                 <button class="graph-btn" onclick="resetZoom()">Reset</button>
                 <button class="graph-btn" onclick="toggleLabels()">Labels</button>
             </div>
             <div class="graph-legend">
                 <div class="legend-item"><div class="legend-dot" style="background:#3b82f6;border:2px solid #60a5fa"></div>Root</div>
                 <div class="legend-item"><div class="legend-dot" style="background:#7f1d1d;border:2px solid #ef4444"></div>Vulnerable</div>
+                <div class="legend-item"><div class="legend-dot" style="background:#0f2240;border:2px solid #fbbf24"></div>Pulled in by Path</div>
                 <div class="legend-item"><div class="legend-dot" style="background:#1e3a5f;border:1px solid #2d5a8f"></div>Package</div>
             </div>
         </div>
     </div>
 
     <footer style="text-align:center;color:#1e3a5f;font-size:0.8rem;border-top:1px solid #0d1421;padding-top:2rem;margin-top:2rem;font-family:'JetBrains Mono',monospace" class="fade-up delay-4">
-        XFPM Runtime Security Engine · Nehonix Team © 2026
+        XFPM Security Audit (XFPM SA) · Nehonix Team © 2026
     </footer>
 </div>
 
@@ -407,8 +423,10 @@ function openModal(v) {
     pathContainer.innerHTML = '';
     if (v.Paths && v.Paths.length > 0) {
         v.Paths.forEach(path => {
+            const pWrap = document.createElement('div');
+            pWrap.style.display = 'flex'; pWrap.style.justifyContent = 'space-between'; pWrap.style.alignItems = 'center'; pWrap.style.marginBottom = '8px';
+            
             const pDiv = document.createElement('div');
-            pDiv.style.marginBottom = '8px';
             pDiv.style.display = 'flex';
             pDiv.style.alignItems = 'center';
             pDiv.style.flexWrap = 'wrap';
@@ -417,7 +435,7 @@ function openModal(v) {
             path.forEach((node, idx) => {
                 const nodeSpan = document.createElement('span');
                 nodeSpan.textContent = node;
-                if (node === '[root]') nodeSpan.style.color = '#3b82f6';
+                if (node === '[root]') nodeSpan.style.color = '#38bdf8';
                 else if (idx === path.length - 1) nodeSpan.style.color = '#f87171';
                 else nodeSpan.style.color = '#e2eaf5';
                 
@@ -430,7 +448,16 @@ function openModal(v) {
                     pDiv.appendChild(arrow);
                 }
             });
-            pathContainer.appendChild(pDiv);
+            pWrap.appendChild(pDiv);
+            
+            const btn = document.createElement('button');
+            btn.className = 'graph-btn';
+            btn.textContent = 'Trace on Graph';
+            btn.style.marginLeft = '12px';
+            btn.onclick = () => tracePath(path);
+            pWrap.appendChild(btn);
+            
+            pathContainer.appendChild(pWrap);
         });
     } else {
         pathContainer.textContent = 'No dependency path available.';
@@ -438,6 +465,21 @@ function openModal(v) {
 
     document.getElementById('modal-overlay').classList.add('active');
     document.body.style.overflow = 'hidden';
+    
+    // Setup copy action
+    const copyBtn = document.getElementById('copy-details');
+    copyBtn.onclick = () => {
+        navigator.clipboard.writeText(document.getElementById('modal-details').innerText);
+        const originalText = copyBtn.textContent;
+        copyBtn.textContent = 'Copied!';
+        copyBtn.style.color = '#34d399';
+        copyBtn.style.borderColor = '#34d399';
+        setTimeout(() => {
+            copyBtn.textContent = originalText;
+            copyBtn.style.color = '';
+            copyBtn.style.borderColor = '';
+        }, 2000);
+    };
 }
 
 function closeModal() {
@@ -451,7 +493,27 @@ document.getElementById('modal-overlay').addEventListener('click', e => {
 });
 document.addEventListener('keydown', e => { if (e.key === 'Escape') closeModal(); });
 
+// SSE for auto-close
+const es = new EventSource('/events');
+es.addEventListener('close', () => window.close());
+es.onerror = () => { es.close(); };
+
 // ─── D3 Force Graph ───
+const defaultPathNodes = new Set();
+const defaultPathEdges = new Set();
+VULNS.forEach(v => {
+    if (v.Paths && v.Paths.length > 0) {
+        v.Paths.forEach(path => {
+            for(let i=0; i<path.length; i++){
+                defaultPathNodes.add(path[i]);
+                if(i < path.length - 1) {
+                    defaultPathEdges.add(`${path[i]}->${path[i+1]}`);
+                }
+            }
+        });
+    }
+});
+
 function buildGraph() {
     const container = document.getElementById('graph-canvas');
     const W = container.clientWidth, H = container.clientHeight;
@@ -484,15 +546,28 @@ function buildGraph() {
     const link = g.append('g').selectAll('line')
         .data(links).join('line')
         .attr('class', d => {
-            const src = typeof d.source === 'object' ? d.source.name : d.source;
-            return vulnIds.has(src) ? 'link link-vuln' : 'link';
+            const srcKey = d.source.isRoot ? '[root]' : d.source.name;
+            const tgtKey = d.target.isRoot ? '[root]' : d.target.name;
+            if (defaultPathEdges.has(`${srcKey}->${tgtKey}`)) return 'link link-path';
+            
+            const srcName = typeof d.source === 'object' ? d.source.name : d.source;
+            return vulnIds.has(srcName) ? 'link link-vuln' : 'link';
         })
-        .attr('stroke-width', 1)
+        .attr('stroke-width', d => {
+            const srcKey = d.source.isRoot ? '[root]' : (typeof d.source === 'object' ? d.source.name : d.source);
+            const tgtKey = d.target.isRoot ? '[root]' : (typeof d.target === 'object' ? d.target.name : d.target);
+            return defaultPathEdges.has(`${srcKey}->${tgtKey}`) ? 1.5 : 1;
+        })
         .attr('marker-end', 'url(#arrow)');
 
     const node = g.append('g').selectAll('g')
         .data(nodes).join('g')
-        .attr('class', d => d.isRoot ? 'node-root' : (d.vuln ? 'node-vuln' : 'node-normal'))
+        .attr('class', d => {
+            if (d.isRoot) return 'node-root';
+            if (d.vuln) return 'node-vuln';
+            if (defaultPathNodes.has(d.name)) return 'node-path node-normal';
+            return 'node-normal';
+        })
         .call(d3.drag()
             .on('start', (e, d) => { if (!e.active) simulation.alphaTarget(0.3).restart(); d.fx = d.x; d.fy = d.y; })
             .on('drag',  (e, d) => { d.fx = e.x; d.fy = e.y; })
@@ -522,6 +597,15 @@ function buildGraph() {
             const v = VULNS.find(x => x.Package === d.name);
             if (v) openModal(v);
         }
+    });
+    
+    // Add simple mouse enter/leave effects
+    node.on('mouseover', function() { d3.select(this).select('circle').attr('stroke', '#38bdf8'); });
+    node.on('mouseout', function(e, d) {
+        let sc = '#1e3a5f';
+        if (d.isRoot) sc = '#3b82f6';
+        else if (d.vuln) sc = '#ef4444';
+        d3.select(this).select('circle').attr('stroke', sc);
     });
 
     simulation.on('tick', () => {
@@ -553,6 +637,184 @@ function toggleExpand() {
         const W = canvas.clientWidth, H = canvas.clientHeight;
         simulation.force('center', d3.forceCenter(W / 2, H / 2)).alpha(0.3).restart();
     }, 350);
+}
+
+let graph3D;
+let is3D = false;
+
+function toggle3D() {
+    is3D = !is3D;
+    const canvas = document.getElementById('graph-canvas');
+    if (is3D) {
+        if (svgRoot) svgRoot.style('display', 'none');
+        document.querySelector('.graph-legend').style.display = 'none';
+        
+        let targetDiv = document.getElementById('3d-graph');
+        if (!targetDiv) {
+            targetDiv = document.createElement('div');
+            targetDiv.id = '3d-graph';
+            targetDiv.style.position = 'absolute';
+            targetDiv.style.inset = '0';
+            canvas.appendChild(targetDiv);
+        }
+        targetDiv.style.display = 'block';
+        
+        if (!graph3D) {
+            const gData = {
+                nodes: GRAPH.nodes.map(d => {
+                    let color = '#1e3a5f';
+                    let val = 1;
+                    if (d.isRoot) { color = '#3b82f6'; val = 3; }
+                    else if (d.vuln) { color = '#ef4444'; val = 2.5; }
+                    else if (defaultPathNodes.has(d.name)) { color = '#fbbf24'; val = 1.5; }
+                    return {id: d.id, name: d.name, val, color};
+                }),
+                links: GRAPH.edges.map(d => {
+                     const srcNode = GRAPH.nodes.find(n => n.id === d.source);
+                     const tgtNode = GRAPH.nodes.find(n => n.id === d.target);
+                     const sK = (srcNode && srcNode.isRoot) ? '[root]' : (srcNode ? srcNode.name : d.source);
+                     const tK = (tgtNode && tgtNode.isRoot) ? '[root]' : (tgtNode ? tgtNode.name : d.target);
+                     const c = defaultPathEdges.has(`${sK}->${tK}`) ? '#fbbf24' : '#1e2d45';
+                     return {source: d.source, target: d.target, color: c};
+                })
+            };
+            graph3D = ForceGraph3D()(targetDiv)
+                .graphData(gData)
+                .nodeLabel('name')
+                .nodeColor('color')
+                .nodeRelSize(4)
+                .linkColor('color')
+                .linkOpacity(0.6)
+                .backgroundColor('#0d1421')
+                .width(canvas.clientWidth)
+                .height(canvas.clientHeight);
+                
+            if (isFlowing) {
+                graph3D.linkDirectionalParticles(d => d.color === '#fbbf24' ? 3 : 0)
+                       .linkDirectionalParticleSpeed(0.01)
+                       .linkDirectionalParticleWidth(2);
+            }
+                
+            // Handle window resize for 3D graph (e.g. Expand toggle)
+            const observer = new ResizeObserver(() => {
+                if (is3D) graph3D.width(canvas.clientWidth).height(canvas.clientHeight);
+            });
+            observer.observe(canvas);
+        }
+    } else {
+        document.getElementById('3d-graph').style.display = 'none';
+        if (svgRoot) svgRoot.style('display', 'block');
+        document.querySelector('.graph-legend').style.display = 'flex';
+    }
+}
+
+function tracePath(path) {
+    closeModal();
+    if (is3D) toggle3D(); // revert to 2D for tracing
+    
+    // Get actual D3 nodes/links
+    // path array is like ["[root]", "remeda", "@hono/node-server"]
+    // Convert path to node IDs. Note: path strings don't include version.
+    
+    // Map path names to IDs in GRAPH.nodes
+    const pathNodes = new Set();
+    const resolvedPath = [];
+    
+    // 1. Resolve nodes
+    for (let i = 0; i < path.length; i++) {
+        let match;
+        if (path[i] === '[root]') match = GRAPH.nodes.find(n => n.isRoot);
+        else match = GRAPH.nodes.find(n => n.name === path[i]);
+        if (match) {
+            pathNodes.add(match.id);
+            resolvedPath.push(match.id);
+        }
+    }
+    
+    // 2. Resolve edges
+    const traceEdges = new Set();
+    for (let i = 0; i < resolvedPath.length - 1; i++) {
+        const src = resolvedPath[i];
+        const tgt = resolvedPath[i+1];
+        traceEdges.add(`${src}->${tgt}`);
+    }
+
+    // 3. Highlight
+    svgRoot.selectAll('.node-root circle, .node-vuln circle, .node-normal circle, .node-path circle')
+        .transition().duration(400)
+        .style('opacity', function(d) { return pathNodes.has(d.id) ? 1 : 0.1; });
+        
+    // Always show labels for nodes in path
+    svgRoot.selectAll('g text')
+        .style('display', d => (showLabels || pathNodes.has(d.id)) ? null : 'none')
+        .style('opacity', d => pathNodes.has(d.id) ? 1 : (showLabels ? 0.1 : 0));
+        
+    svgRoot.selectAll('line')
+        .transition().duration(400)
+        .style('opacity', function(d) {
+            const sid = typeof d.source === 'object' ? d.source.id : d.source;
+            const tid = typeof d.target === 'object' ? d.target.id : d.target;
+            return traceEdges.has(`${sid}->${tid}`) ? 1 : 0.05;
+        })
+        .attr('stroke', function(d) {
+            const sid = typeof d.source === 'object' ? d.source.id : d.source;
+            const tid = typeof d.target === 'object' ? d.target.id : d.target;
+            return traceEdges.has(`${sid}->${tid}`) ? '#38bdf8' : null;
+        })
+        .attr('stroke-width', function(d) {
+            const sid = typeof d.source === 'object' ? d.source.id : d.source;
+            const tid = typeof d.target === 'object' ? d.target.id : d.target;
+            return traceEdges.has(`${sid}->${tid}`) ? 2.5 : 1;
+        });
+        
+    if (isFlowing) {
+        svgRoot.selectAll('line').classed('flowing', function(d) {
+            const sid = typeof d.source === 'object' ? d.source.id : d.source;
+            const tid = typeof d.target === 'object' ? d.target.id : d.target;
+            return traceEdges.has(`${sid}->${tid}`);
+        });
+    }
+
+    // Reset after some time or add a reset mechanism
+    const originalResetZoom = resetZoom;
+    resetZoom = function() {
+        originalResetZoom();
+        clearTrace();
+    };
+    
+    pterm_info_trace();
+}
+
+let isFlowing = false;
+function toggleFlow() {
+    isFlowing = !isFlowing;
+    const btn = document.getElementById('flow-btn');
+    btn.textContent = isFlowing ? 'Stop Flow' : 'Animate Flow';
+    
+    if (svgRoot) {
+        svgRoot.selectAll('line.link-path').classed('flowing', isFlowing);
+    }
+    
+    if (graph3D) {
+        graph3D.linkDirectionalParticles(d => (isFlowing && d.color === '#fbbf24') ? 3 : 0)
+               .linkDirectionalParticleSpeed(0.01)
+               .linkDirectionalParticleWidth(2);
+    }
+}
+
+function clearTrace() {
+    svgRoot.selectAll('circle').transition().duration(400).style('opacity', 1);
+    svgRoot.selectAll('line').transition().duration(400)
+        .style('opacity', function(d) { return d3.select(this).attr('class') && d3.select(this).attr('class').includes('vuln') ? 0.8 : 0.6; })
+        .attr('stroke', null)
+        .attr('stroke-width', 1);
+    svgRoot.selectAll('g text')
+        .style('display', showLabels ? null : 'none')
+        .style('opacity', 1);
+}
+
+function pterm_info_trace() {
+    // optional UI notification could go here
 }
 
 buildGraph();

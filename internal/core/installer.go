@@ -974,7 +974,7 @@ func (i *Installer) SavePendingPlugins() {
 	
 	pterm.Println()
 	utils.Warn("  ⚠️  [SECURITY] %d plugin(s) pending verification.", len(i.PendingPlugins))
-	utils.Info("      Run 'xfpm plugin verify' to finalize installation.")
+	utils.Info("      Run 'xfpm plugin verify -w' to finalize installation.")
 }
 
 func (i *Installer) isPluginTrusted(pkg *ResolvedPackage) bool {
