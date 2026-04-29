@@ -49,6 +49,11 @@ func LocalXpmDir(projectRoot string) string {
 	return filepath.Join(projectRoot, "node_modules", xfpmPath)
 }
 
+// LocalBinDir returns the project-local node_modules/.bin directory
+func LocalBinDir(projectRoot string) string {
+	return filepath.Join(projectRoot, "node_modules", ".bin")
+}
+
 // LocalVStoreDir returns the project-local virtual store directory
 func LocalVStoreDir(projectRoot string) string {
 	return filepath.Join(LocalXpmDir(projectRoot), "vstore")

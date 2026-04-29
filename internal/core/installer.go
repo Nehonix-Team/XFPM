@@ -54,12 +54,17 @@ func NewInstaller(cas *Cas, registry *RegistryClient, projectRoot string) *Insta
 	vstoreRoot := paths.LocalVStoreDir(projectRoot)
 	utils.CreateDirAllSecure(vstoreRoot)
 
+	maxConcurrency := 128
+	if runtime.GOOS == "windows" {
+		maxConcurrency = 48 // Windows is slower with high concurrency due to Antivirus/NTFS limits
+	}
+
 	return &Installer{
 		cas:         cas,
 		registry:    registry,
 		projectRoot: projectRoot,
 		vstoreRoot:  vstoreRoot,
-		linkingPool: utils.NewAdaptiveSemaphore(128),
+		linkingPool: utils.NewAdaptiveSemaphore(maxConcurrency),
 		progress: mpb.New(
 			mpb.WithWidth(64),
 			mpb.WithRefreshRate(180*time.Millisecond),
@@ -358,8 +363,12 @@ func (i *Installer) linkPackageDeps(packages []*ResolvedPackage, vstoreBase stri
 		go func(p *ResolvedPackage) {
 			defer wg.Done()
 			
-			// Use global linking pool
-			if err := i.linkingPool.Acquire(context.Background(), 128); err != nil {
+			// Use global linking pool with OS-aware limit
+			limit := 128
+			if runtime.GOOS == "windows" {
+				limit = 48
+			}
+			if err := i.linkingPool.Acquire(context.Background(), limit); err != nil {
 				return
 			}
 			defer i.linkingPool.Release()

@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"io"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"runtime"
 )
@@ -63,10 +62,8 @@ func LinkDir(oldname, newname string) error {
 	}
 
 	// Fallback to Junction on Windows
-	// We use 'cmd /c mklink /j'
-	// Junctions MUST use absolute paths for the target to be reliable.
-	cmd := exec.Command("cmd", "/c", "mklink", "/j", newname, absOld)
-	if err := cmd.Run(); err != nil {
+	// We use native Win32 API calls instead of spawning 'cmd /c mklink /j' for performance.
+	if err := CreateJunction(absOld, newname); err != nil {
 		// Final fallback: Copying (expensive but works)
 		return CopyDir(absOld, newname)
 	}

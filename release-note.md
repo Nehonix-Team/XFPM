@@ -1,5 +1,13 @@
 # XFPM - Release Notes
 
+## [G0.1.190] - 2026-04-29
+
+### Lifecycle & Cross-Platform Optimization
+
+- **Native Build Tool Resolution**: Fixed a critical bug where lifecycle scripts (e.g., `argon2` install) failed with "node-gyp-build: not found" by correctly injecting `node_modules/.bin` into the execution `PATH`.
+- **Win32 Native Junctions**: Replaced the slow `cmd /c mklink /j` process spawning with native Windows API calls, providing near-instant directory linking on Windows systems.
+- **Optimized Concurrency**: Tuned Windows installation parallelism to avoid disk contention and antivirus-related bottlenecks during high-speed extractions.
+
 ## [G0.1.189] - 2026-04-28
 
 ### CLI & Security Hardening
