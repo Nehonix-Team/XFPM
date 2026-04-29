@@ -121,13 +121,19 @@ func (r *ScriptRunner) buildPath(packageDir string) string {
 		envPaths = append(envPaths, packageBin)
 	}
 
-	// 2. Project's .bin
-	projectBin := filepath.Join(paths.LocalXpmDir(r.projectRoot), ".bin")
+	// 2. Project's standard .bin
+	projectBin := paths.LocalBinDir(r.projectRoot)
 	if _, err := os.Stat(projectBin); err == nil {
 		envPaths = append(envPaths, projectBin)
 	}
 
-	// 3. Global XPM bin
+	// 3. XFPM's internal .bin (fallback/legacy)
+	internalBin := filepath.Join(paths.LocalXpmDir(r.projectRoot), ".bin")
+	if _, err := os.Stat(internalBin); err == nil {
+		envPaths = append(envPaths, internalBin)
+	}
+
+	// 4. Global XPM bin
 	globalBin := paths.BinDir()
 	if _, err := os.Stat(globalBin); err == nil {
 		envPaths = append(envPaths, globalBin)

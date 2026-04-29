@@ -2,10 +2,10 @@
   "name": "XFPM (XyPriss Package Manager)",
   "description": "The ultra-fast package manager for the XyPriss ecosystem.",
   "warning": "CRITICAL: Public modifications to this file are strictly forbidden. Internal Nehonix metadata ONLY.",
-  "latest": "vG0.1.189",
-  "message": "Start Command & Strict Validation: Added 'xfpm start' alias and enforced strict file existence validation during signing for enhanced distribution security.",
+  "latest": "vG0.1.190",
+  "message": "Lifecycle Fix & Windows Optimization: Corrected PATH injection for native module build tools and implemented native Win32 junctions for massive performance gains on Windows.",
   "metadata": {
-    "releaseDate": "2026-04-28",
+    "releaseDate": "2026-04-29",
     "channel": "stable"
   }
 }
