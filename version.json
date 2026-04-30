@@ -2,8 +2,8 @@
   "name": "XFPM (XyPriss Package Manager)",
   "description": "The ultra-fast package manager for the XyPriss ecosystem.",
   "warning": "CRITICAL: Public modifications to this file are strictly forbidden. Internal Nehonix metadata ONLY.",
-  "latest": "vG0.1.191",
-  "message": "Mandatory Security Disclosure: Enforced mandatory 'xfpm.permissions' field in package.json during plugin signing to ensure full transparency of requested privileges.",
+  "latest": "vG0.1.192",
+  "message": "Cross-Platform Execution Fix: Resolved a major bug preventing native `.exe` binaries (like Bun) from being correctly identified and executed on Windows due to missing extensions during the linking phase.",
   "metadata": {
     "releaseDate": "2026-04-30",
     "channel": "stable"

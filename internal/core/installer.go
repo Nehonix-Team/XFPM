@@ -525,13 +525,6 @@ func (i *Installer) linkBinaries(pkgDir, binDir string, bin json.RawMessage) err
 }
 
 func (i *Installer) adaptiveBinLink(name, pkgDir, relPath, binDir string) {
-	dest := filepath.Join(binDir, name)
-	// COLLISION GUARD: First binary to claim the name wins
-	if _, seen := i.linkedPaths.LoadOrStore(dest, true); seen {
-		return
-	}
-	os.Remove(dest)
-
 	// CLEAN RELATIVE PATH (Handle .exe suffixes in Unix or nested bins)
 	cleanRel := strings.TrimSuffix(relPath, ".exe")
 	if runtime.GOOS == "windows" && !strings.HasSuffix(cleanRel, ".exe") {
@@ -556,6 +549,20 @@ func (i *Installer) adaptiveBinLink(name, pkgDir, relPath, binDir string) {
 			}
 		}
 	}
+
+	dest := filepath.Join(binDir, name)
+	// If the resolved target is an executable on Windows, ensure the destination has the .exe extension
+	if runtime.GOOS == "windows" && strings.HasSuffix(strings.ToLower(absTarget), ".exe") {
+		if !strings.HasSuffix(strings.ToLower(dest), ".exe") {
+			dest += ".exe"
+		}
+	}
+
+	// COLLISION GUARD: First binary to claim the name wins
+	if _, seen := i.linkedPaths.LoadOrStore(dest, true); seen {
+		return
+	}
+	os.Remove(dest)
 
 	relTarget, _ := filepath.Rel(binDir, absTarget)
 	if runtime.GOOS != "windows" {

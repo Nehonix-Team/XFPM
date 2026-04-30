@@ -1,5 +1,11 @@
 # XFPM - Release Notes
 
+## [G0.1.192] - 2026-04-30
+
+### Stability & Bugfixes
+
+- **Cross-Platform Execution Guard**: Resolved a major issue on Windows where native `.exe` binaries (such as the Bun runtime) were linked into `node_modules/.bin` without their `.exe` extension. This prevented `EnsureRuntime` and the OS from locating and executing the binaries. XFPM now intelligently detects native Windows executables during the adaptive linking phase and appends the `.exe` extension automatically.
+
 ## [G0.1.191] - 2026-04-30
 
 ### Mandatory Security Disclosure
