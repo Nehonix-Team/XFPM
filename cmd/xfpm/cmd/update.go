@@ -27,6 +27,9 @@ var updateCmd = &cobra.Command{
 	Short:   "Update dependencies to their latest compatible versions",
 	Long:    "Update packages while respecting the version constraints declared in package.json. Without arguments, all top-level dependencies are refreshed.",
 	Aliases: []string{"up"},
+	Annotations: map[string]string{
+		"requireRuntime": "true",
+	},
 	RunE: func(cmd *cobra.Command, args []string) error {
 		// Set resolver into Update mode: always fetch fresh metadata from registry,
 		// but still honour the semver constraint already in package.json.

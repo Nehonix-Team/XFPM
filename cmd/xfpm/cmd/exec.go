@@ -38,6 +38,9 @@ var execCmd = &cobra.Command{
 	Use:   "exec [command]",
 	Short: "Execute a command from local node_modules/.bin",
 	Aliases: []string{"x"},
+	Annotations: map[string]string{
+		"requireRuntime": "true",
+	},
 	DisableFlagParsing: true,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		if len(args) == 0 {

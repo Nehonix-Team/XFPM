@@ -16,7 +16,7 @@ import (
 	"time"
 
 	"github.com/Nehonix-Team/XFMP/internal/core"
-
+	"github.com/Nehonix-Team/XFMP/internal/paths"
 	"github.com/Nehonix-Team/XFMP/internal/utils"
 	"github.com/spf13/cobra"
 )
@@ -42,7 +42,7 @@ var signCmd = &cobra.Command{
 
 		pkgPath, _ := cmd.Flags().GetString("package")
 		if pkgPath == "" {
-			pkgPath = filepath.Join(absPath, "package.json")
+			pkgPath = paths.PackageJsonPath(absPath)
 		}
 		
 		absPkgPath, err := filepath.Abs(pkgPath)
@@ -57,8 +57,7 @@ var signCmd = &cobra.Command{
 
 		packageDir := filepath.Dir(absPkgPath)
 
-		home, _ := os.UserHomeDir()
-		privPath := filepath.Join(home, ".xfpm", "id_ed25519")
+		privPath := paths.IdentityPath()
 		privBytes, err := os.ReadFile(privPath)
 		if err != nil {
 			return fmt.Errorf("identity not found. Run 'xfpm gen-key' first")
@@ -119,7 +118,6 @@ var signCmd = &cobra.Command{
 					utils.Warn("Duplicate permissions detected. Auto-correcting package.json because --fix is enabled.")
 					pkg.Xfpm.Permissions = uniquePerms
 					pkgData, _ := json.MarshalIndent(pkg, "", "  ")
-					// Add a newline at the end if the original had one, but standard MarshalIndent is fine.
 					os.WriteFile(absPkgPath, pkgData, 0644)
 				} else {
 					return fmt.Errorf("duplicate permissions detected in package.json. Remove duplicates manually or run with --fix to auto-correct")
@@ -129,6 +127,78 @@ var signCmd = &cobra.Command{
 			requestedPermsStr = strings.Join(uniquePerms, ",")
 		} else {
 			requestedPermsStr = "none"
+		}
+
+		// --- Mandatory Plugin Config Enforcement ---
+		configPath := paths.ConfigPath(packageDir)
+		configBase := filepath.Base(configPath)
+
+		if _, err := os.Stat(configPath); os.IsNotExist(err) {
+			if fixFlag {
+				utils.Success("Creating missing 'xypriss.config.jsonc'...")
+				content := "{\n    \"$internal\": {\n        \"$(pkg).name\": {\n            \"type\": \"plugin\"\n        }\n    }\n}\n"
+				os.WriteFile(configPath, []byte(content), 0644)
+
+				// Also ensure it's in pkg.Files
+				found := false
+				for _, f := range pkg.Files {
+					if f == configBase || (configBase == "xypriss.config.jsonc" && f == "xypriss.config.json") {
+						found = true
+						break
+					}
+				}
+				if !found {
+					pkg.Files = append(pkg.Files, configBase)
+					pkgData, _ := json.MarshalIndent(pkg, "", "  ")
+					os.WriteFile(absPkgPath, pkgData, 0644)
+				}
+			}
+		} else {
+			// File exists, check content
+			data, _ := os.ReadFile(configPath)
+			content := string(data)
+			if !strings.Contains(content, "\"type\": \"plugin\"") || !strings.Contains(content, "$(pkg).name") {
+				if fixFlag {
+					utils.Warn("Incomplete '%s' detected. Auto-fixing...", configBase)
+					var cfg map[string]interface{}
+					
+					// Simple JSONC stripping for parsing
+					lines := strings.Split(content, "\n")
+					var cleanLines []string
+					for _, l := range lines {
+						trimmed := strings.TrimSpace(l)
+						if !strings.HasPrefix(trimmed, "//") && trimmed != "" {
+							if idx := strings.Index(l, "//"); idx != -1 {
+								cleanLines = append(cleanLines, l[:idx])
+							} else {
+								cleanLines = append(cleanLines, l)
+							}
+						}
+					}
+					json.Unmarshal([]byte(strings.Join(cleanLines, "\n")), &cfg)
+					
+					if cfg == nil {
+						cfg = make(map[string]interface{})
+					}
+
+					internal, ok := cfg["$internal"].(map[string]interface{})
+					if !ok {
+						internal = make(map[string]interface{})
+						cfg["$internal"] = internal
+					}
+					pkgNode, ok := internal["$(pkg).name"].(map[string]interface{})
+					if !ok {
+						pkgNode = make(map[string]interface{})
+						internal["$(pkg).name"] = pkgNode
+					}
+					pkgNode["type"] = "plugin"
+
+					newData, _ := json.MarshalIndent(cfg, "", "  ")
+					os.WriteFile(configPath, newData, 0644)
+				} else {
+					return fmt.Errorf("mandatory '$internal' plugin metadata is missing in '%s'. Run with --fix to correct it", configBase)
+				}
+			}
 		}
 
 		utils.Matrix("Calculating content hash for: " + targetDir)
@@ -148,7 +218,7 @@ var signCmd = &cobra.Command{
 
 		for _, pattern := range pkg.Files {
 			// Skip validation for the signature file itself
-			if pattern == "xypriss.plugin.xsig" {
+			if pattern == paths.SigFileName {
 				continue
 			}
 
@@ -185,7 +255,7 @@ var signCmd = &cobra.Command{
 							return nil
 						}
 						// Skip the signature file itself
-						if info.Name() == "xypriss.plugin.xsig" {
+						if info.Name() == paths.SigFileName {
 							return nil
 						}
 						allFilesMap[path] = true
@@ -193,7 +263,7 @@ var signCmd = &cobra.Command{
 					})
 				} else {
 					// Skip the signature file if matched by glob/file
-					if info.Name() != "xypriss.plugin.xsig" {
+					if info.Name() != paths.SigFileName {
 						allFilesMap[m] = true
 					}
 				}
@@ -257,21 +327,21 @@ var signCmd = &cobra.Command{
 			sigContent, signatureBase64,
 		)
 
-		// Enforce "xypriss.plugin.xsig" in the files array
+		// Enforce signature file in the files array
 		sigInFiles := false
 		for _, f := range pkg.Files {
-			if f == "xypriss.plugin.xsig" {
+			if f == paths.SigFileName {
 				sigInFiles = true
 				break
 			}
 		}
 
 		if !sigInFiles {
-			return fmt.Errorf("\"xypriss.plugin.xsig\" MUST be present in the \"files\" array of package.json")
+			return fmt.Errorf("\"%s\" MUST be present in the \"files\" array of package.json", paths.SigFileName)
 		}
 
 		// Save signature to the same directory as package.json (root of plugin)
-		sigFilePath := filepath.Join(packageDir, "xypriss.plugin.xsig")
+		sigFilePath := paths.PackageSigPath(packageDir)
 
 		if err := os.WriteFile(sigFilePath, []byte(finalSig), 0644); err != nil {
 			return fmt.Errorf("failed to write signature: %w", err)
@@ -285,7 +355,7 @@ var signCmd = &cobra.Command{
 
 func init() {
 	RootCmd.AddCommand(signCmd)
-	signCmd.Flags().String("min-version", "", "Minimum allowed version (anti-downgrade)")
+	signCmd.Flags().StringP("min-version", "m", "", "Minimum allowed version (anti-downgrade)")
 	signCmd.Flags().StringP("package", "p", "", "Path to package.json (default: path/package.json)")
 	signCmd.Flags().Bool("fix", false, "Auto-correct errors in package.json like duplicate permissions")
 }
