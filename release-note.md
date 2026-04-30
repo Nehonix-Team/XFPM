@@ -1,5 +1,11 @@
 # XFPM - Release Notes
 
+## [G0.1.191] - 2026-04-30
+
+### Mandatory Security Disclosure
+
+- **Mandatory Permissions Field**: Enforced strict disclosure of plugin permissions. The `xfpm.permissions` field is now mandatory in `package.json` for the `sign` command. Plugins failing to disclose their required permissions (even if empty `[]`) will be rejected.
+
 ## [G0.1.190] - 2026-04-29
 
 ### Lifecycle & Cross-Platform Optimization

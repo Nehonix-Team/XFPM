@@ -92,7 +92,11 @@ var signCmd = &cobra.Command{
 		fixFlag, _ := cmd.Flags().GetBool("fix")
 
 		requestedPermsStr := ""
-		if pkg.Xfpm != nil && len(pkg.Xfpm.Permissions) > 0 {
+		if pkg.Xfpm == nil || pkg.Xfpm.Permissions == nil {
+			return fmt.Errorf("the 'xfpm.permissions' field is mandatory in package.json for signing. If your plugin requires no permissions, use an empty array: \"permissions\": []")
+		}
+
+		if len(pkg.Xfpm.Permissions) > 0 {
 			utils.Matrix("Validating requested permissions...")
 			seen := make(map[string]bool)
 			var uniquePerms []string
