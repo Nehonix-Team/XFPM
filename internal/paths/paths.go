@@ -3,6 +3,7 @@ package paths
 import (
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 )
 
@@ -10,14 +11,42 @@ var xfpmPath string = ".xfpm"
 
 // XpmHome returns the base XFPM directory, usually ~/.xfpm
 func XpmHome() string {
-	home, _ := os.UserHomeDir()
-	return filepath.Join(home, xfpmPath)
+	return filepath.Join(getEffectiveHome(), xfpmPath)
 }
 
 // LegacyHome returns the old base XPM directory, usually ~/.xpm
 func LegacyHome() string {
+	return filepath.Join(getEffectiveHome(), ".xpm")
+}
+
+// getEffectiveHome returns the home directory, prioritizing the original user's home
+// when running under sudo to ensure consistent tool discovery.
+func getEffectiveHome() string {
+	if runtime.GOOS == "windows" {
+		home, _ := os.UserHomeDir()
+		return home
+	}
+
+	if os.Geteuid() == 0 {
+		if sudoUser := os.Getenv("SUDO_USER"); sudoUser != "" {
+			// Try to recover original home from environment
+			if home := os.Getenv("HOME"); home != "" && !strings.HasPrefix(home, "/root") {
+				return home
+			}
+			// Fallback: common Linux home path
+			userHome := filepath.Join("/home", sudoUser)
+			if _, err := os.Stat(userHome); err == nil {
+				return userHome
+			}
+		}
+	}
 	home, _ := os.UserHomeDir()
-	return filepath.Join(home, ".xpm")
+	return home
+}
+
+// IdentityPath returns the path to the user's Ed25519 private key
+func IdentityPath() string {
+	return filepath.Join(XpmHome(), "id_ed25519")
 }
 
 // BinDir returns the directory for global binaries
@@ -120,8 +149,11 @@ func PackageVStoreDir(projectRoot, pkgName, pkgVersion string) string {
 
 // PackageSigPath returns the designated signature file path within the package root
 func PackageSigPath(pkgDir string) string {
-	return filepath.Join(pkgDir, "xypriss.plugin.xsig")
+	return filepath.Join(pkgDir, SigFileName)
 }
+
+// SigFileName is the official name for XyPriss cryptographic signatures
+const SigFileName = "xypriss.plugin.xsig"
 
 // NodeModulesPkgDir returns the path to a package within the project's node_modules
 func NodeModulesPkgDir(projectRoot, pkgName string) string {

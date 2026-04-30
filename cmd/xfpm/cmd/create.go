@@ -25,6 +25,9 @@ var createCmd = &cobra.Command{
 	Use:   "create [initializer]",
 	Short: "Create a new project from an initializer (e.g., vite, next-app)",
 	Long:  "Native implementation of project initializers. Resolves, installs and executes generators directly.",
+	Annotations: map[string]string{
+		"requireRuntime": "true",
+	},
 	DisableFlagParsing: true,
 	SilenceUsage: true,
 	SilenceErrors: true,

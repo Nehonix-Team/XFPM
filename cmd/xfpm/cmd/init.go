@@ -49,7 +49,10 @@ const TemplateURL = "https://dll.nehonix.com/dl/mds/xypriss/templates/initdr.zip
 var initCmd = &cobra.Command{
 	Use:   "init",
 	Short: "Initialize a new XyPriss project",
-	RunE: func(cmd *cobra.Command, args []string) error {
+    Annotations: map[string]string{
+		"requireRuntime": "true",
+	},
+		RunE: func(cmd *cobra.Command, args []string) error {
 		utils.PrintBanner()
 		name, _ := cmd.Flags().GetString("name")
 		desc, _ := cmd.Flags().GetString("desc")

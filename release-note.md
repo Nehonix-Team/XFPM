@@ -1,5 +1,25 @@
 # XFPM - Release Notes
 
+## [G0.1.194] - 2026-04-30
+
+### Sudo Resilience & UX Hardening
+
+- **Sudo-Aware Path Resolution**: Implemented an intelligent home directory detector in the paths module. XFPM now correctly identifies the original developer's home directory via `SUDO_USER` environment variables even when running with `sudo`. This ensures that global tools (like Bun) and configurations are consistently found across different privilege levels, eliminating redundant installation prompts.
+- **Annotation-Based Runtime Enforcement**: Refactored the automated JS runtime check to use a declarative system. Commands now explicitly state if they require the JS environment via Cobra annotations. 
+- **Streamlined Administrative Workflows**: Administrative and informational commands (`upgrade`, `help`, `version`, `sign`) no longer trigger `EnsureRuntime` checks. This significantly speeds up binary maintenance and eliminates the confusing "Would you like to install Bun?" prompt when performing system-level upgrades as root.
+
+## [G0.1.193] - 2026-04-30
+
+### Security & Developer Experience (DX)
+
+- **Deep Scan Permission Discovery**: Introduced `Plugin.inspect()` in the Plugin API. This utility performs a deep runtime scan of plugin instances, mapping implemented hooks and properties (like `globalMiddleware`) to their official cryptographic permission IDs. This eliminates guesswork for plugin authors when preparing their security manifests.
+- **Mandatory Config Auto-Fix**: The `xfpm sign` command now enforces the presence and correctness of the `xypriss.config.jsonc` security contract. 
+- **Intelligent Signing Logic**: When the `--fix` flag is passed, XFPM will automatically:
+    - Create a missing `xypriss.config.jsonc` with mandatory metadata.
+    - Inject missing `$internal` plugin type declarations into existing configs.
+    - De-duplicate entries in the `xfpm.permissions` array.
+- **Centralized Path Logic**: Refactored the signing and identity management modules to use a unified path resolution system, improving cross-platform reliability.
+
 ## [G0.1.192] - 2026-04-30
 
 ### Stability & Bugfixes

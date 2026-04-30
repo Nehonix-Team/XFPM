@@ -31,8 +31,12 @@ var RootCmd = &cobra.Command{
 		}
 
 		// Automated JS Runtime Check (Bun)
-		if err := core.EnsureRuntime(); err != nil {
-			utils.Error("Runtime verification failed: %v", err)
+		// We use Cobra annotations to determine if a command needs the JS runtime.
+		// This avoids unnecessary prompts for administrative or informational commands.
+		if cmd.Annotations["requireRuntime"] == "true" {
+			if err := core.EnsureRuntime(); err != nil {
+				utils.Error("Runtime verification failed: %v", err)
+			}
 		}
 
 		utils.CheckForUpdates(false)

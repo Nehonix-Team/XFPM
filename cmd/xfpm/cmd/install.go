@@ -26,6 +26,9 @@ var installCmd = &cobra.Command{
 	Use:   "install [packages...]",
 	Short: "Install dependencies for the current project",
 	Aliases: []string{"i", "add"},
+	Annotations: map[string]string{
+		"requireRuntime": "true",
+	},
 	RunE: func(cmd *cobra.Command, args []string) error {
 		startTime := time.Now()
 		global, _ := cmd.Flags().GetBool("global")

@@ -22,6 +22,9 @@ var runCmd = &cobra.Command{
 	Use:   "run [script]",
 	Short: "Run a script defined in package.json",
 	Aliases: []string{"r"},
+	Annotations: map[string]string{
+		"requireRuntime": "true",
+	},
 	RunE: func(cmd *cobra.Command, args []string) error {
 		if len(args) == 0 {
 			return fmt.Errorf("no script specified")
@@ -58,6 +61,9 @@ var runCmd = &cobra.Command{
 var devCmd = &cobra.Command{
 	Use:   "dev",
 	Short: "Alias for 'xfpm run dev'",
+	Annotations: map[string]string{
+		"requireRuntime": "true",
+	},
 	RunE: func(cmd *cobra.Command, args []string) error {
 		return runCmd.RunE(cmd, []string{"dev"})
 	},
@@ -66,6 +72,9 @@ var devCmd = &cobra.Command{
 var startCmd = &cobra.Command{
 	Use:   "start",
 	Short: "Alias for 'xfpm run start'",
+	Annotations: map[string]string{
+		"requireRuntime": "true",
+	},
 	RunE: func(cmd *cobra.Command, args []string) error {
 		return runCmd.RunE(cmd, []string{"start"})
 	},
