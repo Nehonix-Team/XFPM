@@ -75,6 +75,17 @@ func RunOrchestration(opts InitOptions) error {
 	orchestrator := NewOrchestrator(opts.TargetDir)
 
 	// 3. Apply Base Files (Root files in zip)
+	// Create target directory
+	if err := os.MkdirAll(opts.TargetDir, 0755); err != nil {
+		return fmt.Errorf("failed to create target directory: %w", err)
+	}
+
+	// Detect zip root folder (GitHub usually wraps everything in a folder)
+	files, err := os.ReadDir(tempDir)
+	if err == nil && len(files) == 1 && files[0].IsDir() {
+		tempDir = filepath.Join(tempDir, files[0].Name())
+	}
+
 	utils.Log("!", "Setting up base project structure...")
 	if err := o_copyDir(tempDir, opts.TargetDir, true); err != nil {
 		return err
@@ -240,7 +251,7 @@ func o_copyDir(src, dst string, rootOnly bool) error {
 		}
 
 		if rel == "." {
-			return nil
+			return os.MkdirAll(dst, 0755)
 		}
 
 		// Skip main directory when copying from root
