@@ -46,13 +46,37 @@ var initCmd = &cobra.Command{
 			fmt.Println()
 
 			if name == "" {
-				name, _ = pterm.DefaultInteractiveTextInput.WithDefaultText("my-xypriss-app").Show("Project Name")
+				for {
+					name, _ = pterm.DefaultInteractiveTextInput.
+						WithDefaultText("my-xypriss-app").
+						Show("Project Name")
+					if name != "" {
+						break
+					}
+					pterm.Error.Println("Project name cannot be empty")
+				}
 			}
 			if desc == "" {
-				desc, _ = pterm.DefaultInteractiveTextInput.WithDefaultText("A high-performance XyPriss project").Show("Project Description")
+				for {
+					desc, _ = pterm.DefaultInteractiveTextInput.
+						WithDefaultText("A high-performance XyPriss project").
+						Show("Project Description")
+					if desc != "" {
+						break
+					}
+					pterm.Error.Println("Description cannot be empty")
+				}
 			}
 			if version == "" {
-				version, _ = pterm.DefaultInteractiveTextInput.WithDefaultText("1.0.0").Show("Initial Version")
+				for {
+					version, _ = pterm.DefaultInteractiveTextInput.
+						WithDefaultText("1.0.0").
+						Show("Initial Version")
+					if version != "" {
+						break
+					}
+					pterm.Error.Println("Version cannot be empty")
+				}
 			}
 
 			if !cmd.Flags().Changed("mode") {
