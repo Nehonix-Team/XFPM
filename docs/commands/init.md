@@ -23,6 +23,9 @@ By default, running `xfpm init` will create a new directory named `my-xypriss-ap
 | `--author` | `-a` | `XyPriss Developer`| Author name (replaces `{{AUTHOR}}` in templates). |
 | `--version` | `-v` | `1.0.0` | Initial project version (replaces `{{VERSION}}` in templates). |
 | `--alias` | `-A` | | Project alias (replaces `{{ALIAS}}` in templates). |
+| `--port` | `-p` | `8080` | Default server port (replaces `{{PORT}}` in templates). |
+| `--main-port` | | `8081` | XMS Main server port (replaces `{{MAIN_PORT}}` in templates). |
+| `--auth-port` | | `8082` | XMS Auth server port (replaces `{{AUTH_PORT}}` in templates). |
 | `--force` | `-f` | `false` | Force overwrite the target directory if it already exists. |
 
 ## How it Works
@@ -43,6 +46,9 @@ XFPM scans all project files and replaces specific placeholders with your provid
 - `{{AUTHOR}}` → Author Name
 - `{{VERSION}}` → Project Version
 - `{{ALIAS}}` → Project Alias
+- `{{PORT}}` → Default Port
+- `{{MAIN_PORT}}` → XMS Main Port
+- `{{AUTH_PORT}}` → XMS Auth Port
 
 ### 4. Automated Setup
 After the orchestration and injection are complete, XFPM:
