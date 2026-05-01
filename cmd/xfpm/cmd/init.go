@@ -8,6 +8,7 @@ import (
 
 	xfpmInit "github.com/Nehonix-Team/XFMP/internal/init"
 	"github.com/Nehonix-Team/XFMP/internal/utils"
+	"github.com/pterm/pterm"
 	"github.com/spf13/cobra"
 )
 
@@ -21,6 +22,77 @@ var initCmd = &cobra.Command{
 		utils.PrintBanner()
 
 		name, _ := cmd.Flags().GetString("name")
+		desc, _ := cmd.Flags().GetString("desc")
+		version, _ := cmd.Flags().GetString("version")
+		mode, _ := cmd.Flags().GetString("mode")
+		security, _ := cmd.Flags().GetString("security")
+		storage, _ := cmd.Flags().GetString("storage")
+		guardrails, _ := cmd.Flags().GetBool("guardrails")
+		port, _ := cmd.Flags().GetUint16("port")
+		author, _ := cmd.Flags().GetString("author")
+		alias, _ := cmd.Flags().GetString("alias")
+
+		// Detect interactive mode
+		isInteractive := name == "" || desc == "" || version == ""
+
+		if isInteractive {
+			// Check if we are in a terminal
+			if !pterm.RawOutput {
+				// We can continue if it's a terminal even if color is off, 
+				// but let's just check if we can actually prompt.
+			}
+
+			utils.Premium("Setup", "Entering interactive orchestration mode")
+			fmt.Println()
+
+			if name == "" {
+				name, _ = pterm.DefaultInteractiveTextInput.WithDefaultText("my-xypriss-app").Show("Project Name")
+			}
+			if desc == "" {
+				desc, _ = pterm.DefaultInteractiveTextInput.WithDefaultText("A high-performance XyPriss project").Show("Project Description")
+			}
+			if version == "" {
+				version, _ = pterm.DefaultInteractiveTextInput.WithDefaultText("1.0.0").Show("Initial Version")
+			}
+
+			if !cmd.Flags().Changed("mode") {
+				mode, _ = pterm.DefaultInteractiveSelect.
+					WithOptions([]string{"default", "xms"}).
+					WithDefaultOption("default").
+					Show("Select Orchestration Mode")
+			}
+
+			if !cmd.Flags().Changed("security") {
+				security, _ = pterm.DefaultInteractiveSelect.
+					WithOptions([]string{"standard", "api", "web"}).
+					WithDefaultOption("standard").
+					Show("Select Security Profile")
+			}
+
+			if !cmd.Flags().Changed("storage") {
+				storage, _ = pterm.DefaultInteractiveSelect.
+					WithOptions([]string{"none", "xems"}).
+					WithDefaultOption("none").
+					Show("Select Storage Engine")
+			}
+
+			if !cmd.Flags().Changed("guardrails") {
+				guardrails, _ = pterm.DefaultInteractiveConfirm.WithDefaultValue(false).Show("Enable Network Guardrails?")
+			}
+
+			if !cmd.Flags().Changed("port") {
+				pStr, _ := pterm.DefaultInteractiveTextInput.WithDefaultText("8080").Show("Base Network Port")
+				fmt.Sscanf(pStr, "%d", &port)
+			}
+
+			fmt.Println()
+		} else {
+			// In non-interactive mode, validate required flags
+			if name == "" || desc == "" || version == "" {
+				return fmt.Errorf("missing required flags: --name, --desc, --version")
+			}
+		}
+
 		targetDir, _ := os.Getwd()
 		targetDir = filepath.Join(targetDir, name)
 
@@ -35,16 +107,6 @@ var initCmd = &cobra.Command{
 			os.RemoveAll(targetDir)
 		}
 
-		mode, _ := cmd.Flags().GetString("mode")
-		security, _ := cmd.Flags().GetString("security")
-		guardrails, _ := cmd.Flags().GetBool("guardrails")
-		storage, _ := cmd.Flags().GetString("storage")
-		desc, _ := cmd.Flags().GetString("desc")
-		author, _ := cmd.Flags().GetString("author")
-		version, _ := cmd.Flags().GetString("version")
-		alias, _ := cmd.Flags().GetString("alias")
-		port, _ := cmd.Flags().GetUint16("port")
-
 		opts := xfpmInit.InitOptions{
 			Mode:        mode,
 			Security:    security,
@@ -56,8 +118,8 @@ var initCmd = &cobra.Command{
 			Version:     version,
 			Alias:       alias,
 			Port:        port,
-			MainPort:    port,     // Derived from primary port
-			AuthPort:    port + 1, // Auto-incremented for multi-server
+			MainPort:    port,
+			AuthPort:    port + 1,
 			TargetDir:   targetDir,
 		}
 
@@ -104,19 +166,15 @@ var initCmd = &cobra.Command{
 
 func init() {
 	RootCmd.AddCommand(initCmd)
-	initCmd.Flags().StringP("name", "n", "", "Project name (Required)")
-	initCmd.Flags().StringP("desc", "d", "", "Project description (Required)")
-	initCmd.Flags().StringP("version", "v", "", "Initial version (Required)")
+	initCmd.Flags().StringP("name", "n", "", "Project name")
+	initCmd.Flags().StringP("desc", "d", "", "Project description")
+	initCmd.Flags().StringP("version", "v", "", "Initial version")
 	initCmd.Flags().StringP("author", "a", "XyPriss Developer", "Author name")
 	initCmd.Flags().StringP("alias", "A", "", "Project alias")
 	initCmd.Flags().StringP("mode", "m", "default", "Orchestration mode (default or xms)")
 	initCmd.Flags().StringP("security", "s", "standard", "Security level (standard, api, or web)")
 	initCmd.Flags().BoolP("guardrails", "g", false, "Enable network guardrails")
 	initCmd.Flags().StringP("storage", "S", "none", "Storage engine (none or xems)")
-	initCmd.Flags().Uint16P("port", "p", 8080, "Base server port (XMS will use port+1 for nodes)")
+	initCmd.Flags().Uint16P("port", "p", 8080, "Base server port")
 	initCmd.Flags().BoolP("force", "f", false, "Force overwrite existing directory")
-
-	initCmd.MarkFlagRequired("name")
-	initCmd.MarkFlagRequired("desc")
-	initCmd.MarkFlagRequired("version")
 }
