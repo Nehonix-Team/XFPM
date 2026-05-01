@@ -100,6 +100,7 @@ func (o *Orchestrator) ApplyRule(rule Rule) error {
 	fullPath := filepath.Join(o.TargetDir, rule.TargetFile)
 
 	if rule.Type == ActionCreate {
+		utils.Log("→", fmt.Sprintf("Creating %s", rule.TargetFile))
 		if err := os.MkdirAll(filepath.Dir(fullPath), 0755); err != nil {
 			return err
 		}
@@ -107,6 +108,14 @@ func (o *Orchestrator) ApplyRule(rule Rule) error {
 	}
 
 	if rule.Type == ActionBegin {
+		utils.Log("→", fmt.Sprintf("Patching %s", rule.TargetFile))
+		
+		// Check if file exists
+		if _, err := os.Stat(fullPath); os.IsNotExist(err) {
+			utils.Warn("Skipping rule for %s: file does not exist", rule.TargetFile)
+			return nil
+		}
+
 		// Read file
 		data, err := os.ReadFile(fullPath)
 		if err != nil {
