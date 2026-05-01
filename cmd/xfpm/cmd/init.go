@@ -36,15 +36,11 @@ var initCmd = &cobra.Command{
 		isInteractive := name == "" || desc == "" || version == ""
 
 		if isInteractive {
-			// Check if we are in a terminal
-			if !pterm.RawOutput {
-				// We can continue if it's a terminal even if color is off, 
-				// but let's just check if we can actually prompt.
-			}
-
-			utils.Premium("Setup", "Entering interactive orchestration mode")
-			fmt.Println()
-
+			utils.Premium("Setup", "Entering guided orchestration sequence")
+			
+			// --- Section: Project Identity ---
+			pterm.DefaultSection.Println("Project Identity")
+			
 			if name == "" {
 				for {
 					name, _ = pterm.DefaultInteractiveTextInput.
@@ -53,20 +49,22 @@ var initCmd = &cobra.Command{
 					if name != "" {
 						break
 					}
-					pterm.Error.Println("Project name cannot be empty")
+					utils.Error("Project name cannot be empty")
 				}
 			}
+
 			if desc == "" {
 				for {
 					desc, _ = pterm.DefaultInteractiveTextInput.
 						WithDefaultText("A high-performance XyPriss project").
-						Show("Project Description")
+						Show("Description")
 					if desc != "" {
 						break
 					}
-					pterm.Error.Println("Description cannot be empty")
+					utils.Error("Description cannot be empty")
 				}
 			}
+
 			if version == "" {
 				for {
 					version, _ = pterm.DefaultInteractiveTextInput.
@@ -75,29 +73,33 @@ var initCmd = &cobra.Command{
 					if version != "" {
 						break
 					}
-					pterm.Error.Println("Version cannot be empty")
+					utils.Error("Version cannot be empty")
 				}
 			}
+
+			// --- Section: System Architecture ---
+			fmt.Println()
+			pterm.DefaultSection.Println("System Architecture")
 
 			if !cmd.Flags().Changed("mode") {
 				mode, _ = pterm.DefaultInteractiveSelect.
 					WithOptions([]string{"default", "xms"}).
 					WithDefaultOption("default").
-					Show("Select Orchestration Mode")
+					Show("Orchestration Mode")
 			}
 
 			if !cmd.Flags().Changed("security") {
 				security, _ = pterm.DefaultInteractiveSelect.
 					WithOptions([]string{"standard", "api", "web"}).
 					WithDefaultOption("standard").
-					Show("Select Security Profile")
+					Show("Security Profile")
 			}
 
 			if !cmd.Flags().Changed("storage") {
 				storage, _ = pterm.DefaultInteractiveSelect.
 					WithOptions([]string{"none", "xems"}).
 					WithDefaultOption("none").
-					Show("Select Storage Engine")
+					Show("Storage Engine")
 			}
 
 			if !cmd.Flags().Changed("guardrails") {
@@ -105,10 +107,34 @@ var initCmd = &cobra.Command{
 			}
 
 			if !cmd.Flags().Changed("port") {
-				pStr, _ := pterm.DefaultInteractiveTextInput.WithDefaultText("8080").Show("Base Network Port")
+				pStr, _ := pterm.DefaultInteractiveTextInput.WithDefaultText("8080").Show("Primary Network Port")
 				fmt.Sscanf(pStr, "%d", &port)
 			}
 
+			// --- Section: Review & Launch ---
+			fmt.Println()
+			pterm.DefaultSection.Println("Review & Launch")
+			
+			tableData := [][]string{
+				{"Parameter", "Selected Value"},
+				{"Project Name", name},
+				{"Description", desc},
+				{"Version", version},
+				{"Mode", mode},
+				{"Security", security},
+				{"Storage", storage},
+				{"Port", fmt.Sprintf("%d", port)},
+				{"Guardrails", fmt.Sprintf("%v", guardrails)},
+			}
+
+			pterm.DefaultTable.WithHasHeader().WithData(tableData).Render()
+			fmt.Println()
+
+			confirm, _ := pterm.DefaultInteractiveConfirm.WithDefaultValue(true).Show("Proceed with orchestration?")
+			if !confirm {
+				utils.Warn("Orchestration aborted by user.")
+				return nil
+			}
 			fmt.Println()
 		} else {
 			// In non-interactive mode, validate required flags
