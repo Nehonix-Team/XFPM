@@ -46,6 +46,7 @@ var initCmd = &cobra.Command{
 		desc, _ := cmd.Flags().GetString("desc")
 		author, _ := cmd.Flags().GetString("author")
 		version, _ := cmd.Flags().GetString("version")
+		alias, _ := cmd.Flags().GetString("alias")
 
 		opts := xfpmInit.InitOptions{
 			Mode:        mode,
@@ -56,6 +57,7 @@ var initCmd = &cobra.Command{
 			Description: desc,
 			Author:      author,
 			Version:     version,
+			Alias:       alias,
 			TargetDir:   targetDir,
 		}
 
@@ -110,5 +112,6 @@ func init() {
 	initCmd.Flags().StringP("desc", "d", "", "Project description")
 	initCmd.Flags().StringP("author", "a", "XyPriss Developer", "Author name")
 	initCmd.Flags().StringP("version", "v", "1.0.0", "Project version")
+	initCmd.Flags().StringP("alias", "A", "", "Project alias")
 	initCmd.Flags().BoolP("force", "f", false, "Force overwrite existing directory")
 }

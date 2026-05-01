@@ -44,6 +44,7 @@ type InitOptions struct {
 	Description string
 	Author      string
 	Version     string
+	Alias       string
 	TargetDir   string
 }
 
@@ -134,6 +135,7 @@ func ReplaceVariables(opts InitOptions) error {
 		"{{DESCRIPTION}}": opts.Description,
 		"{{AUTHOR}}":      opts.Author,
 		"{{VERSION}}":     opts.Version,
+		"{{ALIAS}}":       opts.Alias,
 	}
 
 	return filepath.Walk(opts.TargetDir, func(path string, info os.FileInfo, err error) error {
