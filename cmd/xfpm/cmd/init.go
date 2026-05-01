@@ -43,6 +43,9 @@ var initCmd = &cobra.Command{
 		security, _ := cmd.Flags().GetString("security")
 		guardrails, _ := cmd.Flags().GetBool("guardrails")
 		storage, _ := cmd.Flags().GetString("storage")
+		desc, _ := cmd.Flags().GetString("desc")
+		author, _ := cmd.Flags().GetString("author")
+		version, _ := cmd.Flags().GetString("version")
 
 		opts := xfpmInit.InitOptions{
 			Mode:        mode,
@@ -50,6 +53,9 @@ var initCmd = &cobra.Command{
 			Guardrails:  guardrails,
 			Storage:     storage,
 			ProjectName: name,
+			Description: desc,
+			Author:      author,
+			Version:     version,
 			TargetDir:   targetDir,
 		}
 
@@ -99,7 +105,10 @@ func init() {
 	initCmd.Flags().StringP("name", "n", "", "Project name")
 	initCmd.Flags().StringP("mode", "m", "default", "Orchestration mode (default or xms)")
 	initCmd.Flags().StringP("security", "s", "standard", "Security level (standard, api, or web)")
-	initCmd.Flags().Bool("guardrails", false, "Enable network guardrails")
-	initCmd.Flags().String("storage", "none", "Storage engine (none or xems)")
+	initCmd.Flags().BoolP("guardrails", "g", false, "Enable network guardrails")
+	initCmd.Flags().StringP("storage", "S", "none", "Storage engine (none or xems)")
+	initCmd.Flags().StringP("desc", "d", "", "Project description")
+	initCmd.Flags().StringP("author", "a", "XyPriss Developer", "Author name")
+	initCmd.Flags().StringP("version", "v", "1.0.0", "Project version")
 	initCmd.Flags().BoolP("force", "f", false, "Force overwrite existing directory")
 }
