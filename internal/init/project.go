@@ -45,6 +45,9 @@ type InitOptions struct {
 	Author      string
 	Version     string
 	Alias       string
+	Port        uint16
+	MainPort    uint16
+	AuthPort    uint16
 	TargetDir   string
 }
 
@@ -136,6 +139,9 @@ func ReplaceVariables(opts InitOptions) error {
 		"{{AUTHOR}}":      opts.Author,
 		"{{VERSION}}":     opts.Version,
 		"{{ALIAS}}":       opts.Alias,
+		"{{PORT}}":        fmt.Sprintf("%d", opts.Port),
+		"{{MAIN_PORT}}":   fmt.Sprintf("%d", opts.MainPort),
+		"{{AUTH_PORT}}":   fmt.Sprintf("%d", opts.AuthPort),
 	}
 
 	return filepath.Walk(opts.TargetDir, func(path string, info os.FileInfo, err error) error {

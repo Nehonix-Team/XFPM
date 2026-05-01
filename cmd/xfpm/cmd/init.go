@@ -47,6 +47,9 @@ var initCmd = &cobra.Command{
 		author, _ := cmd.Flags().GetString("author")
 		version, _ := cmd.Flags().GetString("version")
 		alias, _ := cmd.Flags().GetString("alias")
+		port, _ := cmd.Flags().GetUint16("port")
+		mainPort, _ := cmd.Flags().GetUint16("main-port")
+		authPort, _ := cmd.Flags().GetUint16("auth-port")
 
 		opts := xfpmInit.InitOptions{
 			Mode:        mode,
@@ -58,6 +61,9 @@ var initCmd = &cobra.Command{
 			Author:      author,
 			Version:     version,
 			Alias:       alias,
+			Port:        port,
+			MainPort:    mainPort,
+			AuthPort:    authPort,
 			TargetDir:   targetDir,
 		}
 
@@ -113,5 +119,8 @@ func init() {
 	initCmd.Flags().StringP("author", "a", "XyPriss Developer", "Author name")
 	initCmd.Flags().StringP("version", "v", "1.0.0", "Project version")
 	initCmd.Flags().StringP("alias", "A", "", "Project alias")
+	initCmd.Flags().Uint16P("port", "p", 8080, "Default server port")
+	initCmd.Flags().Uint16("main-port", 8081, "XMS Main server port")
+	initCmd.Flags().Uint16("auth-port", 8082, "XMS Auth server port")
 	initCmd.Flags().BoolP("force", "f", false, "Force overwrite existing directory")
 }
