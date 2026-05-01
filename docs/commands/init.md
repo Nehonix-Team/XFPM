@@ -16,7 +16,7 @@ To create a new project, you must provide the project name, a brief description,
 | :--- | :--- | :--- | :--- |
 | `--name` | `-n` | (Required) | The name of the project and its directory. |
 | `--desc` | `-d` | (Required) | A short description of the project's purpose. |
-| `--version` | `-v` | (Required) | The initial version string (e.g., `1.0.0`). |
+| `--version` | `-v` | (Required) | The initial version string (e.g., `{{VERSION}}`). |
 | `--author` | `-a` | `XyPriss Developer` | The name of the project author. |
 | `--alias` | `-A` | | An internal identifier or alias for the application. |
 | `--mode` | `-m` | `default` | Project architecture: `default` (standard) or `xms` (Multi-Server). |
