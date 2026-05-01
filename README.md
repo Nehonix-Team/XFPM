@@ -79,7 +79,7 @@ npm install -g xypriss-cli
 ### Initialize a project
 
 ```bash
-xfpm init
+xfpm init --name my-app --desc "My project description" --version 1.0.0
 ```
 
 For detailed orchestration options and flags, see the [init command documentation](docs/commands/init.md).
