@@ -128,7 +128,20 @@ func RunOrchestration(opts InitOptions) error {
 
 	// 6. Global Variable Injection
 	utils.Log("!", "Injecting project variables...")
-	return ReplaceVariables(opts)
+	if err := ReplaceVariables(opts); err != nil {
+		return err
+	}
+
+	// 7. Cleanup/Renaming
+	targetReadme := filepath.Join(opts.TargetDir, "TARGET_README.md")
+	if _, err := os.Stat(targetReadme); err == nil {
+		finalReadme := filepath.Join(opts.TargetDir, "README.md")
+		if err := os.Rename(targetReadme, finalReadme); err != nil {
+			utils.Warn("Failed to rename TARGET_README.md: %v", err)
+		}
+	}
+
+	return nil
 }
 
 // ReplaceVariables scans the target directory and replaces placeholders.
