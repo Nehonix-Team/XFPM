@@ -41,6 +41,9 @@ type InitOptions struct {
 	Guardrails  bool
 	Storage     string
 	ProjectName string
+	Description string
+	Author      string
+	Version     string
 	TargetDir   string
 }
 
@@ -119,7 +122,47 @@ func RunOrchestration(opts InitOptions) error {
 		}
 	}
 
-	return nil
+	// 6. Global Variable Injection
+	utils.Log("!", "Injecting project variables...")
+	return ReplaceVariables(opts)
+}
+
+// ReplaceVariables scans the target directory and replaces placeholders.
+func ReplaceVariables(opts InitOptions) error {
+	vars := map[string]string{
+		"{{SERVER_NAME}}": opts.ProjectName,
+		"{{DESCRIPTION}}": opts.Description,
+		"{{AUTHOR}}":      opts.Author,
+		"{{VERSION}}":     opts.Version,
+	}
+
+	return filepath.Walk(opts.TargetDir, func(path string, info os.FileInfo, err error) error {
+		if err != nil {
+			return err
+		}
+		if info.IsDir() || strings.Contains(path, ".git") {
+			return nil
+		}
+
+		data, err := os.ReadFile(path)
+		if err != nil {
+			return err
+		}
+
+		content := string(data)
+		changed := false
+		for k, v := range vars {
+			if strings.Contains(content, k) {
+				content = strings.ReplaceAll(content, k, v)
+				changed = true
+			}
+		}
+
+		if changed {
+			return os.WriteFile(path, []byte(content), info.Mode())
+		}
+		return nil
+	})
 }
 
 func unzip(src, dest string) error {
