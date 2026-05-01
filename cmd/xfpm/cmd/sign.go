@@ -229,7 +229,7 @@ var signCmd = &cobra.Command{
 			
 			if !skipValidation {
 				if err != nil || len(matches) == 0 {
-					return fmt.Errorf("file or directory '%s' listed in package.json does not exist. Use '--' at the end of command to ignore this validation", pattern)
+					return fmt.Errorf("file or directory '%s' listed in package.json does not exist.", pattern)
 				}
 			}
 

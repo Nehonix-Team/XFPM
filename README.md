@@ -82,6 +82,8 @@ npm install -g xypriss-cli
 xfpm init
 ```
 
+For detailed orchestration options and flags, see the [init command documentation](docs/commands/init.md).
+
 ### Manage dependencies
 
 ```bash
