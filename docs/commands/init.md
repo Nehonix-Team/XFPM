@@ -39,5 +39,3 @@ Upon initialization, XFPM automatically:
 3. Verifies and installs the **Bun** runtime if necessary.
 4. Performs an initial `xfpm install` to ensure all dependencies are ready.
 
----
-*XFPM — High-Performance Project Orchestration*
