@@ -53,21 +53,16 @@ type InitOptions struct {
 
 // RunOrchestration runs the full project initialization workflow.
 func RunOrchestration(opts InitOptions) error {
-	// 1. Download
-	utils.Log("!", "Fetching latest XyPriss templates...")
-	zipPath, err := DownloadLatestTemplate()
-	if err != nil {
-		return err
-	}
-	defer os.Remove(zipPath)
-
-	// 2. Extract to temp
-	tempDir, err := os.MkdirTemp("", "xfpm-init-*")
+	tempDir, err := DownloadLatestTemplate()
 	if err != nil {
 		return err
 	}
 	defer os.RemoveAll(tempDir)
 
+	// 2. Unzip
+	utils.Log("!", "Fetching latest XyPriss templates...")
+	zipPath := tempDir
+	tempDir, _ = os.MkdirTemp("", "xfpm-template-extract")
 	if err := unzip(zipPath, tempDir); err != nil {
 		return err
 	}
@@ -83,6 +78,7 @@ func RunOrchestration(opts InitOptions) error {
 	// Detect zip root folder (GitHub usually wraps everything in a folder)
 	files, err := os.ReadDir(tempDir)
 	if err == nil && len(files) == 1 && files[0].IsDir() {
+		utils.Log("!", fmt.Sprintf("Walking into template root: %s", files[0].Name()))
 		tempDir = filepath.Join(tempDir, files[0].Name())
 	}
 
@@ -92,31 +88,31 @@ func RunOrchestration(opts InitOptions) error {
 	}
 
 	// 4. Apply Mode
+	utils.Log("!", fmt.Sprintf("Applying mode: %s...", opts.Mode))
 	modeDir := filepath.Join(tempDir, "main", "mode", opts.Mode)
 	if _, err := os.Stat(modeDir); err == nil {
-		utils.Log("!", fmt.Sprintf("Applying mode: %s...", opts.Mode))
-		if err := o_copyDir(modeDir, opts.TargetDir, false); err != nil {
-			return err
-		}
+		// Merge files from mode directory
+		o_copyDir(modeDir, opts.TargetDir, false)
+		// Apply rules
 		rulesPath := filepath.Join(modeDir, "rules.xru")
 		if _, err := os.Stat(rulesPath); err == nil {
 			if err := orchestrator.ApplyRulesFile(rulesPath); err != nil {
 				return err
 			}
 		}
-	} else {
-		utils.Warn("Mode '%s' not found in templates.", opts.Mode)
 	}
 
 	// 5. Apply Features
-	features := []struct {
+	type feature struct {
 		name string
 		path string
 		cond bool
-	}{
-		{"security", filepath.Join(tempDir, "main", "features", "security", opts.Security), true},
-		{"guardrails", filepath.Join(tempDir, "main", "features", "guardrails", "true"), opts.Guardrails},
-		{"storage", filepath.Join(tempDir, "main", "features", "storage", opts.Storage), opts.Storage != "" && opts.Storage != "none"},
+	}
+
+	features := []feature{
+		{"security", filepath.Join(tempDir, "main", "features", "security", opts.Security), opts.Security != "none" && opts.Security != ""},
+		{"guardrails", filepath.Join(tempDir, "main", "features", "network", "guardrails"), opts.Guardrails},
+		{"storage", filepath.Join(tempDir, "main", "features", "storage", opts.Storage), opts.Storage != "none" && opts.Storage != ""},
 	}
 
 	for _, f := range features {
@@ -124,10 +120,10 @@ func RunOrchestration(opts InitOptions) error {
 			continue
 		}
 		if _, err := os.Stat(f.path); err == nil {
-			utils.Log("!", fmt.Sprintf("Applying feature: %s (%s)...", f.name, filepath.Base(f.path)))
-			if err := o_copyDir(f.path, opts.TargetDir, false); err != nil {
-				return err
-			}
+			utils.Log("!", fmt.Sprintf("Applying feature: %s...", f.name))
+			// Merge files
+			o_copyDir(f.path, opts.TargetDir, false)
+			// Apply rules
 			rulesPath := filepath.Join(f.path, "rules.xru")
 			if _, err := os.Stat(rulesPath); err == nil {
 				if err := orchestrator.ApplyRulesFile(rulesPath); err != nil {
