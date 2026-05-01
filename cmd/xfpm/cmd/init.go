@@ -21,10 +21,6 @@ var initCmd = &cobra.Command{
 		utils.PrintBanner()
 
 		name, _ := cmd.Flags().GetString("name")
-		if name == "" {
-			name = "my-xypriss-app"
-		}
-
 		targetDir, _ := os.Getwd()
 		targetDir = filepath.Join(targetDir, name)
 
@@ -48,8 +44,6 @@ var initCmd = &cobra.Command{
 		version, _ := cmd.Flags().GetString("version")
 		alias, _ := cmd.Flags().GetString("alias")
 		port, _ := cmd.Flags().GetUint16("port")
-		mainPort, _ := cmd.Flags().GetUint16("main-port")
-		authPort, _ := cmd.Flags().GetUint16("auth-port")
 
 		opts := xfpmInit.InitOptions{
 			Mode:        mode,
@@ -62,8 +56,8 @@ var initCmd = &cobra.Command{
 			Version:     version,
 			Alias:       alias,
 			Port:        port,
-			MainPort:    mainPort,
-			AuthPort:    authPort,
+			MainPort:    port,     // Derived from primary port
+			AuthPort:    port + 1, // Auto-incremented for multi-server
 			TargetDir:   targetDir,
 		}
 
@@ -110,17 +104,19 @@ var initCmd = &cobra.Command{
 
 func init() {
 	RootCmd.AddCommand(initCmd)
-	initCmd.Flags().StringP("name", "n", "", "Project name")
+	initCmd.Flags().StringP("name", "n", "", "Project name (Required)")
+	initCmd.Flags().StringP("desc", "d", "", "Project description (Required)")
+	initCmd.Flags().StringP("version", "v", "", "Initial version (Required)")
+	initCmd.Flags().StringP("author", "a", "XyPriss Developer", "Author name")
+	initCmd.Flags().StringP("alias", "A", "", "Project alias")
 	initCmd.Flags().StringP("mode", "m", "default", "Orchestration mode (default or xms)")
 	initCmd.Flags().StringP("security", "s", "standard", "Security level (standard, api, or web)")
 	initCmd.Flags().BoolP("guardrails", "g", false, "Enable network guardrails")
 	initCmd.Flags().StringP("storage", "S", "none", "Storage engine (none or xems)")
-	initCmd.Flags().StringP("desc", "d", "", "Project description")
-	initCmd.Flags().StringP("author", "a", "XyPriss Developer", "Author name")
-	initCmd.Flags().StringP("version", "v", "1.0.0", "Project version")
-	initCmd.Flags().StringP("alias", "A", "", "Project alias")
-	initCmd.Flags().Uint16P("port", "p", 8080, "Default server port")
-	initCmd.Flags().Uint16("main-port", 8081, "XMS Main server port")
-	initCmd.Flags().Uint16("auth-port", 8082, "XMS Auth server port")
+	initCmd.Flags().Uint16P("port", "p", 8080, "Base server port (XMS will use port+1 for nodes)")
 	initCmd.Flags().BoolP("force", "f", false, "Force overwrite existing directory")
+
+	initCmd.MarkFlagRequired("name")
+	initCmd.MarkFlagRequired("desc")
+	initCmd.MarkFlagRequired("version")
 }
