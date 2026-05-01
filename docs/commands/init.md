@@ -22,6 +22,7 @@ By default, running `xfpm init` will create a new directory named `my-xypriss-ap
 | `--desc` | `-d` | | Short description of the project (replaces `{{DESCRIPTION}}` in templates). |
 | `--author` | `-a` | `XyPriss Developer`| Author name (replaces `{{AUTHOR}}` in templates). |
 | `--version` | `-v` | `1.0.0` | Initial project version (replaces `{{VERSION}}` in templates). |
+| `--alias` | `-A` | | Project alias (replaces `{{ALIAS}}` in templates). |
 | `--force` | `-f` | `false` | Force overwrite the target directory if it already exists. |
 
 ## How it Works
@@ -41,6 +42,7 @@ XFPM scans all project files and replaces specific placeholders with your provid
 - `{{DESCRIPTION}}` → Project Description
 - `{{AUTHOR}}` → Author Name
 - `{{VERSION}}` → Project Version
+- `{{ALIAS}}` → Project Alias
 
 ### 4. Automated Setup
 After the orchestration and injection are complete, XFPM:
