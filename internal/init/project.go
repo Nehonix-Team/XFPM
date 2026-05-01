@@ -237,9 +237,9 @@ func unzip(src, dest string) error {
 	return nil
 }
 
-// o_copyDir copies files from src to dst. If rootOnly is true, it only copies files at the root of src.
+// o_copyDir copies files from src to dst. If isBase is true, it skips the internal 'main/' folder.
 // It skips rules.xru.
-func o_copyDir(src, dst string, rootOnly bool) error {
+func o_copyDir(src, dst string, isBase bool) error {
 	return filepath.Walk(src, func(path string, info os.FileInfo, err error) error {
 		if err != nil {
 			return err
@@ -254,8 +254,8 @@ func o_copyDir(src, dst string, rootOnly bool) error {
 			return os.MkdirAll(dst, 0755)
 		}
 
-		// Skip main directory when copying from root
-		if rootOnly && strings.HasPrefix(rel, "main") {
+		// Skip internal orchestration metadata (main/) when copying from root
+		if isBase && (rel == "main" || strings.HasPrefix(rel, "main" + string(os.PathSeparator))) {
 			return filepath.SkipDir
 		}
 
@@ -267,10 +267,6 @@ func o_copyDir(src, dst string, rootOnly bool) error {
 		targetPath := filepath.Join(dst, rel)
 
 		if info.IsDir() {
-			if rootOnly && rel != "." {
-				// Don't recurse if rootOnly (except for root itself which is handled above)
-				return filepath.SkipDir
-			}
 			return os.MkdirAll(targetPath, info.Mode())
 		}
 
