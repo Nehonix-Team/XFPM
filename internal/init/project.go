@@ -30,6 +30,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strings"
 
 	"github.com/Nehonix-Team/XFMP/internal/utils"
@@ -111,7 +112,7 @@ func RunOrchestration(opts InitOptions) error {
 
 	features := []feature{
 		{"security", filepath.Join(tempDir, "main", "features", "security", opts.Security), opts.Security != "none" && opts.Security != ""},
-		{"guardrails", filepath.Join(tempDir, "main", "features", "network", "guardrails"), opts.Guardrails},
+		{"guardrails", filepath.Join(tempDir, "main", "features", "guardrails", "true"), opts.Guardrails},
 		{"storage", filepath.Join(tempDir, "main", "features", "storage", opts.Storage), opts.Storage != "none" && opts.Storage != ""},
 	}
 
@@ -154,14 +155,17 @@ func RunOrchestration(opts InitOptions) error {
 // ReplaceVariables scans the target directory and replaces placeholders.
 func ReplaceVariables(opts InitOptions) error {
 	vars := map[string]string{
-		"{{SERVER_NAME}}": opts.ProjectName,
-		"{{DESCRIPTION}}": opts.Description,
-		"{{AUTHOR}}":      opts.Author,
-		"{{VERSION}}":     opts.Version,
-		"{{ALIAS}}":       opts.Alias,
-		"{{PORT}}":        fmt.Sprintf("%d", opts.Port),
-		"{{MAIN_PORT}}":   fmt.Sprintf("%d", opts.MainPort),
-		"{{AUTH_PORT}}":   fmt.Sprintf("%d", opts.AuthPort),
+		"{{SERVER_NAME}}":  opts.ProjectName,
+		"{{PROJECT_NAME}}": opts.ProjectName,
+		"{{NAME}}":         opts.ProjectName,
+		"{{DESCRIPTION}}":  opts.Description,
+		"{{DESC}}":         opts.Description,
+		"{{AUTHOR}}":       opts.Author,
+		"{{VERSION}}":      opts.Version,
+		"{{ALIAS}}":        opts.Alias,
+		"{{PORT}}":         fmt.Sprintf("%d", opts.Port),
+		"{{MAIN_PORT}}":    fmt.Sprintf("%d", opts.MainPort),
+		"{{AUTH_PORT}}":    fmt.Sprintf("%d", opts.AuthPort),
 	}
 
 	return filepath.Walk(opts.TargetDir, func(path string, info os.FileInfo, err error) error {
@@ -184,6 +188,14 @@ func ReplaceVariables(opts InitOptions) error {
 				content = strings.ReplaceAll(content, k, v)
 				changed = true
 			}
+		}
+
+		// Clean up any remaining orphan xfpm injection markers (lines that
+		// were not matched by any rule and would otherwise pollute the output).
+		orphanRe := regexp.MustCompile(`(?m)^\s*//\s*xfpm:\s*\{\{[A-Z0-9_]+\}\}\s*\n?`)
+		if orphanRe.MatchString(content) {
+			content = orphanRe.ReplaceAllString(content, "")
+			changed = true
 		}
 
 		if changed {
