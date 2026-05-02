@@ -92,9 +92,12 @@ func (c *Cas) StoreStream(reader io.Reader, isExecutable bool) (string, error) {
 		destPath := c.GetFilePath(hashHex)
 
 		// Validate cached file is non-empty (guard against broken prior extractions)
-		if fi, err := os.Stat(destPath); err == nil && fi.Size() == int64(len(buffer)) {
-			c.ensurePermissions(destPath, isExecutable)
-			return hashHex, nil
+		// If the file is 0 bytes, we only accept it if the buffer is also 0 bytes
+		if fi, err := os.Stat(destPath); err == nil {
+			if fi.Size() == int64(len(buffer)) && (fi.Size() > 0 || len(buffer) == 0) {
+				c.ensurePermissions(destPath, isExecutable)
+				return hashHex, nil
+			}
 		}
 
 		if err := c.ensureParentDirs(hashHex); err != nil {

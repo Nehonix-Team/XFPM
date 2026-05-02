@@ -1,3 +1,11 @@
+## [G0.1.197] - 2026-05-02
+
+### CAS Integrity & Extraction Hardening
+
+- **Zero-Byte File Guard**: Fixed a critical bug in the Content Addressable Storage (CAS) where interrupted extractions could leave 0-byte files in the cache. XFPM now strictly validates file sizes during the "ensure extracted" phase, forcing a re-download if a file is unexpectedly empty.
+- **Professional Log Aesthetics**: Removed all emojis from CLI outputs and terminal logs in compliance with Nehonix professional standards. Replaced with structured ANSI color-coded prefixes (`[INFO]`, `[SUCCESS]`, `[ERROR]`).
+- **Improved Concurrency Safety**: Hardened the streaming extractor and linking pool to better handle race conditions during high-concurrency global installations.
+
 ## [G0.1.196] - 2026-05-02
 
 ### Orchestration Cleanup & Engine Hardening
