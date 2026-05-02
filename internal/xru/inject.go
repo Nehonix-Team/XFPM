@@ -31,3 +31,15 @@ func InjectCode(content, key, code string) string {
 
 	return re.ReplaceAllString(content, code)
 }
+
+// CleanOrphans removes any remaining `// xfpm:` markers from the content.
+// This is used as a final cleanup pass to ensure unselected features don't leave artifacts.
+func CleanOrphans(content string) string {
+	// Matches any line that contains the xfpm marker, with or without braces.
+	// It handles both:
+	//   - // xfpm: {{KEY}}
+	//   - // xfpm: KEY
+	// It also cleans the whole line and the trailing newline.
+	re := regexp.MustCompile(`(?m)^.*//\s*xfpm:\s*(\{\{)?([A-Z0-9_]+)(\}\})?.*$\n?`)
+	return re.ReplaceAllString(content, "")
+}

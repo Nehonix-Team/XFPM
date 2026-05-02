@@ -1,4 +1,9 @@
-# XFPM - Release Notes
+## [G0.1.196] - 2026-05-02
+
+### Orchestration Cleanup & Engine Hardening
+
+- **Robust Orphan Cleaning**: Implemented a global regex-based cleanup pass in the orchestration engine. This ensures that any `// xfpm:` markers from unselected features are cleanly removed from the final project source code.
+- **Enhanced Injection Logic**: Refactored `InjectCode` and added `CleanOrphans` to the XRU engine to improve reliability and maintain code cleanliness in generated projects.
 
 ## [G0.1.195] - 2026-05-02
 

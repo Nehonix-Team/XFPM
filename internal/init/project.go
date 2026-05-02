@@ -30,10 +30,10 @@ import (
 	"io"
 	"os"
 	"path/filepath"
-	"regexp"
 	"strings"
 
 	"github.com/Nehonix-Team/XFMP/internal/utils"
+	"github.com/Nehonix-Team/XFMP/internal/xru"
 )
 
 type InitOptions struct {
@@ -192,9 +192,9 @@ func ReplaceVariables(opts InitOptions) error {
 
 		// Clean up any remaining orphan xfpm injection markers (lines that
 		// were not matched by any rule and would otherwise pollute the output).
-		orphanRe := regexp.MustCompile(`(?m)^\s*//\s*xfpm:\s*\{\{[A-Z0-9_]+\}\}\s*\n?`)
-		if orphanRe.MatchString(content) {
-			content = orphanRe.ReplaceAllString(content, "")
+		cleaned := xru.CleanOrphans(content)
+		if cleaned != content {
+			content = cleaned
 			changed = true
 		}
 

@@ -2,10 +2,10 @@
   "name": "XFPM (XyPriss Package Manager)",
   "description": "The ultra-fast package manager for the XyPriss ecosystem.",
   "warning": "CRITICAL: Public modifications to this file are strictly forbidden. Internal Nehonix metadata ONLY.",
-  "latest": "vG0.1.194",
-  "message": "Sudo Resilience & UX Hardening: Implemented sudo-aware home directory resolution to ensure consistent tool discovery under administrative privileges. Skipped automated JS runtime checks for non-execution commands like 'upgrade' to streamline binary maintenance.",
+  "latest": "vG0.1.196",
+  "message": "Orchestration Cleanup & Engine Hardening: Implemented a robust global cleanup pass to ensure generated projects are free of orphan xfpm markers. Harmonized XEMS storage feature markers for consistent orchestration.",
   "metadata": {
-    "releaseDate": "2026-04-30",
+    "releaseDate": "2026-05-02",
     "channel": "stable"
   }
 }
