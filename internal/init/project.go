@@ -33,7 +33,7 @@ import (
 	"strings"
 
 	"github.com/Nehonix-Team/XFMP/internal/utils"
-	"github.com/Nehonix-Team/XFMP/internal/xru"
+	"github.com/Nehonix-Team/xru"
 )
 
 type InitOptions struct {

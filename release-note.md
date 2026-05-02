@@ -4,6 +4,10 @@
 
 - **Robust Orphan Cleaning**: Implemented a global regex-based cleanup pass in the orchestration engine. This ensures that any `// xfpm:` markers from unselected features are cleanly removed from the final project source code.
 - **Enhanced Injection Logic**: Refactored `InjectCode` and added `CleanOrphans` to the XRU engine to improve reliability and maintain code cleanliness in generated projects.
+- **XRU Standalone Migration**: Extracted XRU (XyPriss Rule Unit) into its own repository (`tools/xru`) for better reusability across the ecosystem.
+- **Universal Injection Syntax**: Introduced `@*INJECT` (e.g., `@GOINJECT`) with automatic language filtering for global rules.
+- **New XRU Operations**: Added `&append:` for array manipulation and `&regex:` for pattern-based text transformation.
+- **New Command**: Added `xfpm xru` to allow developers to manually apply rule files to their projects.
 
 ## [G0.1.195] - 2026-05-02
 

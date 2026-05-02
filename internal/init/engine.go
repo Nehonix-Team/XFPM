@@ -11,9 +11,10 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"github.com/Nehonix-Team/XFMP/internal/utils"
-	"github.com/Nehonix-Team/XFMP/internal/xru"
+	"github.com/Nehonix-Team/xru"
 )
 
 // Orchestrator applies XRU rules against a target project directory.
@@ -76,7 +77,13 @@ func (o *Orchestrator) applyGlobal(rule xru.Rule) error {
 
 		for _, action := range rule.Actions {
 			switch a := action.(type) {
-			case xru.TSInjectAction:
+			case xru.InjectAction:
+				if a.Lang != "" {
+					targetExt := "." + strings.ToLower(a.Lang)
+					if targetExt != ext {
+						continue
+					}
+				}
 				content = xru.InjectCode(content, a.Key, a.Code)
 			case xru.PatchAction:
 				content = xru.ApplyPatch(content, a.Op, a.Value)
@@ -116,7 +123,7 @@ func (o *Orchestrator) applyPatch(rule xru.Rule) error {
 
 	for _, action := range rule.Actions {
 		switch a := action.(type) {
-		case xru.TSInjectAction:
+		case xru.InjectAction:
 			content = xru.InjectCode(content, a.Key, a.Code)
 		case xru.PatchAction:
 			content = xru.ApplyPatch(content, a.Op, a.Value)

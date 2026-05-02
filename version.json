@@ -2,8 +2,8 @@
   "name": "XFPM (XyPriss Package Manager)",
   "description": "The ultra-fast package manager for the XyPriss ecosystem.",
   "warning": "CRITICAL: Public modifications to this file are strictly forbidden. Internal Nehonix metadata ONLY.",
-  "latest": "vG0.1.196",
-  "message": "Orchestration Cleanup & Engine Hardening: Implemented a robust global cleanup pass to ensure generated projects are free of orphan xfpm markers. Harmonized XEMS storage feature markers for consistent orchestration.",
+  "latest": "vG0.1.197",
+  "message": "XRU Standalone Migration: Successfully extracted the XyPriss Rule Unit engine into a dedicated project. Upgraded syntax to universal @*INJECT with language filtering and added new structured operations (&append, &regex). Integrated 'xfpm xru' command for manual patching.",
   "metadata": {
     "releaseDate": "2026-05-02",
     "channel": "stable"
