@@ -22,7 +22,79 @@ func ApplyPatch(content string, op PatchOp, patch Value) string {
 			return mergeStructured(content, obj)
 		}
 	case PatchRM:
-		// TODO: Implement structured removal if needed
+		return removeStructured(content, patch)
+	}
+	return content
+}
+
+func removeStructured(content string, patch Value) string {
+	switch p := patch.(type) {
+	case Object:
+		for k, v := range p {
+			// Look for key in content
+			keyPatternQuoted := fmt.Sprintf("%q:", k)
+			keyPatternBare := k + ":"
+			
+			start := strings.Index(content, keyPatternQuoted)
+			if start == -1 {
+				start = strings.Index(content, keyPatternBare)
+			}
+
+			if start != -1 {
+				if nestedPatch, ok := v.(Object); ok {
+					// Recurse into object
+					openOff := strings.Index(content[start:], "{")
+					if openOff != -1 {
+						absOpen := start + openOff
+						closeAbs := matchingBrace(content, absOpen)
+						if closeAbs != -1 {
+							inner := content[absOpen : closeAbs+1]
+							newInner := removeStructured(inner, nestedPatch)
+							content = content[:absOpen] + newInner + content[closeAbs+1:]
+						}
+					}
+				} else {
+					// Remove the key and its value (potentially a whole block)
+					lineStart := strings.LastIndex(content[:start], "\n")
+					if lineStart == -1 { lineStart = 0 } else { lineStart++ }
+					
+					// Check if it's a block in the target file
+					sepPos := strings.Index(content[start:], ":")
+					if sepPos != -1 {
+						afterSep := content[start+sepPos+1:]
+						p := 0
+						for p < len(afterSep) && (afterSep[p] == ' ' || afterSep[p] == '\t' || afterSep[p] == '\r') {
+							p++
+						}
+						if p < len(afterSep) && afterSep[p] == '{' {
+							// It's a block! Find matching brace
+							absOpen := start + sepPos + 1 + p
+							closeAbs := matchingBrace(content, absOpen)
+							if closeAbs != -1 {
+								// Find the end of that line (to include potential comma)
+								lineEnd := strings.Index(content[closeAbs:], "\n")
+								if lineEnd == -1 { lineEnd = len(content[closeAbs:]) }
+								absEnd := closeAbs + lineEnd
+								content = content[:lineStart] + content[absEnd+1:]
+								continue
+							}
+						}
+					}
+
+					// Standard single-line removal
+					lineEnd := strings.Index(content[start:], "\n")
+					if lineEnd == -1 { lineEnd = len(content) - start }
+					absEnd := start + lineEnd
+					content = content[:lineStart] + content[absEnd+1:]
+				}
+			}
+		}
+	case Array:
+		for _, v := range p {
+			if s, ok := v.(Literal); ok {
+				content = removeStructured(content, Object{string(s): Literal("")})
+			}
+		}
 	}
 	return content
 }
