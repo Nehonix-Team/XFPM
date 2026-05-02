@@ -1,5 +1,15 @@
 # XFPM - Release Notes
 
+## [G0.1.195] - 2026-05-02
+
+### Modular XRU Orchestration & STP Engine
+
+- **Modularized XRU Engine**: Extracted orchestration logic into a dedicated `internal/xru` package, separating AST definitions, token-based parsing, and transformation execution.
+- **Structured Text Patcher (STP)**: Implemented a non-destructive transformation engine that operates on raw text using brace-depth tracking. This ensures that comments, custom indentation, and XyPriss-specific variable syntax (`&(pkg).name`) are preserved during patching.
+- **Native XRU Parser**: Replaced restrictive JSON-based rule parsing with a native DSL parser that supports unquoted keys, trailing commas, and native comments within `.xru` files.
+- **Recursive Removal Logic**: Enhanced the `&rm` action to intelligently remove entire structured blocks (objects/arrays) or individual keys while maintaining valid file structure.
+- **Official XRU Documentation**: Added a comprehensive [README.md](file:///home/idevo/Documents/projects/XyPriss/tools/xfpm-go/internal/xru/README.md) for the XRU syntax.
+
 ## [G0.1.194] - 2026-04-30
 
 ### Sudo Resilience & UX Hardening
