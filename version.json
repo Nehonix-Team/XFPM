@@ -2,10 +2,10 @@
   "name": "XFPM (XyPriss Package Manager)",
   "description": "The ultra-fast package manager for the XyPriss ecosystem.",
   "warning": "CRITICAL: Public modifications to this file are strictly forbidden. Internal Nehonix metadata ONLY.",
-  "latest": "vG0.1.197",
-  "message": "XRU Standalone Migration: Successfully extracted the XyPriss Rule Unit engine into a dedicated project. Upgraded syntax to universal @*INJECT with language filtering and added new structured operations (&append, &regex). Integrated 'xfpm xru' command for manual patching.",
+  "latest": "vG0.1.200",
+  "message": "Native XRU Library Integration: Fully migrated from CLI execution to native Go library integration (v0.2.5). Enhanced 'init' command with interactive project setup, custom argument support (KEY=VALUE), and improved temporary directory management.",
   "metadata": {
-    "releaseDate": "2026-05-02",
+    "releaseDate": "2026-05-05",
     "channel": "stable"
   }
 }
