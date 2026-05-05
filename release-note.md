@@ -1,3 +1,14 @@
+## [G0.1.200] - 2026-05-05
+
+### Native XRU Orchestration & Initialization Overhaul
+
+- **Native XRU Integration**: Switched from external CLI execution to native Go library integration using `github.com/Nehonix-Team/xru` (v0.2.5). This eliminates binary dependencies and improves orchestration performance.
+- **Enhanced `init` Command**: 
+    - **Interactive Setup**: Added a guided configuration wizard for project name, version, description, author, and port when running `xfpm init` without arguments.
+    - **Dynamic Arguments**: Support for positional `KEY=VALUE` arguments and a new `--arg` flag to pass custom variables directly to orchestration rules.
+    - **Base Metadata Flags**: Added explicit flags for `--author/-a`, `--desc/-d`, `--version/-v`, and `--port/-p`.
+- **Resource Management**: Fixed a temporary directory leak during project extraction by implementing strict cleanup of extraction folders.
+
 ## [G0.1.197] - 2026-05-02
 
 ### CAS Integrity & Extraction Hardening
