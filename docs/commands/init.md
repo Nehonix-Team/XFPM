@@ -1,41 +1,48 @@
 # xfpm init
 
-The `init` command is used to bootstrap a new **XyPriss** project. It automates the creation of the project structure, configures essential metadata, and prepares the development environment with high-performance defaults.
+The `init` command is used to bootstrap a new **XyPriss** project. It leverages the native **XRU (XyPriss Rule Unit)** orchestration engine to automate structure creation, metadata injection, and environment preparation.
 
 ## Usage
 
 ```bash
-xfpm init --name <name> --desc <description> --version <version> [flags]
+xfpm init [name] [KEY=VALUE...] [flags]
 ```
 
-To create a new project, you must provide the project name, a brief description, and the initial version number.
+### Examples
+- **Interactive**: `xfpm init` (Follow the guided wizard)
+- **Quick Start**: `xfpm init my-app`
+- **Full Configuration**: `xfpm init my-app AUTHOR="Nehonix" VERSION=2.0.0 PORT=9000`
+- **With Flags**: `xfpm init my-app --mode xms --force`
 
 ## Options
 
 | Option | Shorthand | Default | Description |
 | :--- | :--- | :--- | :--- |
-| `--name` | `-n` | (Required) | The name of the project and its directory. |
-| `--desc` | `-d` | (Required) | A short description of the project's purpose. |
-| `--version` | `-v` | (Required) | The initial version string (e.g., `{{VERSION}}`). |
-| `--author` | `-a` | `XyPriss Developer` | The name of the project author. |
-| `--alias` | `-A` | | An internal identifier or alias for the application. |
-| `--mode` | `-m` | `default` | Project architecture: `default` (standard) or `xms` (Multi-Server). |
-| `--security` | `-s` | `standard` | Security profile: `standard`, `api`, or `web`. |
-| `--port` | `-p` | `8080` | The primary network port for the application. |
-| `--guardrails` | `-g` | `false` | Enable network guardrails for latency and traffic control. |
-| `--storage` | `-S` | `none` | Enable specialized storage engines like `xems`. |
+| `--mode` | `-m` | `default` | Orchestration mode: `default` or `xms` (Multi-Server). |
+| `--author` | `-a` | `Nehonix-Team` | The name of the project author. |
+| `--desc` | `-d` | (Generic) | A short description of the project. |
+| `--version` | `-v` | `1.0.0` | Initial project version. |
+| `--port` | `-p` | `8080` | Default network port for the server. |
+| `--arg` | | | Pass custom orchestration variables in `KEY=VALUE` format. |
 | `--force` | `-f` | `false` | Overwrite the target directory if it already exists. |
 
 ## Feature Highlights
 
-### Dynamic Project Modes
-- **Default**: A streamlined, high-performance architecture for standard applications.
-- **XMS (Multi-Server)**: A scalable architecture for distributed systems. When using XMS, XFPM automatically manages port assignments starting from your provided `--port`.
+### Guided Interactive Mode
+If run without arguments, `xfpm init` launches an interactive wizard that guides you through the essential configuration (Name, Version, Description, Author, Port). It provides sane defaults to get you started in seconds.
+
+### Dynamic Orchestration Variables
+XFPM supports a powerful "Pass-Through" argument system. Any positional argument containing an `=` (e.g., `THEME=dark`) is automatically captured and injected into the XRU orchestration rules. This allows you to customize templates without ever modifying the XFPM binary.
+
+### Native XRU Integration
+As of **vG0.1.200**, the orchestration engine is natively integrated.
+- **No external dependencies**: Works out of the box without installing the XRU CLI.
+- **Atomic Execution**: Ensures all rules are applied consistently before finalizing the project.
+- **Cross-Platform**: Handles pathing and shell operations natively on Windows, Linux, and macOS.
 
 ### Automated Environment Setup
-Upon initialization, XFPM automatically:
-1. Provisions the project structure from the latest official templates.
-2. Configures your metadata across the entire codebase.
-3. Verifies and installs the **Bun** runtime if necessary.
-4. Performs an initial `xfpm install` to ensure all dependencies are ready.
+1. **Template Provisioning**: Fetches the latest high-performance templates from official repositories.
+2. **Metadata Injection**: Recursively updates all configuration files, READMEs, and manifests.
+3. **Runtime Validation**: Verifies and installs the **Bun** runtime if missing.
+4. **Auto-Install**: Performs a full dependency installation so you're ready for `xfpm dev` immediately.
 
