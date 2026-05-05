@@ -6,6 +6,8 @@ import (
 	"os/exec"
 	"path/filepath"
 
+	"strings"
+
 	xfpmInit "github.com/Nehonix-Team/XFMP/internal/init"
 	"github.com/Nehonix-Team/XFMP/internal/utils"
 	"github.com/pterm/pterm"
@@ -13,140 +15,63 @@ import (
 )
 
 var initCmd = &cobra.Command{
-	Use:   "init",
+	Use:   "init [name]",
 	Short: "Initialize a new XyPriss project using the Orchestration Engine",
-	Annotations: map[string]string{
-		"requireRuntime": "true",
-	},
+	Args:  cobra.ArbitraryArgs,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		utils.PrintBanner()
 
-		name, _ := cmd.Flags().GetString("name")
-		desc, _ := cmd.Flags().GetString("desc")
-		version, _ := cmd.Flags().GetString("version")
+		var name string
+		var customArgs []string
+
+		for _, arg := range args {
+			if strings.Contains(arg, "=") {
+				customArgs = append(customArgs, arg)
+			} else if name == "" {
+				name = arg
+			}
+		}
+
 		mode, _ := cmd.Flags().GetString("mode")
-		security, _ := cmd.Flags().GetString("security")
-		storage, _ := cmd.Flags().GetString("storage")
-		guardrails, _ := cmd.Flags().GetBool("guardrails")
-		port, _ := cmd.Flags().GetUint16("port")
+		force, _ := cmd.Flags().GetBool("force")
+		version, _ := cmd.Flags().GetString("version")
+		description, _ := cmd.Flags().GetString("description")
 		author, _ := cmd.Flags().GetString("author")
-		alias, _ := cmd.Flags().GetString("alias")
+		port, _ := cmd.Flags().GetString("port")
 
-		// Detect interactive mode
-		isInteractive := name == "" || desc == "" || version == ""
+		// Determine if we should go into interactive mode for missing fields
+		// We go full interactive if no positional arguments were provided
+		isInteractive := len(args) == 0
 
-		if isInteractive {
-			utils.Premium("Setup", "Entering guided orchestration sequence")
-			
-			// --- Section: Project Identity ---
-			pterm.DefaultSection.Println("Project Identity")
-			
+		// Add custom args from --arg flag if any
+		extraArgs, _ := cmd.Flags().GetStringSlice("arg")
+		customArgs = append(customArgs, extraArgs...)
+
+		// Interactive prompts
+		if name == "" {
+			name, _ = pterm.DefaultInteractiveTextInput.WithDefaultText("my-xypriss-app").Show("Project Name")
 			if name == "" {
-				for {
-					name, _ = pterm.DefaultInteractiveTextInput.
-						WithDefaultText("my-xypriss-app").
-						Show("Project Name")
-					if name != "" {
-						break
-					}
-					utils.Error("Project name cannot be empty")
-				}
+				return fmt.Errorf("project name is required")
 			}
+		}
 
-			if desc == "" {
-				for {
-					desc, _ = pterm.DefaultInteractiveTextInput.
-						WithDefaultText("A high-performance XyPriss project").
-						Show("Description")
-					if desc != "" {
-						break
-					}
-					utils.Error("Description cannot be empty")
-				}
+		if isInteractive || (cmd.Flags().Changed("mode") && !cmd.Flags().Changed("version")) {
+			if !cmd.Flags().Changed("version") {
+				version, _ = pterm.DefaultInteractiveTextInput.WithDefaultText(version).Show("Project Version")
 			}
-
-			if version == "" {
-				for {
-					version, _ = pterm.DefaultInteractiveTextInput.
-						WithDefaultText("1.0.0").
-						Show("Initial Version")
-					if version != "" {
-						break
-					}
-					utils.Error("Version cannot be empty")
-				}
+			if !cmd.Flags().Changed("description") {
+				description, _ = pterm.DefaultInteractiveTextInput.WithDefaultText(description).Show("Project Description")
 			}
-
-			// --- Section: System Architecture ---
-			fmt.Println()
-			pterm.DefaultSection.Println("System Architecture")
-
-			if !cmd.Flags().Changed("mode") {
-				mode, _ = pterm.DefaultInteractiveSelect.
-					WithOptions([]string{"default", "xms"}).
-					WithDefaultOption("default").
-					Show("Orchestration Mode")
+			if !cmd.Flags().Changed("author") {
+				author, _ = pterm.DefaultInteractiveTextInput.WithDefaultText(author).Show("Project Author")
 			}
-
-			if !cmd.Flags().Changed("security") {
-				security, _ = pterm.DefaultInteractiveSelect.
-					WithOptions([]string{"standard", "api", "web"}).
-					WithDefaultOption("standard").
-					Show("Security Profile")
-			}
-
-			if !cmd.Flags().Changed("storage") {
-				storage, _ = pterm.DefaultInteractiveSelect.
-					WithOptions([]string{"none", "xems"}).
-					WithDefaultOption("none").
-					Show("Storage Engine")
-			}
-
-			if !cmd.Flags().Changed("guardrails") {
-				guardrails, _ = pterm.DefaultInteractiveConfirm.WithDefaultValue(false).Show("Enable Network Guardrails?")
-			}
-
 			if !cmd.Flags().Changed("port") {
-				pStr, _ := pterm.DefaultInteractiveTextInput.WithDefaultText("8080").Show("Primary Network Port")
-				fmt.Sscanf(pStr, "%d", &port)
-			}
-
-			// --- Section: Review & Launch ---
-			fmt.Println()
-			pterm.DefaultSection.Println("Review & Launch")
-			
-			tableData := [][]string{
-				{"Parameter", "Selected Value"},
-				{"Project Name", name},
-				{"Description", desc},
-				{"Version", version},
-				{"Mode", mode},
-				{"Security", security},
-				{"Storage", storage},
-				{"Port", fmt.Sprintf("%d", port)},
-				{"Guardrails", fmt.Sprintf("%v", guardrails)},
-			}
-
-			pterm.DefaultTable.WithHasHeader().WithData(tableData).Render()
-			fmt.Println()
-
-			confirm, _ := pterm.DefaultInteractiveConfirm.WithDefaultValue(true).Show("Proceed with orchestration?")
-			if !confirm {
-				utils.Warn("Orchestration aborted by user.")
-				return nil
-			}
-			fmt.Println()
-		} else {
-			// In non-interactive mode, validate required flags
-			if name == "" || desc == "" || version == "" {
-				return fmt.Errorf("missing required flags: --name, --desc, --version")
+				port, _ = pterm.DefaultInteractiveTextInput.WithDefaultText(port).Show("Project Port")
 			}
 		}
 
 		targetDir, _ := os.Getwd()
 		targetDir = filepath.Join(targetDir, name)
-
-		force, _ := cmd.Flags().GetBool("force")
 
 		if _, err := os.Stat(targetDir); err == nil {
 			if !force {
@@ -159,18 +84,13 @@ var initCmd = &cobra.Command{
 
 		opts := xfpmInit.InitOptions{
 			Mode:        mode,
-			Security:    security,
-			Guardrails:  guardrails,
-			Storage:     storage,
 			ProjectName: name,
-			Description: desc,
-			Author:      author,
-			Version:     version,
-			Alias:       alias,
-			Port:        port,
-			MainPort:    port,
-			AuthPort:    port + 1,
 			TargetDir:   targetDir,
+			Version:     version,
+			Description: description,
+			Author:      author,
+			Port:        port,
+			CustomArgs:  customArgs,
 		}
 
 		if err := xfpmInit.RunOrchestration(opts); err != nil {
@@ -216,15 +136,11 @@ var initCmd = &cobra.Command{
 
 func init() {
 	RootCmd.AddCommand(initCmd)
-	initCmd.Flags().StringP("name", "n", "", "Project name")
-	initCmd.Flags().StringP("desc", "d", "", "Project description")
-	initCmd.Flags().StringP("version", "v", "", "Initial version")
-	initCmd.Flags().StringP("author", "a", "XyPriss Developer", "Author name")
-	initCmd.Flags().StringP("alias", "A", "", "Project alias")
 	initCmd.Flags().StringP("mode", "m", "default", "Orchestration mode (default or xms)")
-	initCmd.Flags().StringP("security", "s", "standard", "Security level (standard, api, or web)")
-	initCmd.Flags().BoolP("guardrails", "g", false, "Enable network guardrails")
-	initCmd.Flags().StringP("storage", "S", "none", "Storage engine (none or xems)")
-	initCmd.Flags().Uint16P("port", "p", 8080, "Base server port")
 	initCmd.Flags().BoolP("force", "f", false, "Force overwrite existing directory")
+	initCmd.Flags().StringP("version", "v", "1.0.0", "Project version")
+	initCmd.Flags().StringP("description", "d", "A high-performance XyPriss server.", "Project description")
+	initCmd.Flags().StringP("author", "a", "Nehonix-Team", "Project author")
+	initCmd.Flags().StringP("port", "p", "8088", "Default server port")
+	initCmd.Flags().StringSlice("arg", []string{}, "Custom arguments for orchestration (key=value)")
 }

@@ -9,126 +9,40 @@ package init
 
 import (
 	"fmt"
-	"os"
-	"path/filepath"
-	"strings"
-
-	"github.com/Nehonix-Team/XFMP/internal/utils"
-	"github.com/Nehonix-Team/xru"
+	"github.com/Nehonix-Team/xru/pkg/engine"
 )
 
 // Orchestrator applies XRU rules against a target project directory.
 type Orchestrator struct {
 	TargetDir string
+	Args      map[string]string
 }
 
 func NewOrchestrator(targetDir string) *Orchestrator {
-	return &Orchestrator{TargetDir: targetDir}
+	return &Orchestrator{
+		TargetDir: targetDir,
+		Args:      make(map[string]string),
+	}
 }
 
 // ApplyRulesFile parses an .xru file and applies every rule in order.
 func (o *Orchestrator) ApplyRulesFile(path string) error {
-	rf, err := xru.ParseFile(path)
-	if err != nil {
-		return err
-	}
-	for _, rule := range rf.Rules {
-		if err := o.ApplyRule(rule); err != nil {
-			label := rule.Target
-			if label == "" {
-				label = "<global>"
-			}
-			return fmt.Errorf("applying rule for %s: %w", label, err)
-		}
-	}
-	return nil
+	return o.ApplyRulesFileWithArgs(path, nil)
 }
 
-// ApplyRule dispatches a single rule to the appropriate handler.
-func (o *Orchestrator) ApplyRule(rule xru.Rule) error {
-	switch rule.Type {
-	case xru.RuleTypeGlobal:
-		return o.applyGlobal(rule)
-	case xru.RuleTypeCreate:
-		return o.applyCreate(rule)
-	case xru.RuleTypeBegin:
-		return o.applyPatch(rule)
-	}
-	return nil
-}
-
-func (o *Orchestrator) applyGlobal(rule xru.Rule) error {
-	return filepath.Walk(o.TargetDir, func(path string, info os.FileInfo, err error) error {
-		if err != nil {
-			return err
-		}
-		// Global rules apply to common text-based config/source files
-		ext := filepath.Ext(path)
-		if info.IsDir() || (ext != ".ts" && ext != ".json" && ext != ".jsonc" && ext != ".md") {
-			return nil
-		}
-
-		data, err := os.ReadFile(path)
-		if err != nil {
-			return err
-		}
-		content := string(data)
-		original := content
-
-		for _, action := range rule.Actions {
-			switch a := action.(type) {
-			case xru.InjectAction:
-				if a.Lang != "" {
-					targetExt := "." + strings.ToLower(a.Lang)
-					if targetExt != ext {
-						continue
-					}
-				}
-				content = xru.InjectCode(content, a.Key, a.Code)
-			case xru.PatchAction:
-				content = xru.ApplyPatch(content, a.Op, a.Value)
-			}
-		}
-
-		if content != original {
-			return os.WriteFile(path, []byte(content), info.Mode())
-		}
-		return nil
-	})
-}
-
-func (o *Orchestrator) applyCreate(rule xru.Rule) error {
-	fullPath := filepath.Join(o.TargetDir, rule.Target)
-	utils.Log("→", fmt.Sprintf("Creating %s", rule.Target))
-	if err := os.MkdirAll(filepath.Dir(fullPath), 0755); err != nil {
-		return err
-	}
-	return os.WriteFile(fullPath, []byte(rule.Content), 0644)
-}
-
-func (o *Orchestrator) applyPatch(rule xru.Rule) error {
-	fullPath := filepath.Join(o.TargetDir, rule.Target)
-	utils.Log("→", fmt.Sprintf("Patching %s", rule.Target))
-
-	if _, err := os.Stat(fullPath); os.IsNotExist(err) {
-		utils.Warn("Skipping rule for %s: file does not exist", rule.Target)
-		return nil
+// ApplyRulesFileWithArgs applies rules while injecting specific arguments.
+func (o *Orchestrator) ApplyRulesFileWithArgs(path string, args map[string]string) error {
+	// Merge args
+	for k, v := range args {
+		o.Args[k] = v
 	}
 
-	data, err := os.ReadFile(fullPath)
-	if err != nil {
-		return err
-	}
-	content := string(data)
-
-	for _, action := range rule.Actions {
-		switch a := action.(type) {
-		case xru.InjectAction:
-			content = xru.InjectCode(content, a.Key, a.Code)
-		case xru.PatchAction:
-			content = xru.ApplyPatch(content, a.Op, a.Value)
-		}
+	runner := engine.NewRunner()
+	
+	// Convert Args map to XRU's expected --arg NAME=VAL format
+	for k, v := range o.Args {
+		runner.TerminalArgs = append(runner.TerminalArgs, "--arg", fmt.Sprintf("%s=%s", k, v))
 	}
 
-	return os.WriteFile(fullPath, []byte(content), 0644)
+	return runner.Run(path, o.TargetDir)
 }
