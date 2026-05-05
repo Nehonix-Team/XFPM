@@ -4,7 +4,7 @@ go 1.24.4
 
 require (
 	github.com/Masterminds/semver/v3 v3.4.0
-	github.com/Nehonix-Team/xru v0.1.0
+	github.com/Nehonix-Team/xru v0.2.5
 	github.com/google/uuid v1.6.0
 	github.com/nyaosorg/go-windows-junction v0.2.0
 	github.com/pterm/pterm v0.12.83
@@ -33,5 +33,3 @@ require (
 	golang.org/x/term v0.40.0 // indirect
 	golang.org/x/text v0.34.0 // indirect
 )
-
-replace github.com/Nehonix-Team/xru => ../xru
