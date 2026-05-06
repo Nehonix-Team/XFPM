@@ -323,6 +323,6 @@ Only the modified portions of the dependency graph are recalculated during updat
 ## License
 
 Copyright 2025 **Nehonix**. All rights reserved.  
-Licensed under the **Nehonix OSL (NOSL)**.
+Licensed under the **Nehonix OSL (NOSL) v2.0**. [View License](https://dll.nehonix.com/licenses/NOSL/v2)
 
 Powered by Nehonix.
