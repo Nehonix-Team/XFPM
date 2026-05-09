@@ -97,16 +97,7 @@ func CheckForUpdates(forced bool) bool {
 				pterm.Italic.Sprint(data.Message))
 		}
 		
-		pterm.Printf("   %s %s\n", 
-			pterm.FgYellow.Sprint("?"), 
-			pterm.Bold.Sprint("Would you like to install the update now? (y/N)"))
-		
-		fmt.Printf("   %s ", pterm.FgCyan.Sprint(">"))
-		
-		var input string
-		fmt.Scanln(&input)
-
-		if strings.ToLower(input) == "y" {
+		if AskYesNo("Would you like to install the update now? (y/N)") {
 			PerformSelfUpdate()
 			return true
 		}

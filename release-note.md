@@ -1,3 +1,9 @@
+## [G0.1.201] - 2026-05-09
+
+### Cross-Platform Interactive CLI
+
+- **Windows Prompt Compatibility**: Implemented a native cross-platform interactive helper (`internal/utils/interactive.go`). This fixes a bug on Windows where interactive prompts (e.g., asking to install Bun) were automatically bypassed and defaulted to "no". The CLI is now fully interactive across both Linux and Windows environments.
+
 ## [G0.1.200] - 2026-05-05
 
 ### Native XRU Orchestration & Initialization Overhaul

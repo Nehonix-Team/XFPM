@@ -13,11 +13,9 @@ import (
 	"os/exec"
 	"path/filepath"
 	"runtime"
-	"strings"
 
 	"github.com/Nehonix-Team/XFMP/internal/paths"
 	"github.com/Nehonix-Team/XFMP/internal/utils"
-	"github.com/pterm/pterm"
 )
 
 // EnsureRuntime checks if the required JS runtime (Bun) is available.
@@ -39,26 +37,18 @@ func EnsureRuntime() error {
 
 	installedPath, lookErr := exec.LookPath(bunName)
 	
+	var agreed bool
 	// Case 2: Found elsewhere on the system
 	if lookErr == nil {
 		utils.Premium("RUNTIME", fmt.Sprintf("Bun is installed at %s but is not managed by XFPM.", installedPath))
-		pterm.Printf("   %s %s\n", 
-			pterm.FgYellow.Sprint("?"), 
-			pterm.Bold.Sprint("For some reasons, we need to uninstall your actual bun binary to reinstall it manually; do u agree? (y/N)"))
+		agreed = utils.AskYesNo("For some reasons, we need to uninstall your actual bun binary to reinstall it manually; do u agree? (y/N)")
 	} else {
 		// Case 3: Not found at all
 		utils.Premium("RUNTIME", "XyPriss requires the Bun runtime to execute scripts and servers.")
-		pterm.Printf("   %s %s\n", 
-			pterm.FgYellow.Sprint("?"), 
-			pterm.Bold.Sprint("Would you like XFPM to automatically install Bun for you? (y/N)"))
+		agreed = utils.AskYesNo("Would you like XFPM to automatically install Bun for you? (y/N)")
 	}
-	
-	fmt.Printf("   %s ", pterm.FgCyan.Sprint(">"))
-	
-	var input string
-	fmt.Scanln(&input)
 
-	if strings.ToLower(input) != "y" {
+	if !agreed {
 		if lookErr == nil {
 			utils.Info("Using existing Bun at %s. Some features may be unstable.", installedPath)
 			return nil
