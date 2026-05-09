@@ -2,10 +2,10 @@
   "name": "XFPM (XyPriss Package Manager)",
   "description": "The ultra-fast package manager for the XyPriss ecosystem.",
   "warning": "CRITICAL: Public modifications to this file are strictly forbidden. Internal Nehonix metadata ONLY.",
-  "latest": "vG0.1.200",
-  "message": "Native XRU Library Integration: Fully migrated from CLI execution to native Go library integration (v0.2.5). Enhanced 'init' command with interactive project setup, custom argument support (KEY=VALUE), and improved temporary directory management.",
+  "latest": "vG0.1.201",
+  "message": "Windows Interactive Prompts Fix: Implemented cross-platform interactive helper to correctly handle terminal prompts (like Bun installation) on Windows.",
   "metadata": {
-    "releaseDate": "2026-05-05",
+    "releaseDate": "2026-05-09",
     "channel": "stable"
   }
 }
