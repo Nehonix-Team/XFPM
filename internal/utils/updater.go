@@ -118,7 +118,7 @@ func PerformSelfUpdate() {
 
 	var cmd *exec.Cmd
 	if runtime.GOOS == "windows" {
-		cmd = exec.Command("powershell", "-Command", fmt.Sprintf("Invoke-RestMethod -Uri '%s' -UseBasicParsing | node", InstallScriptURL))
+		cmd = exec.Command("powershell", "-NoProfile", "-Command", fmt.Sprintf("Invoke-RestMethod -Uri '%s' -UseBasicParsing | node", InstallScriptURL))
 	} else {
 		// Use sh/bash for Unix-like systems
 		cmd = exec.Command("sh", "-c", fmt.Sprintf("curl -sL %s | node", InstallScriptURL))

@@ -39,7 +39,11 @@ var RootCmd = &cobra.Command{
 			}
 		}
 
-		utils.CheckForUpdates(false)
+		cmdName := cmd.Name()
+		if cmdName != "completion" && cmdName != "__complete" && cmdName != "help" && cmdName != "version" && cmdName != "upgrade" {
+			utils.CheckForUpdates(false)
+		}
+		
 		return nil
 	},
 	Run: func(cmd *cobra.Command, args []string) {
