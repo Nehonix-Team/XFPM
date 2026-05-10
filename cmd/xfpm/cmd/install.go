@@ -67,7 +67,8 @@ var installCmd = &cobra.Command{
 			xpmStore := paths.StorageDir()
 			cas, _ := core.NewCas(xpmStore)
 
-			if selected == options[0] {
+			switch selected {
+			case options[0]:
 				pb, _ := pterm.DefaultProgressbar.
 					WithTotal(0).
 					WithTitle("  " + pterm.Gray("->") + " Migrating files").
@@ -81,19 +82,19 @@ var installCmd = &cobra.Command{
 
 				pb.Stop()
 				pterm.Success.Println("Project migrated successfully!")
-			} else if selected == options[1] {
+			case options[1]:
 				// Search everything from HOME
 				home, _ := os.UserHomeDir()
 				pterm.Info.Printfln("Searching for legacy stores in %s... (this might take a few seconds)", home)
 				s, _ := pterm.DefaultSpinner.Start("Scanning deep...")
 				roots := core.FindLegacyStorages(home)
 				s.Stop()
-				
+
 				if len(roots) > 0 {
 					pterm.Info.Printfln("Found %d legacy projects. Starting mass migration...", len(roots))
 					for _, r := range roots {
 						pterm.DefaultSection.Printf("Migrating %s", r)
-						
+
 						pb, _ := pterm.DefaultProgressbar.
 							WithTotal(0).
 							WithTitle("  " + pterm.Gray("->") + " Moving files").
