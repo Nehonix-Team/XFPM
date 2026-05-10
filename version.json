@@ -2,8 +2,8 @@
   "name": "XFPM (XyPriss Package Manager)",
   "description": "The ultra-fast package manager for the XyPriss ecosystem.",
   "warning": "CRITICAL: Public modifications to this file are strictly forbidden. Internal Nehonix metadata ONLY.",
-  "latest": "vG0.1.202",
-  "message": "Native PowerShell Updater: Migrated Windows self-update to the native install.ps1 script for improved performance and reliability. Fixed StrictMode errors in the PowerShell installer.",
+  "latest": "vG0.1.203",
+  "message": "Windows Hardening: Fixed binary linking (junction vs hardlink), optimized interactive prompts, and eliminated redundant runtime checks during initialization.",
   "metadata": {
     "releaseDate": "2026-05-10",
     "channel": "stable"

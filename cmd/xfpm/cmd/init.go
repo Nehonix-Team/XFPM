@@ -9,6 +9,7 @@ import (
 	"strings"
 
 	xfpmInit "github.com/Nehonix-Team/XFMP/internal/init"
+	"github.com/Nehonix-Team/XFMP/internal/paths"
 	"github.com/Nehonix-Team/XFMP/internal/utils"
 	"github.com/pterm/pterm"
 	"github.com/spf13/cobra"
@@ -103,9 +104,22 @@ var initCmd = &cobra.Command{
 		// Dependencies initialization
 		utils.Log("!", "Initializing dependencies...")
 
-		if _, err := exec.LookPath("bun"); err != nil {
+		// Check if bun is available either in PATH or in XFPM's bin directory
+		hasBun := false
+		if _, err := exec.LookPath("bun"); err == nil {
+			hasBun = true
+		} else {
+			xfpmBun := filepath.Join(paths.BinDir(), "bun")
+			if runtime.GOOS == "windows" { xfpmBun += ".exe" }
+			if _, err := os.Stat(xfpmBun); err == nil {
+				hasBun = true
+			}
+		}
+
+		if !hasBun {
 			utils.Warn("Bun not found globally. Installing it via xfpm...")
 			bunInstall := exec.Command(os.Args[0], "install", "-g", "bun")
+			bunInstall.Env = append(os.Environ(), "XFPM_INTERNAL_SPAWN=true")
 			bunInstall.Stdout = os.Stdout
 			bunInstall.Stderr = os.Stderr
 			if err := bunInstall.Run(); err != nil {
@@ -114,6 +128,7 @@ var initCmd = &cobra.Command{
 		}
 
 		selfInstall := exec.Command(os.Args[0], "install", "--force")
+		selfInstall.Env = append(os.Environ(), "XFPM_INTERNAL_SPAWN=true")
 		selfInstall.Dir = targetDir
 		selfInstall.Stdout = os.Stdout
 		selfInstall.Stderr = os.Stderr

@@ -401,7 +401,7 @@ func (i *Installer) linkPackageDeps(packages []*ResolvedPackage, vstoreBase stri
 				relTarget := filepath.Join(relPrefix, depVStoreName, "node_modules", realDepName)
 
 				os.Remove(targetLink)
-				if err := utils.LinkDir(relTarget, targetLink); err != nil {
+				if err := utils.Link(relTarget, targetLink); err != nil {
 					utils.Error("Failed to link dependency %s -> %s: %v", depName, targetLink, err)
 				}
 			}
@@ -444,7 +444,7 @@ func (i *Installer) linkToRoot(packages []*ResolvedPackage) error {
 		relTarget, _ := filepath.Rel(filepath.Dir(rootNM), absTarget)
 
 		os.Remove(rootNM)
-		if err := utils.LinkDir(relTarget, rootNM); err != nil {
+		if err := utils.Link(relTarget, rootNM); err != nil {
 			utils.Error("Failed to link root package %s -> %s: %v", pkg.Name, rootNM, err)
 		}
 
@@ -571,7 +571,7 @@ func (i *Installer) adaptiveBinLink(name, pkgDir, relPath, binDir string) {
 		os.Chmod(absTarget, 0755)
 		i.ensureExecutableRecursive(filepath.Dir(absTarget))
 	} else {
-		if err := utils.LinkDir(relTarget, dest); err != nil {
+		if err := utils.Link(relTarget, dest); err != nil {
 			utils.Error("Failed to link binary %s -> %s: %v", name, dest, err)
 		}
 
