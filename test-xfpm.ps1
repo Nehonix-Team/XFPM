@@ -5,7 +5,7 @@ $logFile = "$HOME\xfpm_test_$(Get-Date -Format 'yyyyMMdd_HHmmss').log"
 Start-Transcript -Path $logFile -Append
 
 Write-Host "==========================================" -ForegroundColor Cyan
-Write-Host "   ⚡ XFPM REAL-MACHINE TEST ENGINE ⚡   " -ForegroundColor Cyan
+Write-Host "   ⚡ XFPM ReM TEST ENGINE ⚡   " -ForegroundColor Cyan
 Write-Host "==========================================" -ForegroundColor Cyan
 Write-Host "Logging to: $logFile"
 
@@ -59,7 +59,7 @@ $job = Start-Job -ScriptBlock {
 }
 
 $ready = $false
-$timeout = 90 # 1.5 minute timeout for first-time compilation
+$timeout = 120 # 2 minute timeout for first-time compilation
 $start = Get-Date
 
 while (((Get-Date) - $start).TotalSeconds -lt $timeout) {
@@ -82,7 +82,7 @@ if ($ready) {
     Write-Host "`n[ACTION] Press ANY KEY here to finalize the test and stop the server." -ForegroundColor Yellow
     $null = $Host.UI.RawUI.ReadKey("NoEcho,IncludeKeyDown")
 } else {
-    Write-Host "`n⚠️  Timeout: 'localhost' not detected after 90s." -ForegroundColor Orange
+    Write-Host "`n⚠️  Timeout: 'localhost' not detected after $timeout s." -ForegroundColor Orange
     Write-Host "The server might still be starting or encountered an error."
 }
 
