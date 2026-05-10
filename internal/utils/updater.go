@@ -130,21 +130,37 @@ func PerformSelfUpdate() {
 	cmd.Stderr = os.Stderr
 	cmd.Stdin = os.Stdin
 
-	if err := cmd.Start(); err != nil {
-		pterm.Println()
-		Error("Failed to launch installer: %v", err)
-		pterm.Println()
-		return
-	}
-
 	if runtime.GOOS == "windows" {
-		// Exit immediately to release the file lock on Windows
-		// The installer will continue in the background using the same console
+		// Renaming Strategy: On Windows, you can rename a running executable.
+		// This releases the lock on the original filename "xfpm.exe", allowing the
+		// installer to replace it, while we stay alive to manage the console UX.
+		exePath, err := os.Executable()
+		if err == nil {
+			oldPath := exePath + ".old"
+			_ = os.Remove(oldPath) // Remove previous leftover if any
+			if err := os.Rename(exePath, oldPath); err == nil {
+				// We are now running as xfpm.exe.old. The path "xfpm.exe" is free!
+				if err := cmd.Run(); err != nil {
+					pterm.Println()
+					Error("Installation failed: %v", err)
+				} else {
+					pterm.Println()
+					Success("XFPM updated successfully! Please restart your terminal to use the new version.")
+				}
+				os.Exit(0)
+			}
+		}
+		
+		// Fallback if renaming fails: original non-blocking logic
+		if err := cmd.Start(); err != nil {
+			Error("Failed to launch installer: %v", err)
+			return
+		}
 		os.Exit(0)
 	}
 
 	// For Unix-like systems, wait for the installer to finish and then re-execute the task
-	if err := cmd.Wait(); err != nil {
+	if err := cmd.Run(); err != nil {
 		pterm.Println()
 		Error("Installation failed: %v", err)
 		pterm.Println()
@@ -153,6 +169,17 @@ func PerformSelfUpdate() {
 		Success("XFPM updated successfully! Proceeding with task...")
 		pterm.Println()
 		ContinueTask()
+	}
+}
+
+// CleanupOldBinary removes the .old binary left after a Windows update.
+func CleanupOldBinary() {
+	if runtime.GOOS != "windows" {
+		return
+	}
+	exePath, err := os.Executable()
+	if err == nil {
+		_ = os.Remove(exePath + ".old")
 	}
 }
 
