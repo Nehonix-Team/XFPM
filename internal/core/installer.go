@@ -47,6 +47,7 @@ type Installer struct {
 	AutoVerify      bool
 	NoInteract      bool
 	TargetPackages  map[string]bool
+	globalDirCache  sync.Map
 }
 
 func NewInstaller(cas *Cas, registry *RegistryClient, projectRoot string) *Installer {
@@ -67,7 +68,10 @@ func NewInstaller(cas *Cas, registry *RegistryClient, projectRoot string) *Insta
 		linkingPool: utils.NewAdaptiveSemaphore(maxConcurrency),
 		progress: mpb.New(
 			mpb.WithWidth(64),
-			mpb.WithRefreshRate(180*time.Millisecond),
+			mpb.WithRefreshRate(func() time.Duration {
+				if runtime.GOOS == "windows" { return 250 * time.Millisecond }
+				return 180 * time.Millisecond
+			}()),
 		),
 	}
 }
@@ -309,7 +313,6 @@ func (i *Installer) LinkFilesToDir(destDir string, index map[string]string) erro
 	close(jobs)
 
 	var wg sync.WaitGroup
-	var dirCache sync.Map // Cache for created directories
 
 	for w := 0; w < concurrency; w++ {
 		wg.Add(1)
@@ -324,9 +327,9 @@ func (i *Installer) LinkFilesToDir(destDir string, index map[string]string) erro
 				sourcePath := i.cas.GetFilePath(j.hash)
 				
 				parentDir := filepath.Dir(destPath)
-				if _, created := dirCache.Load(parentDir); !created {
+				if _, created := i.globalDirCache.Load(parentDir); !created {
 					utils.CreateDirAllSecure(parentDir)
-					dirCache.Store(parentDir, true)
+					i.globalDirCache.Store(parentDir, true)
 				}
 				os.Remove(destPath)
 				
@@ -364,7 +367,6 @@ func (i *Installer) applyPermissions(src, dst string) {
 
 func (i *Installer) linkPackageDeps(packages []*ResolvedPackage, vstoreBase string) error {
 	var wg sync.WaitGroup
-	var dirCache sync.Map // Cache for created directories
 	errChan := make(chan error, len(packages))
 
 	for _, pkg := range packages {
@@ -403,9 +405,9 @@ func (i *Installer) linkPackageDeps(packages []*ResolvedPackage, vstoreBase stri
 				}
 
 				parentDir := filepath.Dir(targetLink)
-				if _, created := dirCache.Load(parentDir); !created {
+				if _, created := i.globalDirCache.Load(parentDir); !created {
 					utils.CreateDirAllSecure(parentDir)
-					dirCache.Store(parentDir, true)
+					i.globalDirCache.Store(parentDir, true)
 				}
 				depVStoreName := strings.ReplaceAll(realDepName, "/", "+") + "@" + depVersion
 				steps := strings.Count(depName, "/") + 2
@@ -437,7 +439,6 @@ func (i *Installer) linkToRoot(packages []*ResolvedPackage) error {
 	utils.CreateDirAllSecure(rootBinDir)
 
 	var wg sync.WaitGroup
-	var dirCache sync.Map // Cache for created directories
 	linkPkg := func(pkg *ResolvedPackage) {
 		defer wg.Done()
 
@@ -454,9 +455,9 @@ func (i *Installer) linkToRoot(packages []*ResolvedPackage) error {
 		defer i.linkingPool.Release()
 
 		parentDir := filepath.Dir(rootNM)
-		if _, created := dirCache.Load(parentDir); !created {
+		if _, created := i.globalDirCache.Load(parentDir); !created {
 			utils.CreateDirAllSecure(parentDir)
-			dirCache.Store(parentDir, true)
+			i.globalDirCache.Store(parentDir, true)
 		}
 		pkgVStoreName := strings.ReplaceAll(pkg.Name, "/", "+") + "@" + pkg.Version
 
