@@ -92,8 +92,8 @@ Stop-Job $job
 if (Test-Path $devLog) {
     $finalDevLogs = Get-Content $devLog
     Write-Host "`n--- CAPTURED DEV LOGS ---" -ForegroundColor Gray
-    $finalDevLogs | Write-Host
-    $finalDevLogs >> $logFile
+    # Write-Host will be captured by the transcript automatically
+    $finalDevLogs | ForEach-Object { Write-Host $_ }
     Remove-Item $devLog
 }
 
