@@ -33,7 +33,7 @@ func InstallPendingPlugin(projectRoot, pkgName, pkgVer string) error {
 	inst.LinkFilesToDir(pkgDir, index)
 	
 	rootDest := paths.NodeModulesPkgDir(projectRoot, pkgName)
-	utils.LinkDir(pkgDir, rootDest)
+	utils.Link(pkgDir, rootDest)
 	
 	utils.Success("Plugin %s@%s successfully linked to project.", pkgName, pkgVer)
 	return nil

@@ -959,7 +959,7 @@ func (i *Installer) SavePendingPlugins() {
 				// Finalize installation for this plugin
 				i.LinkFilesToDir(pkgDir, index)
 				rootDest := filepath.Join(i.projectRoot, "node_modules", p.Name)
-				utils.LinkDir(pkgDir, rootDest)
+				utils.Link(pkgDir, rootDest)
 				verifiedCount++
 			} else {
 				utils.Error("Verification failed for %s: %v", p.Name, err)

@@ -254,7 +254,7 @@ var pluginVerifyCmd = &cobra.Command{
 			utils.Info("Finalizing installation for %s@%s...", pkgName, pkgVer)
 			installer.LinkFilesToDir(pkgDir, index)
 			rootDest := paths.NodeModulesPkgDir(projectRoot, pkgName)
-			utils.LinkDir(pkgDir, rootDest)
+			utils.Link(pkgDir, rootDest)
 			utils.Success("Plugin %s@%s fully installed.", pkgName, pkgVer)
 		}
 
