@@ -22,6 +22,7 @@ import (
 var GlobalBytesDownloaded atomic.Uint64
 
 type RegistryPackage struct {
+	mu       sync.RWMutex
 	Name     string                     `json:"name"`
 	DistTags map[string]string          `json:"dist-tags"`
 	Versions map[string]VersionMetadata `json:"versions"`

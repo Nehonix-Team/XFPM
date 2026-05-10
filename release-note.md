@@ -1,3 +1,9 @@
+## [G0.1.212] - 2026-05-10
+
+### Security & Stability
+
+- **Fixed Critical Resolver Race**: Resolved a `fatal error: concurrent map iteration and map write` in the package resolver. Implemented `sync.RWMutex` on `RegistryPackage` to ensure thread-safe access to cached package metadata during high-concurrency resolution bursts.
+
 ## [G0.1.211] - 2026-05-10
 
 ### Deep Performance & Concurrency Refactor

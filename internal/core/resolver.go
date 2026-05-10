@@ -444,7 +444,9 @@ func (r *Resolver) resolvePackage(ctx context.Context, name, req string, isOptio
 		}
 	}
 
+	pkgInfo.mu.RLock()
 	version, err := r.bestMatch(pkgInfo, realReq)
+	pkgInfo.mu.RUnlock()
 	if err != nil {
 		if !shouldForce {
 			// Cache miss for this version, maybe newly published? Fetch fresh!
@@ -474,7 +476,9 @@ func (r *Resolver) resolvePackage(ctx context.Context, name, req string, isOptio
 		return nil
 	}
 
+	pkgInfo.mu.RLock()
 	meta := pkgInfo.Versions[version]
+	pkgInfo.mu.RUnlock()
 
 	// NPM abbreviated packument strips custom properties like "xfpm"
 	// So if this is a direct dependency (isRoot), we fetch the full version-specific packument (small size: 1-2KB).
@@ -534,6 +538,7 @@ func (r *Resolver) resolvePackage(ctx context.Context, name, req string, isOptio
 	// Note: resolved.IsRevoked and RevokedBy might have been set above
 	
 	// Serverless Revocation Check
+	pkgInfo.mu.Lock()
 	latestVersion := pkgInfo.DistTags["latest"]
 	if latestVersion != "" {
 		latestMeta, ok := pkgInfo.Versions[latestVersion]
@@ -542,9 +547,13 @@ func (r *Resolver) resolvePackage(ctx context.Context, name, req string, isOptio
 			if latestMeta.Xfpm == nil && !isRoot {
 				// We only do this if it's potentially a XyPriss plugin or if we have reason to suspect revocations
 				if strings.HasPrefix(realName, "xypriss-plugin-") || strings.Contains(realName, "xypriss") {
+					pkgInfo.mu.Unlock() // Unlock to avoid deadlocking during network call
 					if fullLatest, err := r.registry.FetchVersionMetadata(ctx, realName, latestVersion); err == nil {
+						pkgInfo.mu.Lock()
 						latestMeta.Xfpm = fullLatest.Xfpm
 						pkgInfo.Versions[latestVersion] = latestMeta
+					} else {
+						pkgInfo.mu.Lock()
 					}
 				}
 			}
@@ -556,6 +565,7 @@ func (r *Resolver) resolvePackage(ctx context.Context, name, req string, isOptio
 						utils.Info("Reason: A critical security vulnerability or key compromise was detected for this version.")
 						utils.Info("Action: Please upgrade to the latest version (%s) or a safe version.", latestVersion)
 						if !r.IgnoreRevocations {
+							pkgInfo.mu.Unlock()
 							return fmt.Errorf("package %s@%s is revoked", realName, version)
 						}
 						r.RevokedPackages.Store(versionKey, latestVersion)
@@ -566,6 +576,7 @@ func (r *Resolver) resolvePackage(ctx context.Context, name, req string, isOptio
 			}
 		}
 	}
+	pkgInfo.mu.Unlock()
 
 	r.resolved.Store(versionKey, resolved)
 
@@ -644,6 +655,9 @@ func (r *Resolver) parseAlias(name, req string) (string, string) {
 }
 
 func (r *Resolver) bestMatch(pkg *RegistryPackage, req string) (string, error) {
+	pkg.mu.RLock()
+	defer pkg.mu.RUnlock()
+
 	if req == "latest" || req == "*" || req == "" {
 		if v, ok := pkg.DistTags["latest"]; ok {
 			return v, nil
