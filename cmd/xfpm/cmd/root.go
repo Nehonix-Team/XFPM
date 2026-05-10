@@ -33,7 +33,8 @@ var RootCmd = &cobra.Command{
 		// Automated JS Runtime Check (Bun)
 		// We use Cobra annotations to determine if a command needs the JS runtime.
 		// This avoids unnecessary prompts for administrative or informational commands.
-		if cmd.Annotations["requireRuntime"] == "true" {
+		// We also skip it if this is an internal spawn to avoid redundant prompts.
+		if cmd.Annotations["requireRuntime"] == "true" && os.Getenv("XFPM_INTERNAL_SPAWN") != "true" {
 			if err := core.EnsureRuntime(); err != nil {
 				utils.Error("Runtime verification failed: %v", err)
 			}

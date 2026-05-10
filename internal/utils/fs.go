@@ -44,10 +44,12 @@ func GenerateBinShim(binDir, name, absTarget string) error {
 	return nil
 }
 
-// LinkDir creates a symbolic link for a directory.
-// On Windows, if symlinking fails (e.g., due to missing privileges), it falls back to a Directory Junction.
-func LinkDir(oldname, newname string) error {
-	// Ensure oldname is absolute for Junctions
+// Link creates a symbolic link for a file or directory.
+// On Windows, if symlinking fails (e.g., due to missing privileges):
+// - For directories: it falls back to a Directory Junction.
+// - For files: it falls back to a Hard Link.
+func Link(oldname, newname string) error {
+	// Ensure oldname is absolute for Junctions/Hardlinks
 	absOld := oldname
 	if !filepath.IsAbs(oldname) {
 		absOld, _ = filepath.Abs(filepath.Join(filepath.Dir(newname), oldname))
@@ -61,13 +63,42 @@ func LinkDir(oldname, newname string) error {
 		return err
 	}
 
-	// Fallback to Junction on Windows
-	// We use native Win32 API calls instead of spawning 'cmd /c mklink /j' for performance.
-	if err := CreateJunction(absOld, newname); err != nil {
-		// Final fallback: Copying (expensive but works)
-		return CopyDir(absOld, newname)
+	// Fallback logic for Windows
+	info, statErr := os.Stat(absOld)
+	if statErr != nil {
+		return statErr
+	}
+
+	if info.IsDir() {
+		// Fallback to Junction for directories
+		if err := CreateJunction(absOld, newname); err != nil {
+			return CopyDir(absOld, newname)
+		}
+		return nil
+	}
+
+	// Fallback to Hard Link for files
+	if err := os.Link(absOld, newname); err != nil {
+		// Final fallback: Copying
+		return copyFile(absOld, newname)
 	}
 	return nil
+}
+
+// copyFile is a helper to copy a single file.
+func copyFile(src, dst string) error {
+	s, err := os.Open(src)
+	if err != nil {
+		return err
+	}
+	defer s.Close()
+	d, err := os.Create(dst)
+	if err != nil {
+		return err
+	}
+	defer d.Close()
+	_, err = io.Copy(d, s)
+	return err
 }
 
 // CopyDir recursively copies a directory.
