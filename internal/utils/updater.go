@@ -130,16 +130,16 @@ func PerformSelfUpdate() {
 	cmd.Stderr = os.Stderr
 	cmd.Stdin = os.Stdin
 
-	if err := cmd.Run(); err != nil {
+	if err := cmd.Start(); err != nil {
 		pterm.Println()
-		Error("Installation failed: %v", err)
+		Error("Failed to launch installer: %v", err)
 		pterm.Println()
-	} else {
-		pterm.Println()
-		Success("XFPM updated successfully! Proceeding with task...")
-		pterm.Println()
-		ContinueTask()
+		return
 	}
+
+	// Exit immediately to release the file lock on Windows
+	// The installer will continue in the background using the same console
+	os.Exit(0)
 }
 
 // ContinueTask attempts to re-execute the current command using the updated binary (Unix)

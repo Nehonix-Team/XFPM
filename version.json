@@ -2,8 +2,8 @@
   "name": "XFPM (XyPriss Package Manager)",
   "description": "The ultra-fast package manager for the XyPriss ecosystem.",
   "warning": "CRITICAL: Public modifications to this file are strictly forbidden. Internal Nehonix metadata ONLY.",
-  "latest": "vG0.1.203",
-  "message": "Windows Hardening: Fixed binary linking (junction vs hardlink), optimized interactive prompts, and eliminated redundant runtime checks during initialization.",
+  "latest": "vG0.1.204",
+  "message": "Windows Upgrade Fix: Improved self-update logic on Windows to prevent process locks and deadlocks during the upgrade sequence.",
   "metadata": {
     "releaseDate": "2026-05-10",
     "channel": "stable"
