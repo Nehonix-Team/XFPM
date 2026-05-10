@@ -107,7 +107,7 @@ func CheckForUpdates(forced bool) bool {
 	}
 
 	if forced {
-		Success("XFPM is already up to date (v%s).", BinVersion)
+		pterm.Success.Printf("XFPM is already up to date (%s).\n", BinVersion)
 	}
 	return true
 }
@@ -137,9 +137,23 @@ func PerformSelfUpdate() {
 		return
 	}
 
-	// Exit immediately to release the file lock on Windows
-	// The installer will continue in the background using the same console
-	os.Exit(0)
+	if runtime.GOOS == "windows" {
+		// Exit immediately to release the file lock on Windows
+		// The installer will continue in the background using the same console
+		os.Exit(0)
+	}
+
+	// For Unix-like systems, wait for the installer to finish and then re-execute the task
+	if err := cmd.Wait(); err != nil {
+		pterm.Println()
+		Error("Installation failed: %v", err)
+		pterm.Println()
+	} else {
+		pterm.Println()
+		Success("XFPM updated successfully! Proceeding with task...")
+		pterm.Println()
+		ContinueTask()
+	}
 }
 
 // ContinueTask attempts to re-execute the current command using the updated binary (Unix)
