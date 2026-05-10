@@ -158,9 +158,6 @@ func (c *Cas) StoreStream(reader io.Reader, isExecutable bool) (string, error) {
 		}
 	}
 
-	if err := tempFile.Sync(); err != nil {
-		return "", err
-	}
 	tempFile.Close()
 
 	hashHex := hex.EncodeToString(hasher.Sum(nil))
