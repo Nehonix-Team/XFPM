@@ -21,7 +21,7 @@ import (
 )
 
 const (
-	VersionCheckURL  = "https://raw.githubusercontent.com/Nehonix-Team/XFMP/master/version.json"
+	VersionCheckURL  = "https://raw.githubusercontent.com/Nehonix-Team/XFPM/master/version.json"
 	InstallScriptURL = "https://xypriss.nehonix.com/install.js"
 	InstallScriptPS1 = "https://dll.nehonix.com/repo/xypriss/xfpm/scripts/install.ps1"
 )
