@@ -1,3 +1,11 @@
+## [G0.1.206] - 2026-05-10
+
+### Linux/Unix & UX Polish
+
+- **Unix Upgrade Flow**: Restored the sequential upgrade behavior on Linux/macOS. Unlike Windows, Unix systems can handle binary replacement while running, so we now wait for the installer to finish and then re-execute the task automatically.
+- **Shadowing Detection**: Improved the Linux installer to detect if `xfpm` is being shadowed by a global installation (e.g., in `/usr/local/bin`) and provide a clear fix command.
+- **Log Polish**: Fixed a cosmetic bug where version numbers were prefixed with a double 'v' (`vvG0.1.205`).
+
 ## [G0.1.205] - 2026-05-10
 
 ### Windows Performance Optimizations
