@@ -1,3 +1,10 @@
+## [G0.1.208] - 2026-05-10
+
+### Interactive CLI & Update Flow
+
+- **Fixed Terminal "Cutting" Bug**: Resolved a critical issue where the terminal would return to the shell prompt prematurely during self-updates or after interactive inputs. XFPM now correctly waits for the installer to finish on Windows, providing a stable and sequential upgrade experience.
+- **Robust Input Handling**: Hardened the interactive prompt logic to ensure it reliably reads user input across different shell environments (CMD, PowerShell, Bash).
+
 ## [G0.1.207] - 2026-05-10
 
 ### Windows UX & Stability

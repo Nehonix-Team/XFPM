@@ -151,10 +151,14 @@ func PerformSelfUpdate() {
 			}
 		}
 		
-		// Fallback if renaming fails: original non-blocking logic
-		if err := cmd.Start(); err != nil {
-			Error("Failed to launch installer: %v", err)
-			return
+		// Fallback if renaming fails: wait for the installer to finish.
+		// If we don't wait, the terminal returns to the shell prompt prematurely (the "cutting" bug).
+		if err := cmd.Run(); err != nil {
+			pterm.Println()
+			Error("Installation failed: %v", err)
+		} else {
+			pterm.Println()
+			Success("XFPM updated successfully! Please restart your terminal to use the new version.")
 		}
 		os.Exit(0)
 	}
