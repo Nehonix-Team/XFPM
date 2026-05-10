@@ -23,6 +23,7 @@ import (
 const (
 	VersionCheckURL  = "https://raw.githubusercontent.com/Nehonix-Team/XFMP/master/version.json"
 	InstallScriptURL = "https://xypriss.nehonix.com/install.js"
+	InstallScriptPS1 = "https://dll.nehonix.com/repo/xypriss/xfpm/scripts/install.ps1"
 )
 
 // CheckForUpdates fetches the latest version from Nehonix GitHub and proposes an update if needed.
@@ -118,7 +119,8 @@ func PerformSelfUpdate() {
 
 	var cmd *exec.Cmd
 	if runtime.GOOS == "windows" {
-		cmd = exec.Command("powershell", "-NoProfile", "-Command", fmt.Sprintf("Invoke-RestMethod -Uri '%s' -UseBasicParsing | node", InstallScriptURL))
+		cmd = exec.Command("powershell.exe", "-NoProfile", "-ExecutionPolicy", "Bypass", "-Command", 
+			fmt.Sprintf("Invoke-RestMethod -Uri '%s' -UseBasicParsing | Invoke-Expression", InstallScriptPS1))
 	} else {
 		// Use sh/bash for Unix-like systems
 		cmd = exec.Command("sh", "-c", fmt.Sprintf("curl -sL %s | node", InstallScriptURL))
