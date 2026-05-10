@@ -1,3 +1,8 @@
+## [G0.1.209] - 2026-05-10
+
+### Fixes
+- **Corrected Update URL**: Fixed an issue where the version check was pointing to a deprecated repository URL, which could lead to incorrect "ahead of release" messages.
+
 ## [G0.1.208] - 2026-05-10
 
 ### Interactive CLI & Update Flow
