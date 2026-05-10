@@ -2,7 +2,7 @@
   "name": "XFPM (XyPriss Package Manager)",
   "description": "The ultra-fast package manager for the XyPriss ecosystem.",
   "warning": "CRITICAL: Public modifications to this file are strictly forbidden. Internal Nehonix metadata ONLY.",
-  "latest": "vG0.1.201",
+  "latest": "vG0.1.203",
   "message": "Windows Interactive Prompts Fix: Implemented cross-platform interactive helper to correctly handle terminal prompts (like Bun installation) on Windows.",
   "metadata": {
     "releaseDate": "2026-05-09",
