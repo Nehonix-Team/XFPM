@@ -1,3 +1,10 @@
+## [G0.1.207] - 2026-05-10
+
+### Windows UX & Stability
+
+- **Binary Renaming Strategy**: Implemented a "hot-swap" update mechanism for Windows. By renaming the running `xfpm.exe` to `xfpm.exe.old`, we can now release the file lock and let the installer replace the binary while keeping the parent process alive. This eliminates the "overlapping prompt" bug where the shell would return to the command line before the installer finished.
+- **Auto-Cleanup**: Added automatic cleanup of `.old` binary residues on the next startup.
+
 ## [G0.1.206] - 2026-05-10
 
 ### Linux/Unix & UX Polish

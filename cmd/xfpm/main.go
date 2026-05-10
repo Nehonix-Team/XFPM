@@ -16,5 +16,6 @@ func main() {
 	// This ensures SIGINT/SIGTERM are captured before any Cobra command
 	// or runtime default handler can intercept them.
 	utils.SignalManager.Start()
+	utils.CleanupOldBinary()
 	cmd.Execute()
 }
