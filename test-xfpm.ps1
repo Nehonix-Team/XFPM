@@ -5,7 +5,7 @@ $logFile = "$HOME\xfpm_test_$(Get-Date -Format 'yyyyMMdd_HHmmss').log"
 Start-Transcript -Path $logFile -Append
 
 Write-Host "==========================================" -ForegroundColor Cyan
-Write-Host "   ⚡ XFPM RM TEST ENGINE ⚡   " -ForegroundColor Cyan
+Write-Host "   ⚡ XFPM REAL-MACHINE TEST ENGINE ⚡   " -ForegroundColor Cyan
 Write-Host "==========================================" -ForegroundColor Cyan
 Write-Host "Logging to: $logFile"
 
@@ -40,46 +40,61 @@ if (-not (Test-Path "my-xyp-project")) {
     exit 1
 }
 
-# 4. Change Directory
+# 3. Change Directory
 cd my-xyp-project
 Write-Host "Entered project: $(Get-Location)" -ForegroundColor Gray
 
-# 4. Start Dev Server
+# 4. Start Dev Server with Live Detection
 Write-Host "`n[3/4] Starting development server..." -ForegroundColor Yellow
-Write-Host "The server will run for 30 seconds for testing, then exit." -ForegroundColor Gray
+Write-Host "Waiting for 'localhost' signal in logs..." -ForegroundColor Gray
 
-# Start xfpm dev in a separate process to avoid blocking and capture output
-$psi = New-Object System.Diagnostics.ProcessStartInfo
-$psi.FileName = "$HOME\.xfpm\bin\xfpm.exe"
-$psi.Arguments = "dev"
-$psi.WorkingDirectory = (Get-Location).Path
-$psi.UseShellExecute = $false
-$psi.RedirectStandardOutput = $true
-$psi.RedirectStandardError = $true
+$devLog = "$HOME\xfpm_dev_temp.log"
+if (Test-Path $devLog) { Remove-Item $devLog }
 
-$proc = [System.Diagnostics.Process]::Start($psi)
+# Start in background via a Job to capture output
+$job = Start-Job -ScriptBlock {
+    $env:Path = [System.Environment]::GetEnvironmentVariable("Path","User") + ";" + [System.Environment]::GetEnvironmentVariable("Path","Machine")
+    cd $using:PWD
+    & "$HOME\.xfpm\bin\xfpm.exe" dev *>&1 | Out-File $using:devLog -Encoding utf8
+}
 
-Write-Host "Server started. Observing performance for 30s..." -ForegroundColor DarkGray
-$seconds = 30
-for ($i = 0; $i -lt $seconds; $i++) {
-    if ($proc.HasExited) { break }
-    Write-Progress -Activity "Testing XFPM Dev" -Status "Server running ($($seconds - $i)s left)" -PercentComplete (($i / $seconds) * 100)
+$ready = $false
+$timeout = 90 # 1.5 minute timeout for first-time compilation
+$start = Get-Date
+
+while (((Get-Date) - $start).TotalSeconds -lt $timeout) {
+    if (Test-Path $devLog) {
+        try {
+            $logs = Get-Content $devLog -Raw -ErrorAction SilentlyContinue
+            if ($logs -match "localhost" -or $logs -match "Ready" -or $logs -match "http://") {
+                $ready = $true
+                break
+            }
+        } catch { }
+    }
+    Write-Progress -Activity "Booting Neural Bridge" -Status "Searching for localhost..." -PercentComplete (((Get-Date) - $start).TotalSeconds / $timeout * 100)
     Start-Sleep -Seconds 1
 }
 
-if (-not $proc.HasExited) {
-    Write-Host "Stopping server..." -ForegroundColor Gray
-    $proc.Kill()
+if ($ready) {
+    Write-Host "`n✅ SERVER IS READY AT LOCALHOST!" -ForegroundColor Green
+    Write-Host "Everything looks stable and optimized." -ForegroundColor Green
+    Write-Host "`n[ACTION] Press ANY KEY here to finalize the test and stop the server." -ForegroundColor Yellow
+    $null = $Host.UI.RawUI.ReadKey("NoEcho,IncludeKeyDown")
+} else {
+    Write-Host "`n⚠️  Timeout: 'localhost' not detected after 90s." -ForegroundColor Orange
+    Write-Host "The server might still be starting or encountered an error."
 }
 
-$output = $proc.StandardOutput.ReadToEnd()
-$errors = $proc.StandardError.ReadToEnd()
-
-Write-Host "--- SERVER OUTPUT ---" -ForegroundColor Gray
-Write-Host $output
-if ($errors) {
-    Write-Host "--- SERVER ERRORS ---" -ForegroundColor Red
-    Write-Host $errors
+# 5. Finalize
+Write-Host "`n[4/4] Finalizing test..." -ForegroundColor Yellow
+Stop-Job $job
+if (Test-Path $devLog) {
+    $finalDevLogs = Get-Content $devLog
+    Write-Host "`n--- CAPTURED DEV LOGS ---" -ForegroundColor Gray
+    $finalDevLogs | Write-Host
+    $finalDevLogs >> $logFile
+    Remove-Item $devLog
 }
 
 Write-Host "`n==========================================" -ForegroundColor Green
