@@ -18,11 +18,11 @@ func AskYesNo(question string) bool {
 	
 	fmt.Printf("   %s ", pterm.FgCyan.Sprint(">"))
 	
-	scanner := bufio.NewScanner(os.Stdin)
-	if scanner.Scan() {
-		input := strings.TrimSpace(scanner.Text())
-		return strings.ToLower(input) == "y"
+	reader := bufio.NewReader(os.Stdin)
+	input, err := reader.ReadString('\n')
+	if err != nil {
+		return false
 	}
-
-	return false
+	
+	return strings.ToLower(strings.TrimSpace(input)) == "y"
 }
