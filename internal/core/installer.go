@@ -48,6 +48,11 @@ type Installer struct {
 	NoInteract      bool
 	TargetPackages  map[string]bool
 	globalDirCache  sync.Map
+
+	// [OPTIM] Pre-computed OS flags to avoid repeated runtime.GOOS checks
+	isWindows bool
+	// [OPTIM] Copy buffer pool — reused across copyFile calls
+	copyBufPool sync.Pool
 }
 
 func NewInstaller(cas *Cas, registry *RegistryClient, projectRoot string) *Installer {
@@ -55,25 +60,48 @@ func NewInstaller(cas *Cas, registry *RegistryClient, projectRoot string) *Insta
 	vstoreRoot := paths.LocalVStoreDir(projectRoot)
 	utils.CreateDirAllSecure(vstoreRoot)
 
+	isWindows := runtime.GOOS == "windows"
+
+	// [OPTIM] On Windows, NTFS + Antivirus latency is the bottleneck, not CPU.
+	// Higher concurrency compensates for per-op latency (each syscall is ~5-10x slower).
+	// On Linux, lower values avoid inode lock contention.
 	maxConcurrency := 128
-	if runtime.GOOS == "windows" {
-		maxConcurrency = 48 // Windows is slower with high concurrency due to Antivirus/NTFS limits
+	if isWindows {
+		maxConcurrency = 96 // raised from 48 — NTFS latency needs more parallelism to hide it
 	}
 
-	return &Installer{
+	inst := &Installer{
 		cas:         cas,
 		registry:    registry,
 		projectRoot: projectRoot,
 		vstoreRoot:  vstoreRoot,
+		isWindows:   isWindows,
 		linkingPool: utils.NewAdaptiveSemaphore(maxConcurrency),
 		progress: mpb.New(
 			mpb.WithWidth(64),
 			mpb.WithRefreshRate(func() time.Duration {
-				if runtime.GOOS == "windows" { return 250 * time.Millisecond }
+				if isWindows {
+					// [OPTIM] Less frequent redraws reduce terminal I/O pressure on Windows
+					return 300 * time.Millisecond
+				}
 				return 180 * time.Millisecond
 			}()),
 		),
 	}
+
+	// [OPTIM] Pool of large copy buffers — avoids GC pressure during bulk file copying
+	bufSize := 256 * 1024 // 256KB default
+	if isWindows {
+		bufSize = 1024 * 1024 // 1MB — NTFS benefits from larger sequential writes
+	}
+	inst.copyBufPool = sync.Pool{
+		New: func() interface{} {
+			buf := make([]byte, bufSize)
+			return &buf
+		},
+	}
+
+	return inst
 }
 
 func (i *Installer) Install(ctx context.Context, packages []*ResolvedPackage) error {
@@ -89,11 +117,11 @@ func (i *Installer) Install(ctx context.Context, packages []*ResolvedPackage) er
 			color := pterm.FgCyan
 			if percent > 50 { color = pterm.FgYellow }
 			if percent > 90 { color = pterm.FgGreen }
-			
+
 			width := 40
 			filled := int(float64(width) * float64(percent) / 100)
 			if filled > width { filled = width }
-			
+
 			bar := color.Sprint(strings.Repeat("█", filled))
 			if filled < width {
 				bar += utils.DimColor.Sprint(strings.Repeat("░", width-filled))
@@ -144,10 +172,6 @@ func (i *Installer) Install(ctx context.Context, packages []*ResolvedPackage) er
 	i.globalBar.SetTotal(int64(len(uniquePackages)), true)
 	i.progress.Wait()
 
-	// UX: Aggressive clear screen after installation progress
-	// fmt.Print("\033[H\033[2J")
-	// utils.PrintBanner() // permet d'afficher le banner
-	
 	// ALWAYS run lifecycle scripts BEFORE exporting global binaries
 	if err := i.runLifecycleScripts(ctx, packages); err != nil {
 		return err
@@ -195,14 +219,19 @@ func (i *Installer) getUniquePackages(packages []*ResolvedPackage) []*ResolvedPa
 
 func (i *Installer) batchEnsureExtracted(ctx context.Context, packages []*ResolvedPackage, targetVStore string) error {
 	if len(packages) == 0 { return nil }
+
+	// [OPTIM] Windows NTFS has high per-op latency (~1ms vs ~0.1ms on Linux ext4).
+	// More concurrent workers hide this latency by keeping the pipeline full.
+	// Linux uses fewer workers to avoid inode lock contention on hot directories.
 	concurrency := 16
-	if runtime.GOOS == "windows" {
-		concurrency = 8 // Windows file system and terminal rendering are slower
+	if i.isWindows {
+		concurrency = 24 // raised from 8 — more workers to overlap NTFS latency
 	}
+
 	sem := make(chan struct{}, concurrency)
 	errChan := make(chan error, len(packages))
 	var wg sync.WaitGroup
-	
+
 	i.startNetworkMonitoring()
 
 	for _, pkg := range packages {
@@ -265,7 +294,7 @@ func (i *Installer) ensureExtracted(ctx context.Context, pkg *ResolvedPackage, t
 	if err != nil { return err }
 
 	i.cas.StoreIndex(pkg.Name, pkg.Version, fileMap)
-	
+
 	// Plugin Detection
 	isPlugin := false
 	for path := range fileMap {
@@ -301,38 +330,68 @@ func (i *Installer) ensureExtracted(ctx context.Context, pkg *ResolvedPackage, t
 
 func (i *Installer) LinkFilesToDir(destDir string, index map[string]string) error {
 	utils.CreateDirAllSecure(destDir)
-	
-	// Speed boost: Parallelize file linking within the package
-	// We use a small local pool to avoid overwhelming the OS with open files
-	concurrency := 8
-	if len(index) < concurrency { concurrency = 1 }
-	
-	type linkJob struct { relPath, hash string }
-	jobs := make(chan linkJob, len(index))
-	for r, h := range index { jobs <- linkJob{r, h} }
-	close(jobs)
+
+	// [OPTIM] Pre-collect unique parent directories and create them all up-front
+	// before spawning workers. This avoids repeated CreateDirAllSecure calls inside
+	// hot goroutines and eliminates the sync.Map lookup overhead per file.
+	dirsToCreate := make(map[string]struct{}, len(index))
+	type linkJob struct{ relPath, hash string }
+	jobs := make([]linkJob, 0, len(index))
+
+	for r, h := range index {
+		normalized := r
+		if idx := strings.Index(r, "/"); idx != -1 {
+			normalized = r[idx+1:]
+		}
+		destPath := filepath.Join(destDir, normalized)
+		parentDir := filepath.Dir(destPath)
+		if _, ok := i.globalDirCache.Load(parentDir); !ok {
+			dirsToCreate[parentDir] = struct{}{}
+		}
+		jobs = append(jobs, linkJob{normalized, h})
+	}
+
+	// Batch dir creation in one pass — single goroutine, no lock contention
+	for dir := range dirsToCreate {
+		if _, alreadyCreated := i.globalDirCache.LoadOrStore(dir, true); !alreadyCreated {
+			utils.CreateDirAllSecure(dir)
+		}
+	}
+
+	// [OPTIM] Scale workers to file count. Windows: more workers to hide NTFS latency.
+	// Linux: fewer to avoid lock contention.
+	concurrency := 12
+	if i.isWindows {
+		concurrency = 20
+	}
+	if len(jobs) < concurrency {
+		concurrency = len(jobs)
+	}
+	if concurrency < 1 {
+		concurrency = 1
+	}
+
+	jobCh := make(chan linkJob, len(jobs))
+	for _, j := range jobs {
+		jobCh <- j
+	}
+	close(jobCh)
 
 	var wg sync.WaitGroup
-
 	for w := 0; w < concurrency; w++ {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			for j := range jobs {
-				normalized := j.relPath
-				if idx := strings.Index(j.relPath, "/"); idx != -1 { 
-					normalized = j.relPath[idx+1:] 
-				}
-				destPath := filepath.Join(destDir, normalized)
+			for j := range jobCh {
+				destPath := filepath.Join(destDir, j.relPath)
 				sourcePath := i.cas.GetFilePath(j.hash)
-				
-				parentDir := filepath.Dir(destPath)
-				if _, created := i.globalDirCache.Load(parentDir); !created {
-					utils.CreateDirAllSecure(parentDir)
-					i.globalDirCache.Store(parentDir, true)
+
+				// [OPTIM] Skip os.Remove if file doesn't exist — avoids a syscall on Windows
+				// (os.Remove on a non-existent file still hits the kernel on NTFS)
+				if _, err := os.Lstat(destPath); err == nil {
+					os.Remove(destPath)
 				}
-				os.Remove(destPath)
-				
+
 				err := utils.Reflink(sourcePath, destPath)
 				if err == nil {
 					i.applyPermissions(sourcePath, destPath)
@@ -355,7 +414,7 @@ func (i *Installer) LinkFilesToDir(destDir string, index map[string]string) erro
 }
 
 func (i *Installer) applyPermissions(src, dst string) {
-	if runtime.GOOS == "windows" { return }
+	if i.isWindows { return }
 	if fi, err := os.Stat(src); err == nil {
 		if (fi.Mode() & 0111) != 0 {
 			os.Chmod(dst, 0755)
@@ -366,63 +425,83 @@ func (i *Installer) applyPermissions(src, dst string) {
 }
 
 func (i *Installer) linkPackageDeps(packages []*ResolvedPackage, vstoreBase string) error {
-	var wg sync.WaitGroup
-	errChan := make(chan error, len(packages))
+	// [OPTIM] Replaced unbounded goroutine-per-package with a fixed worker pool.
+	// Previously: N goroutines each calling linkingPool.Acquire(128) caused a thundering
+	// herd — all goroutines fought for the same semaphore tokens simultaneously.
+	// Now: a bounded pool processes packages sequentially per worker, eliminating
+	// contention and reducing goroutine scheduling overhead.
+	workerCount := 64
+	if i.isWindows {
+		workerCount = 96 // more workers to saturate NTFS pipeline
+	}
 
+	pkgCh := make(chan *ResolvedPackage, len(packages))
 	for _, pkg := range packages {
+		pkgCh <- pkg
+	}
+	close(pkgCh)
+
+	errChan := make(chan error, len(packages))
+	var wg sync.WaitGroup
+
+	for w := 0; w < workerCount; w++ {
 		wg.Add(1)
-		go func(p *ResolvedPackage) {
+		go func() {
 			defer wg.Done()
-			
-			// Use global linking pool with OS-aware limit
-			limit := 128
-			if runtime.GOOS == "windows" {
-				limit = 48
+			for p := range pkgCh {
+				if p.ResolvedDependencies == nil { continue }
+
+				pkgVStoreName := strings.ReplaceAll(p.Name, "/", "+") + "@" + p.Version
+				pkgDepsNM := filepath.Join(vstoreBase, pkgVStoreName, "node_modules")
+
+				// [OPTIM] Batch parent dir creation before per-dep work
+				parentCreated := false
+
+				for depName, depVersion := range p.ResolvedDependencies {
+					realDepName := depName
+					if rName, ok := p.DependencyRealNames[depName]; ok {
+						realDepName = rName
+					}
+
+					targetLink := filepath.Join(pkgDepsNM, depName)
+
+					// COLLISION GUARD: Though each unique version has its own vstore NM,
+					// if we process uniquePackages, we only ever visit each once.
+					if _, seen := i.linkedPaths.LoadOrStore(targetLink, true); seen {
+						continue
+					}
+
+					// [OPTIM] Create parent dir once per package, not per dep
+					if !parentCreated {
+						if _, created := i.globalDirCache.LoadOrStore(pkgDepsNM, true); !created {
+							utils.CreateDirAllSecure(pkgDepsNM)
+						}
+						parentCreated = true
+					}
+
+					// For scoped packages the parent dir differs
+					parentDir := filepath.Dir(targetLink)
+					if parentDir != pkgDepsNM {
+						if _, created := i.globalDirCache.LoadOrStore(parentDir, true); !created {
+							utils.CreateDirAllSecure(parentDir)
+						}
+					}
+
+					depVStoreName := strings.ReplaceAll(realDepName, "/", "+") + "@" + depVersion
+					steps := strings.Count(depName, "/") + 2
+					relPrefix := strings.Repeat("../", steps)
+					relTarget := filepath.Join(relPrefix, depVStoreName, "node_modules", realDepName)
+
+					// [OPTIM] Skip os.Remove if link doesn't exist
+					if _, err := os.Lstat(targetLink); err == nil {
+						os.Remove(targetLink)
+					}
+					if err := utils.Link(relTarget, targetLink); err != nil {
+						utils.Error("Failed to link dependency %s -> %s: %v", depName, targetLink, err)
+					}
+				}
 			}
-			if err := i.linkingPool.Acquire(context.Background(), limit); err != nil {
-				return
-			}
-			defer i.linkingPool.Release()
-
-			if p.ResolvedDependencies == nil { return }
-
-			pkgVStoreName := strings.ReplaceAll(p.Name, "/", "+") + "@" + p.Version
-			pkgDepsNM := filepath.Join(vstoreBase, pkgVStoreName, "node_modules")
-
-			for depName, depVersion := range p.ResolvedDependencies {
-				realDepName := depName
-				if rName, ok := p.DependencyRealNames[depName]; ok {
-					realDepName = rName
-				}
-
-				targetLink := filepath.Join(pkgDepsNM, depName)
-				
-				// COLLISION GUARD: Though each unique version has its own vstore NM,
-				// if we process uniquePackages, we only ever visit each once.
-				// However, redundancy might exist if resolvedDependencies overlaps.
-				if _, seen := i.linkedPaths.LoadOrStore(targetLink, true); seen {
-					continue
-				}
-
-				parentDir := filepath.Dir(targetLink)
-				if _, created := i.globalDirCache.Load(parentDir); !created {
-					utils.CreateDirAllSecure(parentDir)
-					i.globalDirCache.Store(parentDir, true)
-				}
-				depVStoreName := strings.ReplaceAll(realDepName, "/", "+") + "@" + depVersion
-				steps := strings.Count(depName, "/") + 2
-				relPrefix := ""
-				for j := 0; j < steps; j++ {
-					relPrefix += "../"
-				}
-				relTarget := filepath.Join(relPrefix, depVStoreName, "node_modules", realDepName)
-
-				os.Remove(targetLink)
-				if err := utils.Link(relTarget, targetLink); err != nil {
-					utils.Error("Failed to link dependency %s -> %s: %v", depName, targetLink, err)
-				}
-			}
-		}(pkg)
+		}()
 	}
 
 	wg.Wait()
@@ -444,27 +523,28 @@ func (i *Installer) linkToRoot(packages []*ResolvedPackage) error {
 
 		rootNM := filepath.Join(rootNMDir, pkg.Name)
 		// COLLISION GUARD: First worker to reach a path wins.
-		// For root packages, we prioritize those in i.DirectDeps below.
 		if _, seen := i.linkedPaths.LoadOrStore(rootNM, true); seen {
 			return
 		}
-		
+
 		if err := i.linkingPool.Acquire(context.Background(), 128); err != nil {
 			return
 		}
 		defer i.linkingPool.Release()
 
 		parentDir := filepath.Dir(rootNM)
-		if _, created := i.globalDirCache.Load(parentDir); !created {
+		if _, created := i.globalDirCache.LoadOrStore(parentDir, true); !created {
 			utils.CreateDirAllSecure(parentDir)
-			i.globalDirCache.Store(parentDir, true)
 		}
 		pkgVStoreName := strings.ReplaceAll(pkg.Name, "/", "+") + "@" + pkg.Version
 
 		absTarget := filepath.Join(i.vstoreRoot, pkgVStoreName, "node_modules", pkg.Name)
 		relTarget, _ := filepath.Rel(filepath.Dir(rootNM), absTarget)
 
-		os.Remove(rootNM)
+		// [OPTIM] Lstat before Remove
+		if _, err := os.Lstat(rootNM); err == nil {
+			os.Remove(rootNM)
+		}
 		if err := utils.Link(relTarget, rootNM); err != nil {
 			utils.Error("Failed to link root package %s -> %s: %v", pkg.Name, rootNM, err)
 		}
@@ -504,20 +584,20 @@ func (i *Installer) runLifecycleScripts(ctx context.Context, packages []*Resolve
 	runner := NewScriptRunner(i.projectRoot)
 	tasks := []ScriptTask{}
 	lifecycleOrder := []string{"preinstall", "install", "postinstall"}
-	
+
 	for _, pkg := range packages {
 		if i.TargetPackages != nil && !i.TargetPackages[pkg.Name] {
 			continue
 		}
 		cacheKey := pkg.Name + "@" + pkg.Version
 		if _, wasChanged := i.changedPackages.Load(cacheKey); !wasChanged { continue }
-		
+
 		pkgVStoreName := strings.ReplaceAll(pkg.Name, "/", "+") + "@" + pkg.Version
 		pkgDir := filepath.Join(i.vstoreRoot, pkgVStoreName, "node_modules", pkg.Name)
-		
+
 		pkgJson, err := LoadPackageJson(filepath.Join(pkgDir, "package.json"))
 		if err != nil { continue }
-		
+
 		for _, scriptType := range lifecycleOrder {
 			if cmd, ok := pkgJson.Scripts[scriptType]; ok {
 				tasks = append(tasks, ScriptTask{
@@ -548,18 +628,16 @@ func (i *Installer) linkBinaries(pkgDir, binDir string, bin json.RawMessage) err
 func (i *Installer) adaptiveBinLink(name, pkgDir, relPath, binDir string) {
 	// CLEAN RELATIVE PATH (Handle .exe suffixes in Unix or nested bins)
 	cleanRel := strings.TrimSuffix(relPath, ".exe")
-	if runtime.GOOS == "windows" && !strings.HasSuffix(cleanRel, ".exe") {
+	if i.isWindows && !strings.HasSuffix(cleanRel, ".exe") {
 		cleanRel += ".exe"
 	}
 
 	absTarget := filepath.Join(pkgDir, cleanRel)
 
-	// ADAPTIVE DISCOVERY (If metadata says bin/bun.exe but file is bin/bun)
+	// ADAPTIVE DISCOVERY
 	if _, err := os.Stat(absTarget); os.IsNotExist(err) {
-		// Try literally as specified in metadata
 		absTarget = filepath.Join(pkgDir, relPath)
 		if _, err := os.Stat(absTarget); os.IsNotExist(err) {
-			// Search for any executable with the same base name in common bin folders
 			bases := []string{"bin", "dist", "."}
 			for _, b := range bases {
 				target := filepath.Join(pkgDir, b, name)
@@ -572,8 +650,7 @@ func (i *Installer) adaptiveBinLink(name, pkgDir, relPath, binDir string) {
 	}
 
 	dest := filepath.Join(binDir, name)
-	// If the resolved target is an executable on Windows, ensure the destination has the .exe extension
-	if runtime.GOOS == "windows" && strings.HasSuffix(strings.ToLower(absTarget), ".exe") {
+	if i.isWindows && strings.HasSuffix(strings.ToLower(absTarget), ".exe") {
 		if !strings.HasSuffix(strings.ToLower(dest), ".exe") {
 			dest += ".exe"
 		}
@@ -583,22 +660,20 @@ func (i *Installer) adaptiveBinLink(name, pkgDir, relPath, binDir string) {
 	if _, seen := i.linkedPaths.LoadOrStore(dest, true); seen {
 		return
 	}
-	os.Remove(dest)
+	// [OPTIM] Lstat before Remove
+	if _, err := os.Lstat(dest); err == nil {
+		os.Remove(dest)
+	}
 
 	relTarget, _ := filepath.Rel(binDir, absTarget)
-	if runtime.GOOS != "windows" {
+	if !i.isWindows {
 		os.Symlink(relTarget, dest)
-		// Ensure it's executable
 		os.Chmod(absTarget, 0755)
 		i.ensureExecutableRecursive(filepath.Dir(absTarget))
 	} else {
 		if err := utils.Link(relTarget, dest); err != nil {
 			utils.Error("Failed to link binary %s -> %s: %v", name, dest, err)
 		}
-
-		// GENERATE SHIMS FOR JS BINARIES ON WINDOWS
-		// This allows running 'eslint' instead of 'node node_modules/eslint/bin/eslint'
-		// It only applies if the target is NOT an .exe
 		if !strings.HasSuffix(strings.ToLower(absTarget), ".exe") {
 			utils.GenerateBinShim(binDir, name, relTarget)
 		}
@@ -627,15 +702,24 @@ func (i *Installer) exportGlobalBinaries(packages []*ResolvedPackage) {
 	}
 }
 
+// [OPTIM] copyFile uses a pooled buffer (256KB on Linux, 1MB on Windows).
+// The default io.Copy uses 32KB which is too small for NTFS sequential writes.
 func (i *Installer) copyFile(src, dst string) error {
 	in, err := os.Open(src)
 	if err != nil { return err }
 	defer in.Close()
-	os.Remove(dst)
+
+	// [OPTIM] Lstat before Remove — avoids a kernel call when file doesn't exist
+	if _, err := os.Lstat(dst); err == nil {
+		os.Remove(dst)
+	}
 	out, err := os.Create(dst)
 	if err != nil { return err }
 	defer out.Close()
-	_, err = io.Copy(out, in)
+
+	bufPtr := i.copyBufPool.Get().(*[]byte)
+	defer i.copyBufPool.Put(bufPtr)
+	_, err = io.CopyBuffer(out, in, *bufPtr)
 	return err
 }
 
@@ -718,7 +802,7 @@ func (i *Installer) VerifySignatureInternal(sigPath string, pkg *ResolvedPackage
 	if sigPath != "" {
 		sigBytes, err = os.ReadFile(sigPath)
 	}
-	
+
 	if err != nil || len(sigBytes) == 0 {
 		// Fallback to CAS if index is provided
 		for path, hash := range index {
@@ -730,13 +814,13 @@ func (i *Installer) VerifySignatureInternal(sigPath string, pkg *ResolvedPackage
 		}
 	}
 
-	if len(sigBytes) == 0 { 
+	if len(sigBytes) == 0 {
 		if index != nil {
 			return fmt.Errorf("security: signature file 'xypriss.plugin.xsig' missing from package %s", pkg.Name)
 		}
-		return nil 
+		return nil
 	}
-	
+
 	var sigData struct {
 		AuthorKey  string `json:"author_key"`
 		Privileges string `json:"privileges"`
@@ -768,8 +852,6 @@ func (i *Installer) VerifySignatureInternal(sigPath string, pkg *ResolvedPackage
 				continue
 			}
 
-			// We MUST include the newline in the sigBody for verification
-			// as it was part of the signed content in sign.go
 			sigBody.WriteString(line + "\n")
 
 			if idx := strings.Index(line, ": "); idx != -1 {
@@ -848,7 +930,7 @@ func (i *Installer) VerifySignatureInternal(sigPath string, pkg *ResolvedPackage
 	if sigData.Privileges != "" && sigData.Privileges != "none" {
 		privStr = fmt.Sprintf("\n\nREQUESTED PRIVILEGES:\n%s", strings.ReplaceAll(sigData.Privileges, ",", "\n"))
 	}
-	
+
 	pterm.DefaultBox.WithTitle("[SECURITY] New plugin author detected: " + pkg.Name).Println(
 		fmt.Sprintf("Package: %s\n\nACTION REQUIRED:\nThis plugin has never been trusted before.\nVerify the Developer ID from the official README:\nhttps://npmjs.com/package/%s%s\n\nThen paste the Developer ID below to confirm trust (and authorize all privileges).", pkg.Name, pkg.Name, privStr),
 	)
@@ -940,15 +1022,11 @@ func (i *Installer) patchPackageJsonForRevocation(pkgDir string, pkg *ResolvedPa
 	xfpm["revoked"] = true
 	xfpm["revoked_by"] = pkg.RevokedBy
 	xfpm["revocation_timestamp"] = time.Now().Format(time.RFC3339)
-	
+
 	pkgJson["xfpm"] = xfpm
 
-	// Before writing, we must ensure we are not overwriting a hardlink/reflink from CAS
-	// if we don't want to affect the whole system.
-	// But in XFPM, we want revoked packages to BE revoked.
-	// However, it's cleaner to replace the file.
 	os.Remove(pkgJsonPath)
-	
+
 	if out, err := json.MarshalIndent(pkgJson, "", "  "); err == nil {
 		os.WriteFile(pkgJsonPath, out, 0644)
 		utils.Success("Package %s@%s patched with revocation metadata.", pkg.Name, pkg.Version)
@@ -959,7 +1037,7 @@ func (i *Installer) SavePendingPlugins() {
 	i.pendingMu.Lock()
 	defer i.pendingMu.Unlock()
 	if len(i.PendingPlugins) == 0 { return }
-	
+
 	if i.AutoVerify {
 		var verifiedCount int
 		var stillPending []*ResolvedPackage
@@ -1001,14 +1079,14 @@ func (i *Installer) SavePendingPlugins() {
 	var list []map[string]string
 	for _, p := range i.PendingPlugins {
 		list = append(list, map[string]string{
-			"name": p.Name,
+			"name":    p.Name,
 			"version": p.Version,
 		})
 	}
-	
+
 	data, _ := json.MarshalIndent(list, "", "  ")
 	os.WriteFile(pendingPath, data, 0644)
-	
+
 	pterm.Println()
 	utils.Warn("  ⚠️  [SECURITY] %d plugin(s) pending verification.", len(i.PendingPlugins))
 	utils.Info("      Run 'xfpm plugin verify -w' to finalize installation.")

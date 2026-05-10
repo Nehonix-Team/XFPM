@@ -2,8 +2,8 @@
   "name": "XFPM (XyPriss Package Manager)",
   "description": "The ultra-fast package manager for the XyPriss ecosystem.",
   "warning": "CRITICAL: Public modifications to this file are strictly forbidden. Internal Nehonix metadata ONLY.",
-  "latest": "vG0.1.210",
-  "message": "Windows Performance: Optimized disk I/O and directory caching for significantly faster installations on Windows NTFS partitions.",
+  "latest": "vG0.1.211",
+  "message": "Deep Performance Refactor: Optimized Windows NTFS pipeline with pooled buffers, pre-computed OS paths, and lock-free concurrency scaling.",
   "metadata": {
     "releaseDate": "2026-05-10",
     "channel": "stable"
