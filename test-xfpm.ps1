@@ -1,39 +1,16 @@
 # XFPM Real-Machine Test Script (Windows)
 # This script will clean existing XFPM installations, reinstall it, and test a full project lifecycle.
 
-$logFile = "$PSScriptRoot\xfpm_test_$(Get-Date -Format 'yyyyMMdd_HHmmss').log"
+$logFile = "$HOME\xfpm_test_$(Get-Date -Format 'yyyyMMdd_HHmmss').log"
 Start-Transcript -Path $logFile -Append
 
 Write-Host "==========================================" -ForegroundColor Cyan
-Write-Host "   ⚡ XFPM REAL-MACHINE TEST ENGINE ⚡   " -ForegroundColor Cyan
+Write-Host "   ⚡ XFPM RM TEST ENGINE ⚡   " -ForegroundColor Cyan
 Write-Host "==========================================" -ForegroundColor Cyan
 Write-Host "Logging to: $logFile"
 
-# 1. Check and Clean Existing XFPM
-Write-Host "[1/5] Checking for existing XFPM installation..." -ForegroundColor Yellow
-$xfpmPath = Get-Command xfpm -ErrorAction SilentlyContinue
-
-if ($xfpmPath) {
-    Write-Host "Found XFPM at: $($xfpmPath.Source)" -ForegroundColor Gray
-    Write-Host "Cleaning up old installation..." -ForegroundColor Gray
-    
-    $xfpmDir = "$HOME\.xfpm"
-    $xpmStorage = "$HOME\.xpm"
-    
-    if (Test-Path $xfpmDir) {
-        Remove-Item -Recurse -Force $xfpmDir
-        Write-Host "Removed $xfpmDir" -ForegroundColor DarkGray
-    }
-    if (Test-Path $xpmStorage) {
-        Remove-Item -Recurse -Force $xpmStorage
-        Write-Host "Removed $xpmStorage" -ForegroundColor DarkGray
-    }
-} else {
-    Write-Host "No existing XFPM found. Fresh start." -ForegroundColor Gray
-}
-
-# 2. Install XFPM
-Write-Host "`n[2/5] Installing XFPM..." -ForegroundColor Yellow
+# 1. Install XFPM (Installer handles cleanup)
+Write-Host "[1/4] Installing/Updating XFPM..." -ForegroundColor Yellow
 try {
     # Using the node-based bridge as requested
     Invoke-RestMethod -Uri "https://xypriss.nehonix.com/install.js" -UseBasicParsing | node
@@ -48,8 +25,8 @@ try {
     exit 1
 }
 
-# 3. Initialize Project
-Write-Host "`n[3/5] Initializing new XyPriss project..." -ForegroundColor Yellow
+# 2. Initialize Project
+Write-Host "`n[2/4] Initializing new XyPriss project..." -ForegroundColor Yellow
 if (Test-Path "my-xyp-project") {
     Remove-Item -Recurse -Force "my-xyp-project"
 }
@@ -67,8 +44,8 @@ if (-not (Test-Path "my-xyp-project")) {
 cd my-xyp-project
 Write-Host "Entered project: $(Get-Location)" -ForegroundColor Gray
 
-# 5. Start Dev Server
-Write-Host "`n[4/5] Starting development server..." -ForegroundColor Yellow
+# 4. Start Dev Server
+Write-Host "`n[3/4] Starting development server..." -ForegroundColor Yellow
 Write-Host "The server will run for 30 seconds for testing, then exit." -ForegroundColor Gray
 
 # Start xfpm dev in a separate process to avoid blocking and capture output
