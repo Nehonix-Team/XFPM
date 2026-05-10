@@ -1,3 +1,10 @@
+## [G0.1.204] - 2026-05-10
+
+### Windows Self-Update Reliability
+
+- **Non-Blocking Upgrade**: Refactored `xfpm upgrade` on Windows to launch the installer and exit immediately. This releases the binary file lock and prevents the "deadlock" where the installer waits for the process it's trying to replace.
+- **Smart Installer Wait**: Updated the PowerShell installer to wait a few seconds for the parent process to exit before prompting to kill it, providing a much smoother upgrade experience.
+
 ## [G0.1.203] - 2026-05-10
 
 ### Windows Environment Hardening & UX
