@@ -192,6 +192,9 @@ func (i *Installer) getUniquePackages(packages []*ResolvedPackage) []*ResolvedPa
 func (i *Installer) batchEnsureExtracted(ctx context.Context, packages []*ResolvedPackage, targetVStore string) error {
 	if len(packages) == 0 { return nil }
 	concurrency := 16
+	if runtime.GOOS == "windows" {
+		concurrency = 8 // Windows file system and terminal rendering are slower
+	}
 	sem := make(chan struct{}, concurrency)
 	errChan := make(chan error, len(packages))
 	var wg sync.WaitGroup
@@ -306,6 +309,7 @@ func (i *Installer) LinkFilesToDir(destDir string, index map[string]string) erro
 	close(jobs)
 
 	var wg sync.WaitGroup
+	var dirCache sync.Map // Cache for created directories
 
 	for w := 0; w < concurrency; w++ {
 		wg.Add(1)
@@ -319,7 +323,11 @@ func (i *Installer) LinkFilesToDir(destDir string, index map[string]string) erro
 				destPath := filepath.Join(destDir, normalized)
 				sourcePath := i.cas.GetFilePath(j.hash)
 				
-				utils.CreateDirAllSecure(filepath.Dir(destPath))
+				parentDir := filepath.Dir(destPath)
+				if _, created := dirCache.Load(parentDir); !created {
+					utils.CreateDirAllSecure(parentDir)
+					dirCache.Store(parentDir, true)
+				}
 				os.Remove(destPath)
 				
 				err := utils.Reflink(sourcePath, destPath)
@@ -356,6 +364,7 @@ func (i *Installer) applyPermissions(src, dst string) {
 
 func (i *Installer) linkPackageDeps(packages []*ResolvedPackage, vstoreBase string) error {
 	var wg sync.WaitGroup
+	var dirCache sync.Map // Cache for created directories
 	errChan := make(chan error, len(packages))
 
 	for _, pkg := range packages {
@@ -372,6 +381,8 @@ func (i *Installer) linkPackageDeps(packages []*ResolvedPackage, vstoreBase stri
 				return
 			}
 			defer i.linkingPool.Release()
+
+			if p.ResolvedDependencies == nil { return }
 
 			pkgVStoreName := strings.ReplaceAll(p.Name, "/", "+") + "@" + p.Version
 			pkgDepsNM := filepath.Join(vstoreBase, pkgVStoreName, "node_modules")
@@ -391,7 +402,11 @@ func (i *Installer) linkPackageDeps(packages []*ResolvedPackage, vstoreBase stri
 					continue
 				}
 
-				utils.CreateDirAllSecure(filepath.Dir(targetLink))
+				parentDir := filepath.Dir(targetLink)
+				if _, created := dirCache.Load(parentDir); !created {
+					utils.CreateDirAllSecure(parentDir)
+					dirCache.Store(parentDir, true)
+				}
 				depVStoreName := strings.ReplaceAll(realDepName, "/", "+") + "@" + depVersion
 				steps := strings.Count(depName, "/") + 2
 				relPrefix := ""
@@ -422,6 +437,7 @@ func (i *Installer) linkToRoot(packages []*ResolvedPackage) error {
 	utils.CreateDirAllSecure(rootBinDir)
 
 	var wg sync.WaitGroup
+	var dirCache sync.Map // Cache for created directories
 	linkPkg := func(pkg *ResolvedPackage) {
 		defer wg.Done()
 
@@ -437,7 +453,11 @@ func (i *Installer) linkToRoot(packages []*ResolvedPackage) error {
 		}
 		defer i.linkingPool.Release()
 
-		utils.CreateDirAllSecure(filepath.Dir(rootNM))
+		parentDir := filepath.Dir(rootNM)
+		if _, created := dirCache.Load(parentDir); !created {
+			utils.CreateDirAllSecure(parentDir)
+			dirCache.Store(parentDir, true)
+		}
 		pkgVStoreName := strings.ReplaceAll(pkg.Name, "/", "+") + "@" + pkg.Version
 
 		absTarget := filepath.Join(i.vstoreRoot, pkgVStoreName, "node_modules", pkg.Name)

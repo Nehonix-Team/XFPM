@@ -1,3 +1,11 @@
+## [G0.1.205] - 2026-05-10
+
+### Windows Performance Optimizations
+
+- **Directory Creation Cache**: Implemented a `sync.Map` cache for directory creation during the linking phase. This eliminates thousands of redundant `MkdirAll` syscalls, which are a major performance bottleneck on Windows filesystems.
+- **Tuned Concurrency**: Optimized extraction and linking concurrency for Windows (reduced from 16 to 8 simultaneous extractions) to reduce NTFS lock contention and alleviate terminal rendering pressure.
+- **Linking Pool Refinement**: Adjusted the global linking pool limit on Windows to ensure smoother I/O operations and more responsive UI updates.
+
 ## [G0.1.204] - 2026-05-10
 
 ### Windows Self-Update Reliability
