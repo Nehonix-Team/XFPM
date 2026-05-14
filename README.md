@@ -21,7 +21,7 @@
 
 ## Overview
 
-**XFPM** is a cross-platform command-line tool designed for the XyPriss ecosystem. It delivers fast dependency resolution, strict package isolation through a virtual store, and a clean terminal interface suited for professional workflows.
+[**XFPM**](https://xypriss.nehonix.com/docs/xfpm) is a cross-platform command-line tool designed for the XyPriss ecosystem. It delivers fast dependency resolution, strict package isolation through a virtual store, and a clean terminal interface suited for professional workflows.
 
 ---
 
@@ -44,33 +44,11 @@
 
 XFPM is distributed through the official **Nehonix unified installer**.
 
-### Unix / macOS / WSL
+For step-by-step instructions and platform-specific guides, please refer to the [Official XFPM Installation Guide](https://xypriss.nehonix.com/docs/xfpm#installation).
 
-```bash
-curl -sL https://xypriss.nehonix.com/install.js | node
-```
+---
 
-### Windows (PowerShell)
-
-```powershell
-Invoke-RestMethod -Uri "https://xypriss.nehonix.com/install.js" -UseBasicParsing | node
-```
-
-### NPM
-
-> **Note:** Administrative privileges are required to deploy the native binaries.
-
-**Linux / macOS** — `sudo` and the `-g` flag are mandatory. Without `sudo`, the script cannot write to `/usr/local/bin`.
-
-```bash
-sudo npm install -g xypriss-cli
-```
-
-**Windows** — Run PowerShell or Command Prompt as **Administrator**.
-
-```powershell
-npm install -g xypriss-cli
-```
+---
 
 ---
 
@@ -308,7 +286,7 @@ XFPM resolves dependencies by building a **Neural Dependency Graph** of your pro
 
 ### CAS — Content Addressable Storage
 
-Every file is hashed and stored once across the entire system within the global `~/.xpm/storage` directory, eliminating duplicates and ensuring deterministic installs.
+Every file is hashed and stored once across the entire system within the global `~/.xfpm/storage` directory, eliminating duplicates and ensuring deterministic installs.
 
 ### Virtual Store
 

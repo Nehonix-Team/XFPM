@@ -104,6 +104,20 @@ func NewInstaller(cas *Cas, registry *RegistryClient, projectRoot string) *Insta
 	return inst
 }
 
+func (i *Installer) ensureDir(path string) {
+	ch := make(chan struct{})
+	actual, loaded := i.globalDirCache.LoadOrStore(path, ch)
+	if loaded {
+		// Another worker is already creating this directory.
+		// Wait for the 'close(ch)' signal before proceeding.
+		<-actual.(chan struct{})
+	} else {
+		// We are the designated creator for this path in this transaction.
+		utils.CreateDirAllSecure(path)
+		close(ch)
+	}
+}
+
 func (i *Installer) Install(ctx context.Context, packages []*ResolvedPackage) error {
 	utils.Info("Starting installation of %d packages via Ancestor Hoisting...", len(packages))
 
@@ -345,17 +359,13 @@ func (i *Installer) LinkFilesToDir(destDir string, index map[string]string) erro
 		}
 		destPath := filepath.Join(destDir, normalized)
 		parentDir := filepath.Dir(destPath)
-		if _, ok := i.globalDirCache.Load(parentDir); !ok {
-			dirsToCreate[parentDir] = struct{}{}
-		}
+		dirsToCreate[parentDir] = struct{}{}
 		jobs = append(jobs, linkJob{normalized, h})
 	}
 
 	// Batch dir creation in one pass — single goroutine, no lock contention
 	for dir := range dirsToCreate {
-		if _, alreadyCreated := i.globalDirCache.LoadOrStore(dir, true); !alreadyCreated {
-			utils.CreateDirAllSecure(dir)
-		}
+		i.ensureDir(dir)
 	}
 
 	// [OPTIM] Scale workers to file count. Windows: more workers to hide NTFS latency.
@@ -473,18 +483,14 @@ func (i *Installer) linkPackageDeps(packages []*ResolvedPackage, vstoreBase stri
 
 					// [OPTIM] Create parent dir once per package, not per dep
 					if !parentCreated {
-						if _, created := i.globalDirCache.LoadOrStore(pkgDepsNM, true); !created {
-							utils.CreateDirAllSecure(pkgDepsNM)
-						}
+						i.ensureDir(pkgDepsNM)
 						parentCreated = true
 					}
 
 					// For scoped packages the parent dir differs
 					parentDir := filepath.Dir(targetLink)
 					if parentDir != pkgDepsNM {
-						if _, created := i.globalDirCache.LoadOrStore(parentDir, true); !created {
-							utils.CreateDirAllSecure(parentDir)
-						}
+						i.ensureDir(parentDir)
 					}
 
 					depVStoreName := strings.ReplaceAll(realDepName, "/", "+") + "@" + depVersion
@@ -533,9 +539,7 @@ func (i *Installer) linkToRoot(packages []*ResolvedPackage) error {
 		defer i.linkingPool.Release()
 
 		parentDir := filepath.Dir(rootNM)
-		if _, created := i.globalDirCache.LoadOrStore(parentDir, true); !created {
-			utils.CreateDirAllSecure(parentDir)
-		}
+		i.ensureDir(parentDir)
 		pkgVStoreName := strings.ReplaceAll(pkg.Name, "/", "+") + "@" + pkg.Version
 
 		absTarget := filepath.Join(i.vstoreRoot, pkgVStoreName, "node_modules", pkg.Name)

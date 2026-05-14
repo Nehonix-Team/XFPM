@@ -37,7 +37,7 @@ var infoCmd = &cobra.Command{
 
 		registry := core.NewRegistryClient("", 3)
 
-		s, _ := pterm.DefaultSpinner.Start("Fetching package metadata...")
+		s, _ := pterm.DefaultSpinner.Start("Fetching package metadata from registry...")
 
 		pkgData, err := registry.FetchPackage(context.Background(), pkgName, false)
 		if err != nil {
@@ -51,39 +51,74 @@ var infoCmd = &cobra.Command{
 			}
 		}
 
-		metadata, ok := pkgData.Versions[version]
+		metadata, err := registry.FetchVersionMetadata(context.Background(), pkgName, version)
 		s.Stop()
 
-		if !ok {
-			return fmt.Errorf("version %s not found for package %s", version, pkgName)
+		if err != nil {
+			return fmt.Errorf("failed to fetch version metadata: %w", err)
 		}
 
-		// Display formatted info
-		pterm.DefaultSection.Printf("%s@%s", pkgName, version)
+		// Display Premium Header
+		pterm.Println()
+		pterm.DefaultBox.WithTitle(pterm.LightBlue(" PACKAGE INFORMATION ")).Println(
+			fmt.Sprintf("%s %s\n%s", 
+				pterm.Bold.Sprint(metadata.Name), 
+				pterm.Gray("v"+metadata.Version),
+				pterm.Italic.Sprint(metadata.Description)),
+		)
 
 		var data [][]string
-		data = append(data, []string{pterm.LightCyan("Name:"), metadata.Name})
-		data = append(data, []string{pterm.LightCyan("Version:"), metadata.Version})
+		data = append(data, []string{pterm.LightCyan("License:"), metadata.License})
+		
+		// Author handling (can be string or object)
+		authorStr := "Unknown"
+		if metadata.Author != nil {
+			switch a := metadata.Author.(type) {
+			case string:
+				authorStr = a
+			case map[string]interface{}:
+				if name, ok := a["name"].(string); ok {
+					authorStr = name
+					if email, ok := a["email"].(string); ok {
+						authorStr += " <" + email + ">"
+					}
+				}
+			}
+		}
+		data = append(data, []string{pterm.LightCyan("Author:"), authorStr})
 
-		if metadata.Dist.Tarball != "" {
-			data = append(data, []string{pterm.LightCyan("Tarball:"), metadata.Dist.Tarball})
+		if len(metadata.Keywords) > 0 {
+			data = append(data, []string{pterm.LightCyan("Keywords:"), strings.Join(metadata.Keywords, ", ")})
 		}
+
 		if metadata.Dist.UnpackedSize > 0 {
-			data = append(data, []string{pterm.LightCyan("Size:"), fmt.Sprintf("%d bytes", metadata.Dist.UnpackedSize)})
+			sizeStr := fmt.Sprintf("%.2f MiB", float64(metadata.Dist.UnpackedSize)/(1024*1024))
+			data = append(data, []string{pterm.LightCyan("Unpacked Size:"), sizeStr})
 		}
+		
+		data = append(data, []string{pterm.LightCyan("File Count:"), fmt.Sprintf("%d", metadata.Dist.FileCount)})
 
 		pterm.DefaultTable.WithData(data).Render()
 
+		// Dependencies Section
 		if len(metadata.Dependencies) > 0 {
 			pterm.Println()
-			pterm.DefaultHeader.WithFullWidth().WithBackgroundStyle(pterm.NewStyle(pterm.BgDarkGray)).WithTextStyle(pterm.NewStyle(pterm.FgLightBlue)).Println("Dependencies")
+			pterm.DefaultSection.WithLevel(2).Println("Dependencies")
+			
 			var deps [][]string
+			count := 0
 			for k, v := range metadata.Dependencies {
-				deps = append(deps, []string{k, pterm.LightGreen(v)})
+				deps = append(deps, []string{"• " + k, pterm.Gray(v)})
+				count++
+				if count > 20 { // Cap the display for very large packages
+					deps = append(deps, []string{pterm.Gray("... and more"), ""})
+					break
+				}
 			}
 			pterm.DefaultTable.WithData(deps).Render()
 		}
 
+		pterm.Println()
 		return nil
 	},
 }
