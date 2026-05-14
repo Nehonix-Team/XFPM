@@ -51,14 +51,17 @@ type VersionMetadata struct {
 	Name                 string            `json:"name"`
 	Version              string            `json:"version"`
 	Description          string            `json:"description,omitempty"`
+	Author               any               `json:"author,omitempty"`
+	License              string            `json:"license,omitempty"`
+	Keywords             []string          `json:"keywords,omitempty"`
 	Dist                 Dist              `json:"dist"`
 	Dependencies         map[string]string `json:"dependencies,omitempty"`
 	PeerDependencies     map[string]string `json:"peerDependencies,omitempty"`
 	PeerDependenciesMeta map[string]struct {
 		Optional bool `json:"optional"`
 	} `json:"peerDependenciesMeta,omitempty"`
-	OptionalDependencies map[string]string `json:"optionalDependencies,omitempty"`
-	Bin                  json.RawMessage   `json:"bin,omitempty"`
+	OptionalDependencies map[string]string   `json:"optionalDependencies,omitempty"`
+	Bin                  json.RawMessage     `json:"bin,omitempty"`
 	OS                   StringOrStringArray `json:"os,omitempty"`
 	CPU                  StringOrStringArray `json:"cpu,omitempty"`
 	Libc                 StringOrStringArray `json:"libc,omitempty"`

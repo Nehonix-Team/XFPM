@@ -188,18 +188,23 @@ var installCmd = &cobra.Command{
 		// Handle --path flag
 		if localPath != "" {
 			absPath, err := filepath.Abs(localPath)
-			if err == nil {
-				localPkg, err := core.LoadPackageJson(filepath.Join(absPath, "package.json"))
-				if err == nil {
-					localPackages[localPkg.Name] = absPath
-					rootDeps[localPkg.Name] = localPkg.Version
-					directPkgs[localPkg.Name] = localPkg.Version
-					if resolver.ForcePackages == nil {
-						resolver.ForcePackages = make(map[string]bool)
-					}
-					resolver.ForcePackages[localPkg.Name] = true
-				}
+			if err != nil {
+				return fmt.Errorf("invalid path specified via -P: %w", err)
 			}
+			if fi, err := os.Stat(absPath); err != nil || !fi.IsDir() {
+				return fmt.Errorf("local path does not exist or is not a directory: %s", absPath)
+			}
+			localPkg, err := core.LoadPackageJson(filepath.Join(absPath, "package.json"))
+			if err != nil {
+				return fmt.Errorf("no valid package.json found in %s: %w", absPath, err)
+			}
+			localPackages[localPkg.Name] = absPath
+			rootDeps[localPkg.Name] = localPkg.Version
+			directPkgs[localPkg.Name] = localPkg.Version
+			if resolver.ForcePackages == nil {
+				resolver.ForcePackages = make(map[string]bool)
+			}
+			resolver.ForcePackages[localPkg.Name] = true
 		}
 
 		if len(args) > 0 {
@@ -210,18 +215,21 @@ var installCmd = &cobra.Command{
 				// Check if p is a local path
 				if strings.HasPrefix(p, "./") || strings.HasPrefix(p, "../") || filepath.IsAbs(p) {
 					absPath, err := filepath.Abs(p)
-					if err == nil {
-						if fi, err := os.Stat(absPath); err == nil && fi.IsDir() {
-							localPkg, err := core.LoadPackageJson(filepath.Join(absPath, "package.json"))
-							if err == nil {
-								localPackages[localPkg.Name] = absPath
-								rootDeps[localPkg.Name] = localPkg.Version
-								directPkgs[localPkg.Name] = localPkg.Version
-								resolver.ForcePackages[localPkg.Name] = true
-								continue
-							}
-						}
+					if err != nil {
+						return fmt.Errorf("invalid local path: %s", p)
 					}
+					if fi, err := os.Stat(absPath); err != nil || !fi.IsDir() {
+						return fmt.Errorf("local path does not exist or is not a directory: %s", absPath)
+					}
+					localPkg, err := core.LoadPackageJson(filepath.Join(absPath, "package.json"))
+					if err != nil {
+						return fmt.Errorf("no valid package.json found in %s: %w", absPath, err)
+					}
+					localPackages[localPkg.Name] = absPath
+					rootDeps[localPkg.Name] = localPkg.Version
+					directPkgs[localPkg.Name] = localPkg.Version
+					resolver.ForcePackages[localPkg.Name] = true
+					continue
 				}
 
 				name := p
