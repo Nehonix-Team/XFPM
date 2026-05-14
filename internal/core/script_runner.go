@@ -155,6 +155,8 @@ func (r *ScriptRunner) buildEnv(pathVal string) []string {
 		"TMPDIR":                        paths.LocalTmpDir(r.projectRoot),
 		"TEMP":                          paths.LocalTmpDir(r.projectRoot),
 		"TMP":                           paths.LocalTmpDir(r.projectRoot),
+		"XFPM":                          "true",
+		"npm_config_user_agent":         "xfpm",
 	}
 
 	// 1. NODE_PATH addition
