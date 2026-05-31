@@ -21,8 +21,12 @@ var RootCmd = &cobra.Command{
 	Long:  `Official XyPriss Fast Package Manager (XFPM). XFPM is a high-performance, cross-platform CLI tool built for the XyPriss ecosystem. Written in Go, it delivers fast dependency resolution, strict package isolation through a virtual store, and a clean terminal interface designed for professional workflows.`,
 	Version: utils.BinVersion,
 	PersistentPreRunE: func(cmd *cobra.Command, args []string) error {
+		// --silent doit etre lu en premier pour supprimer tous les logs suivants.
+		silent, _ := cmd.Flags().GetBool("silent")
+		utils.SetSilent(silent)
+
 		utils.SetupUI()
-		
+
 		cwd, _ := cmd.Flags().GetString("cwd")
 		if cwd != "" {
 			if err := os.Chdir(cwd); err != nil {
@@ -44,7 +48,7 @@ var RootCmd = &cobra.Command{
 		if cmdName != "completion" && cmdName != "__complete" && cmdName != "help" && cmdName != "version" && cmdName != "upgrade" {
 			utils.CheckForUpdates(false)
 		}
-		
+
 		return nil
 	},
 	Run: func(cmd *cobra.Command, args []string) {
@@ -62,4 +66,5 @@ func Execute() {
 
 func init() {
 	RootCmd.PersistentFlags().StringP("cwd", "C", "", "Change work directory")
+	RootCmd.PersistentFlags().BoolP("silent", "S", false, "Suppress all installation logs (errors fatals restent visibles)")
 }

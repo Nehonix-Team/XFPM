@@ -47,7 +47,7 @@ var installCmd = &cobra.Command{
 		}
 
 		// Legacy storage detection and migration prompt
-		if !global && core.HasLegacyStorage(projectRoot) {
+		if !global && core.HasLegacyStorage(projectRoot) && !utils.SilentMode {
 			pterm.DefaultBox.
 				WithTitle(pterm.LightYellow(" LEGACY STORE DETECTED ")).
 				WithTitleBottomRight().
@@ -58,7 +58,7 @@ var installCmd = &cobra.Command{
 				"Migrate and search for ALL other legacy projects on my machine",
 				"Skip (I'll run 'xfpm store prune --legacy' later)",
 			}
-			
+
 			selected, _ := pterm.DefaultInteractiveSelect.
 				WithOptions(options).
 				WithDefaultText("What would you like to do?").
@@ -277,10 +277,19 @@ var installCmd = &cobra.Command{
 
 		resolver.SetLocalPackages(localPackages)
 
-		s, _ := pterm.DefaultSpinner.
-			WithRemoveWhenDone(true).
-			WithText("Analysing project tree...").
-			Start()
+		var (
+			s           *pterm.SpinnerPrinter
+			stopSpinner chan struct{}
+		)
+
+		if !utils.SilentMode {
+			s, _ = pterm.DefaultSpinner.
+				WithRemoveWhenDone(true).
+				WithText("Analysing project tree...").
+				Start()
+			stopSpinner = make(chan struct{})
+		}
+
 		var mu sync.Mutex
 		lastResolving := ""
 
@@ -290,30 +299,34 @@ var installCmd = &cobra.Command{
 			mu.Unlock()
 		})
 
-		stopSpinner := make(chan struct{})
-		startTimeMatrix := time.Now()
-		go func() {
-			ticker := time.NewTicker(80 * time.Millisecond)
-			defer ticker.Stop()
-			for {
-				select {
-				case <-ticker.C:
-					mu.Lock()
-					name := lastResolving
-					mu.Unlock()
-					if name != "" {
-						elapsed := time.Since(startTimeMatrix).Truncate(time.Millisecond)
-						s.UpdateText("  " + utils.DimColor.Sprint("Searching: ") + utils.AccentColor.Sprint(name) + "  " + utils.DimColor.Sprint(elapsed.String()))
+		if !utils.SilentMode {
+			startTimeMatrix := time.Now()
+			go func() {
+				ticker := time.NewTicker(80 * time.Millisecond)
+				defer ticker.Stop()
+				for {
+					select {
+					case <-ticker.C:
+						mu.Lock()
+						name := lastResolving
+						mu.Unlock()
+						if name != "" {
+							elapsed := time.Since(startTimeMatrix).Truncate(time.Millisecond)
+							s.UpdateText("  " + utils.DimColor.Sprint("Searching: ") + utils.AccentColor.Sprint(name) + "  " + utils.DimColor.Sprint(elapsed.String()))
+						}
+					case <-stopSpinner:
+						return
 					}
-				case <-stopSpinner:
-					return
 				}
-			}
-		}()
-		
+			}()
+		}
+
 		resolved, rootVersions, err := resolver.ResolveTree(context.Background(), rootDeps)
-		close(stopSpinner)
-		s.Stop()
+
+		if !utils.SilentMode && stopSpinner != nil {
+			close(stopSpinner)
+			s.Stop()
+		}
 
 		if err != nil {
 			return err

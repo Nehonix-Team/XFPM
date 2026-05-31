@@ -48,7 +48,9 @@ func (r *ScriptRunner) ExecuteParallel(ctx context.Context, tasks []ScriptTask) 
 		return nil
 	}
 
-	fmt.Printf("\n  [SCRIPTS] Executing %d tasks...\n", len(tasks))
+	if !utils.SilentMode {
+		fmt.Printf("\n  [SCRIPTS] Executing %d tasks...\n", len(tasks))
+	}
 
 	sem := make(chan struct{}, r.maxParallel)
 	var wg sync.WaitGroup
@@ -183,6 +185,11 @@ func (r *ScriptRunner) streamLines(rdr io.ReadCloser, prefix string) {
 		return
 	}
 	defer rdr.Close()
+	if utils.SilentMode {
+		// Drain the pipe pour eviter que le process fils se bloque sur un write
+		io.Copy(io.Discard, rdr)
+		return
+	}
 	scanner := bufio.NewScanner(rdr)
 	for scanner.Scan() {
 		fmt.Printf("   %s %s\n", utils.DimColor.Sprint(prefix), scanner.Text())
