@@ -70,6 +70,20 @@ func NewInstaller(cas *Cas, registry *RegistryClient, projectRoot string) *Insta
 		maxConcurrency = 96 // raised from 48 — NTFS latency needs more parallelism to hide it
 	}
 
+	// En mode silencieux, on redirige mpb vers io.Discard pour
+	// eliminer tout rendu terminal sans modifier la logique d'incrementation.
+	progressOutput := io.Writer(os.Stdout)
+	if utils.SilentMode {
+		progressOutput = io.Discard
+	}
+
+	refreshRate := func() time.Duration {
+		if isWindows {
+			return 300 * time.Millisecond
+		}
+		return 180 * time.Millisecond
+	}()
+
 	inst := &Installer{
 		cas:         cas,
 		registry:    registry,
@@ -78,14 +92,9 @@ func NewInstaller(cas *Cas, registry *RegistryClient, projectRoot string) *Insta
 		isWindows:   isWindows,
 		linkingPool: utils.NewAdaptiveSemaphore(maxConcurrency),
 		progress: mpb.New(
+			mpb.WithOutput(progressOutput),
 			mpb.WithWidth(64),
-			mpb.WithRefreshRate(func() time.Duration {
-				if isWindows {
-					// [OPTIM] Less frequent redraws reduce terminal I/O pressure on Windows
-					return 300 * time.Millisecond
-				}
-				return 180 * time.Millisecond
-			}()),
+			mpb.WithRefreshRate(refreshRate),
 		),
 	}
 

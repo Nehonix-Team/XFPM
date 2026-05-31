@@ -9,6 +9,22 @@ import (
 	"github.com/pterm/pterm/putils"
 )
 
+// SilentMode supprime tous les logs non critiques quand il vaut true.
+// Utiliser SetSilent pour le modifier.
+var SilentMode bool
+
+// SetSilent active ou desactive le mode silencieux.
+// En mode silencieux, pterm est entierement desactive et
+// toutes les fonctions de log deviennent des no-ops.
+func SetSilent(silent bool) {
+	SilentMode = silent
+	if silent {
+		pterm.DisableOutput()
+	} else {
+		pterm.EnableOutput()
+	}
+}
+
 var (
 	InfoColor    = pterm.NewStyle(pterm.FgCyan)
 	SuccessColor = pterm.NewStyle(pterm.FgGreen, pterm.Bold)
@@ -21,6 +37,9 @@ var (
 )
 
 func Info(format string, a ...any) {
+	if SilentMode {
+		return
+	}
 	printer := pterm.PrefixPrinter{
 		Prefix: pterm.Prefix{
 			Text:  " [*] ",
@@ -32,6 +51,9 @@ func Info(format string, a ...any) {
 }
 
 func Success(format string, a ...any) {
+	if SilentMode {
+		return
+	}
 	printer := pterm.PrefixPrinter{
 		Prefix: pterm.Prefix{
 			Text:  " [✔] ",
@@ -43,6 +65,9 @@ func Success(format string, a ...any) {
 }
 
 func Warn(format string, a ...any) {
+	if SilentMode {
+		return
+	}
 	printer := pterm.PrefixPrinter{
 		Prefix: pterm.Prefix{
 			Text:  " [!] ",
@@ -65,18 +90,30 @@ func Error(format string, a ...any) {
 }
 
 func Log(prefix, msg string) {
+	if SilentMode {
+		return
+	}
 	pterm.Printf("   %s %s\n", DimColor.Sprint(prefix), msg)
 }
 
 func LiveLog(msg string) {
+	if SilentMode {
+		return
+	}
 	pterm.Printf("   %s %s\n", GreenColor.Sprint("→"), msg)
 }
 
 func Matrix(msg string) {
+	if SilentMode {
+		return
+	}
 	MatrixColor.Printf(" [NEURAL_LINK] %s\n", msg)
 }
 
 func Premium(title, msg string) {
+	if SilentMode {
+		return
+	}
 	AccentColor.Printf("  ➤ %-12s ", title)
 	fmt.Printf("%s\n", msg)
 }
@@ -119,13 +156,16 @@ func PrintBanner() {
 }
 
 func PrintFooter(duration time.Duration) {
+	if SilentMode {
+		return
+	}
 	fmt.Println()
-	pterm.Printf("  %s %s\n", 
-		SuccessColor.Sprint("Done in"), 
+	pterm.Printf("  %s %s\n",
+		SuccessColor.Sprint("Done in"),
 		pterm.FgYellow.Sprint(duration.Round(time.Millisecond)),
 	)
-	pterm.Printf("  %s %s\n", 
-		DimColor.Sprint("Powered by"), 
+	pterm.Printf("  %s %s\n",
+		DimColor.Sprint("Powered by"),
 		pterm.FgLightBlue.Sprint("Nehonix"),
 	)
 }
