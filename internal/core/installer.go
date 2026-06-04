@@ -127,7 +127,20 @@ func (i *Installer) ensureDir(path string) {
 	}
 }
 
-func (i *Installer) Install(ctx context.Context, packages []*ResolvedPackage) error {
+func (i *Installer) Install(ctx context.Context, packages []*ResolvedPackage) (err error) {
+	if utils.SilentMode {
+		pterm.EnableOutput()
+		spinner, _ := pterm.DefaultSpinner.WithText("Installing dependencies...").Start()
+		defer func() {
+			if err != nil {
+				spinner.Fail("Installation failed.")
+			} else {
+				spinner.Success("Installation complete.")
+			}
+			pterm.DisableOutput()
+		}()
+	}
+
 	utils.Info("Starting installation of %d packages via Ancestor Hoisting...", len(packages))
 
 	uniquePackages := i.getUniquePackages(packages)
@@ -286,6 +299,40 @@ func (i *Installer) ensureExtracted(ctx context.Context, pkg *ResolvedPackage, t
 	}
 
 	if pkg.LocalPath != "" { return i.extractLocal(pkg, targetVStore) }
+
+	// [OPTIM] Check Global CAS first before network download
+	if !i.Force && i.cas.HasIndex(pkg.Name, pkg.Version) {
+		if fileMap, err := i.cas.GetIndex(pkg.Name, pkg.Version); err == nil && len(fileMap) > 0 {
+			isPlugin := false
+			for path := range fileMap {
+				if strings.HasSuffix(path, "xypriss.plugin.xsig") {
+					isPlugin = true
+					break
+				}
+			}
+
+			if isPlugin {
+				if i.isPluginTrusted(pkg) {
+					i.LinkFilesToDir(pkgDir, fileMap)
+				} else {
+					i.pendingMu.Lock()
+					i.PendingPlugins = append(i.PendingPlugins, pkg)
+					i.pendingMu.Unlock()
+					return nil
+				}
+			} else {
+				i.LinkFilesToDir(pkgDir, fileMap)
+			}
+
+			i.changedPackages.Store(pkg.Name+"@"+pkg.Version, true)
+
+			if pkg.IsRevoked {
+				i.patchPackageJsonForRevocation(pkgDir, pkg)
+			}
+
+			return nil
+		}
+	}
 
 	total := pkg.Metadata.Dist.UnpackedSize
 	if total == 0 { total = 100 } // fallback

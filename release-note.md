@@ -1,3 +1,9 @@
+## [G0.1.218] - 2026-06-04
+
+### Extreme Performance Optimization
+
+- **Global CAS Linking**: Implemented a global Content Addressable Storage (CAS) lookup before initiating package downloads. If a package exists in the global cache, XFPM now completely bypasses the network and `tgz` stream extraction, linking the files directly into the local `node_modules`. This transforms a network-bound 50+ second installation into a disk-bound sub-10 second operation, rivaling or exceeding npm's speed when restoring from cache.
+
 ## [G0.1.217] - 2026-05-31
 
 ### Silent Mode
