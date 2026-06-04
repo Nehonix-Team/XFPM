@@ -23,6 +23,7 @@ var (
 	revokeNoPending  bool
 	listLocal        bool
 	listReview       bool
+	listWeb          bool
 )
 
 var pluginCmd = &cobra.Command{
@@ -270,6 +271,7 @@ var pluginListCmd = &cobra.Command{
 	RunE: func(cmd *cobra.Command, args []string) error {
 		localOnly, _ := cmd.Flags().GetBool("local")
 		reviewMode, _ := cmd.Flags().GetBool("review")
+		webMode, _ := cmd.Flags().GetBool("web")
 		projectRoot, _ := os.Getwd()
 
 		pkgJsonPath := paths.PackageJsonPath(projectRoot)
@@ -308,8 +310,8 @@ var pluginListCmd = &cobra.Command{
 		for k, v := range pkg.Dependencies { allDeps[k] = v }
 		for k, v := range pkg.DevDependencies { allDeps[k] = v }
 
-		// In review mode, also include orphans present in config
-		if reviewMode {
+		// In review mode or web mode, also include orphans present in config
+		if reviewMode || webMode {
 			if internal, ok := config["$internal"].(map[string]interface{}); ok {
 				for name := range internal {
 					if _, exists := allDeps[name]; !exists {
@@ -474,7 +476,7 @@ var pluginListCmd = &cobra.Command{
 
 				mu.Lock()
 				items = append(items, []string{n, resolvedVer, status, authorID})
-				if reviewMode {
+				if reviewMode || webMode {
 					privs := ""
 					if len(xsigBytes) > 0 {
 						privs = plugin.ExtractPrivileges(xsigBytes)
@@ -508,7 +510,7 @@ var pluginListCmd = &cobra.Command{
 			return nil
 		}
 
-		if reviewMode && len(reviewPrompt) > 0 {
+		if (reviewMode || webMode) && len(reviewPrompt) > 0 {
 			utils.Info("Opening browser for permission review...")
 			plugin.HandleHtmlVerify(projectRoot, reviewPrompt, config, configPath, true)
 		} else {
@@ -658,6 +660,7 @@ func init() {
 
 	pluginListCmd.Flags().BoolVarP(&listLocal, "local", "l", false, "Only check locally installed packages")
 	pluginListCmd.Flags().BoolVarP(&listReview, "review", "r", false, "Review and update plugin permissions via web dashboard")
+	pluginListCmd.Flags().BoolVarP(&listWeb, "web", "w", false, "Open web dashboard to view plugins")
 	pluginCmd.AddCommand(pluginListCmd)
 	pluginCmd.AddCommand(pluginTrustCmd)
 	pluginRevokeCmd.Flags().BoolVar(&revokeNoPending, "no-pending", false, "Do not add the plugin back to pending list after revocation")
