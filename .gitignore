@@ -87,3 +87,4 @@ simulation/
 /xfpm
 dist/
 tmp/
+pl.sh

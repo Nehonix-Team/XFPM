@@ -2,10 +2,10 @@
   "name": "XFPM (XyPriss Package Manager)",
   "description": "The ultra-fast package manager for the XyPriss ecosystem.",
   "warning": "CRITICAL: Public modifications to this file are strictly forbidden. Internal Nehonix metadata ONLY.",
-  "latest": "vG0.1.217",
-  "message": "Silent Mode: Added --silent / -S flag to suppress all installation output. Ideal for CI/CD pipelines and scripted environments.",
+  "latest": "vG0.1.218",
+  "message": "Performance: Implemented Global CAS caching to bypass network downloads during installation, dramatically improving extraction speeds.",
   "metadata": {
-    "releaseDate": "2026-05-31",
+    "releaseDate": "2026-06-04",
     "channel": "stable"
   }
 }
