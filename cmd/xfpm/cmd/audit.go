@@ -56,7 +56,7 @@ var auditCmd = &cobra.Command{
 		if err != nil {
 			return err
 		}
-
+ 
 		spinner, _ := pterm.DefaultSpinner.Start("Analyzing dependency graph...")
 
 		registry := core.NewRegistryClient("", 3)
@@ -70,7 +70,7 @@ var auditCmd = &cobra.Command{
 		resolver.IgnoreRevocations = true // Allow audit to see everything
 
 		ctx := context.Background()
-		resolved, _, err := resolver.ResolveTree(ctx, pkgJson.AllDependencies())
+		resolved, _, err := resolver.ResolveTree(ctx, projectRoot, pkgJson.AllDependencies())
 		if err != nil {
 			spinner.Fail(fmt.Sprintf("Failed to resolve dependencies: %v", err))
 			return err
@@ -651,7 +651,7 @@ var auditFixCmd = &cobra.Command{
 		resolver := core.NewResolver(registry, cas)
 
 		ctx := context.Background()
-		resolved, _, err := resolver.ResolveTree(ctx, pkgJson.AllDependencies())
+		resolved, _, err := resolver.ResolveTree(ctx, projectRoot, pkgJson.AllDependencies())
 		if err != nil {
 			spinner.Fail(fmt.Sprintf("Audit failed: %v", err))
 			return err
@@ -740,7 +740,7 @@ var auditFixCmd = &cobra.Command{
 			}
 
 			// Resolve and Install
-			res, _, err := resolver.ResolveTree(ctx, pkgJson.AllDependencies())
+			res, _, err := resolver.ResolveTree(ctx, projectRoot, pkgJson.AllDependencies())
 			if err != nil {
 				updateSpinner.Fail("Failed to resolve new tree")
 				continue

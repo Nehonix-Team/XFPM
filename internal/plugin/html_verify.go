@@ -38,7 +38,7 @@ func fetchMasterPermissions() {
 	if masterPermissions != nil {
 		return
 	}
-	resp, err := http.Get("https://raw.githubusercontent.com/Nehonix-Team/XyPriss/master/.data/base/permissions.json")
+	resp, err := http.Get("https://dll.nehonix.com/proxy/xypriss/data/permissions")
 	if err == nil {
 		defer resp.Body.Close()
 		json.NewDecoder(resp.Body).Decode(&masterPermissions)

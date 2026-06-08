@@ -321,7 +321,7 @@ var installCmd = &cobra.Command{
 			}()
 		}
 
-		resolved, rootVersions, err := resolver.ResolveTree(context.Background(), rootDeps)
+		resolved, rootVersions, err := resolver.ResolveTree(context.Background(), projectRoot, rootDeps)
 
 		if !utils.SilentMode && stopSpinner != nil {
 			close(stopSpinner)

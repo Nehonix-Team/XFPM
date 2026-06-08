@@ -87,7 +87,7 @@ func DownloadAndInstallBun() error {
 	resolver := NewResolver(registry, cas)
 	rootDeps := map[string]string{"bun": "latest"}
 	
-	resolved, rootVersions, err := resolver.ResolveTree(ctx, rootDeps)
+	resolved, rootVersions, err := resolver.ResolveTree(ctx, projectRoot, rootDeps)
 	if err != nil {
 		return fmt.Errorf("failed to resolve bun: %w", err)
 	}
