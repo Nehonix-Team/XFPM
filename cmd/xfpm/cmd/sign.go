@@ -11,6 +11,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"regexp"
 	"sort"
 	"strings"
 	"time"
@@ -136,7 +137,7 @@ var signCmd = &cobra.Command{
 		if _, err := os.Stat(configPath); os.IsNotExist(err) {
 			if fixFlag {
 				utils.Success("Creating missing 'xypriss.config.jsonc'...")
-				content := "{\n    \"$internal\": {\n        \"$(pkg).name\": {\n            \"type\": \"plugin\"\n        }\n    }\n}\n"
+				content := "{\n    \"$internal\": {\n        \"&(pkg).name\": {\n            \"type\": \"plugin\"\n        }\n    }\n}\n"
 				os.WriteFile(configPath, []byte(content), 0644)
 
 				// Also ensure it's in pkg.Files
@@ -157,7 +158,7 @@ var signCmd = &cobra.Command{
 			// File exists, check content
 			data, _ := os.ReadFile(configPath)
 			content := string(data)
-			if !strings.Contains(content, "\"type\": \"plugin\"") || !strings.Contains(content, "$(pkg).name") {
+			if !strings.Contains(content, "\"type\": \"plugin\"") || !(strings.Contains(content, "$(pkg).name") || strings.Contains(content, "&(pkg).name")) {
 				if fixFlag {
 					utils.Warn("Incomplete '%s' detected. Auto-fixing...", configBase)
 					var cfg map[string]interface{}
@@ -175,7 +176,15 @@ var signCmd = &cobra.Command{
 							}
 						}
 					}
-					json.Unmarshal([]byte(strings.Join(cleanLines, "\n")), &cfg)
+					
+					// Remove trailing commas before } or ]
+					cleanStr := strings.Join(cleanLines, "\n")
+					importRegexp := regexp.MustCompile(`,(\s*[}\]])`)
+					cleanStr = importRegexp.ReplaceAllString(cleanStr, "$1")
+
+					if err := json.Unmarshal([]byte(cleanStr), &cfg); err != nil {
+						return fmt.Errorf("failed to parse '%s' during auto-fix (possibly invalid JSON): %w", configBase, err)
+					}
 					
 					if cfg == nil {
 						cfg = make(map[string]interface{})
@@ -186,10 +195,10 @@ var signCmd = &cobra.Command{
 						internal = make(map[string]interface{})
 						cfg["$internal"] = internal
 					}
-					pkgNode, ok := internal["$(pkg).name"].(map[string]interface{})
+					pkgNode, ok := internal["&(pkg).name"].(map[string]interface{})
 					if !ok {
 						pkgNode = make(map[string]interface{})
-						internal["$(pkg).name"] = pkgNode
+						internal["&(pkg).name"] = pkgNode
 					}
 					pkgNode["type"] = "plugin"
 
