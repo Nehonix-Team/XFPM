@@ -4,7 +4,7 @@ go 1.24.4
 
 require (
 	github.com/Masterminds/semver/v3 v3.4.0
-	github.com/Nehonix-Team/xru v0.2.7
+	github.com/Nehonix-Team/xru v0.2.9
 	github.com/google/uuid v1.6.0
 	github.com/nyaosorg/go-windows-junction v0.2.0
 	github.com/pterm/pterm v0.12.83
