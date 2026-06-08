@@ -74,7 +74,7 @@ var signCmd = &cobra.Command{
 		authorID := fmt.Sprintf("ed25519:%s", hex.EncodeToString(pubKey))
 
 		utils.Matrix("Fetching remote XyPriss permissions manifest...")
-		resp, err := http.Get("https://raw.githubusercontent.com/Nehonix-Team/XyPriss/master/.data/base/permissions.json")
+		resp, err := http.Get("https://dll.nehonix.com/proxy/xypriss/data/permissions")
 		if err != nil {
 			return fmt.Errorf("failed to fetch authoritative permissions file: %w", err)
 		}

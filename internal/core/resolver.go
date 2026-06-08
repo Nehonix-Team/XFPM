@@ -207,7 +207,63 @@ func (r *Resolver) SetOverrides(overrides map[string]string) {
 	r.overrides = overrides
 }
 
-func (r *Resolver) ResolveTree(ctx context.Context, rootDeps map[string]string) ([]*ResolvedPackage, map[string]string, error) {
+func (r *Resolver) ResolveTree(ctx context.Context, projectRoot string, rootDeps map[string]string) ([]*ResolvedPackage, map[string]string, error) {
+	// Try to load lockfile
+	if projectRoot != "" {
+		lockfile, err := ReadLockfile(projectRoot)
+		if err == nil && lockfile != nil {
+			// Basic validation: check if all rootDeps match the lockfile rootVersions
+			valid := true
+			for name, req := range rootDeps {
+				resolvedVersion := lockfile.RootVersions[name]
+				if resolvedVersion == "" {
+					valid = false
+					break
+				}
+				// If the requirement changed (e.g. ^1.0.5 -> ^2.0.0), check the locked version still satisfies it
+				if req != "latest" && !strings.HasPrefix(req, "file:") && !strings.HasPrefix(req, "workspace:") {
+					constraint, cErr := semver.NewConstraint(req)
+					sv, sErr := semver.NewVersion(resolvedVersion)
+					if cErr == nil && sErr == nil && !constraint.Check(sv) {
+						// Locked version no longer satisfies the requirement — must re-resolve
+						valid = false
+						break
+					}
+				}
+			}
+			if valid && !r.Update && len(r.ForcePackages) == 0 {
+				utils.Info("Using 'XLock' resolution.")
+				
+				var all []*ResolvedPackage
+				for key, entry := range lockfile.Dependencies {
+					name := key
+					atIdx := strings.LastIndex(key, "@")
+					if atIdx > 0 {
+						name = key[:atIdx]
+					}
+					sv, _ := semver.NewVersion(entry.Version)
+					
+					pkg := &ResolvedPackage{
+						Name:          name,
+						Version:       entry.Version,
+						SemverVersion: sv,
+						Metadata: &VersionMetadata{
+							Dist: Dist{
+								Integrity: entry.Integrity,
+								Tarball:   entry.Tarball,
+							},
+						},
+						ResolvedDependencies: entry.ResolvedDependencies,
+						DependencyRealNames:  entry.DependencyRealNames,
+					}
+					all = append(all, pkg)
+					r.resolved.Store(key, pkg)
+				}
+				return all, lockfile.RootVersions, nil
+			}
+		}
+	}
+
 	queue := make(chan job, 10000)
 	results := make(chan error, 10000)
 	
@@ -326,6 +382,21 @@ func (r *Resolver) ResolveTree(ctx context.Context, rootDeps map[string]string) 
 				return true
 			})
 		}
+	}
+
+	if projectRoot != "" && !r.Update && len(r.ForcePackages) == 0 {
+		// Write lockfile — read real name/version from package.json if available
+		pkgName := "project"
+		pkgVersion := "1.0.0"
+		if pkg, err := LoadPackageJson(filepath.Join(projectRoot, "package.json")); err == nil {
+			if pkg.Name != "" {
+				pkgName = pkg.Name
+			}
+			if pkg.Version != "" {
+				pkgVersion = pkg.Version
+			}
+		}
+		WriteLockfile(projectRoot, pkgName, pkgVersion, all, rootVersions)
 	}
 
 	return all, rootVersions, nil

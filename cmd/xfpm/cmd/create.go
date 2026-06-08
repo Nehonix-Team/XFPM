@@ -79,7 +79,7 @@ var createCmd = &cobra.Command{
 		
 		// 3. Resolve
 		rootDeps := map[string]string{pkgName: version}
-		resolved, rootVersions, err := resolver.ResolveTree(context.Background(), rootDeps)
+		resolved, rootVersions, err := resolver.ResolveTree(context.Background(), tempRoot, rootDeps)
 		if err != nil {
 			return fmt.Errorf("resolution failed: %w", err)
 		}
