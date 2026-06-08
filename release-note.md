@@ -1,3 +1,10 @@
+## [G0.1.221] - 2026-06-08
+
+### Engine Upgrades
+- **XRU Engine Update (v0.2.8)**: Updated the underlying orchestration engine to resolve a severe logic bug where `"" != ""` incorrectly evaluated to `true`, leading to silently dropped project metadata during `xfpm init` executions.
+- **Robust Parameter Injection**: Added native compatibility for CLI flag parameters (like `--name`) when resolving `#ARG:` variables, bridging the gap between XRU scripts and XFPM orchestration CLI without requiring strict `--arg KEY=VAL` syntax. 
+- **`xfpm init` Enhancements**: Reinforced the initialization command to proactively inject missing `--name` attributes to bypass edge cases during plugin setup scenarios.
+
 ## [G0.1.220] - 2026-06-08
 
 ### Performance Optimization: Lockfile System
