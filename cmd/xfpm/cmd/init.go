@@ -84,6 +84,18 @@ var initCmd = &cobra.Command{
 			os.RemoveAll(targetDir)
 		}
 
+		// Ensure NAME argument is passed to XRU if not already provided by user
+		hasNameArg := false
+		for _, arg := range customArgs {
+			if strings.HasPrefix(strings.ToUpper(arg), "NAME=") {
+				hasNameArg = true
+				break
+			}
+		}
+		if !hasNameArg && name != "" {
+			customArgs = append(customArgs, "NAME="+name)
+		}
+
 		opts := xfpmInit.InitOptions{
 			Mode:        mode,
 			ProjectName: name,
