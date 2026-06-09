@@ -7,7 +7,6 @@
 package cmd
 
 import (
-	"encoding/json"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -186,40 +185,19 @@ func cleanupGlobalBinaries(globalRoot, pkgName string) {
 }
 
 func updatePackageJsonRemove(path string, packages []string) {
-	data, err := os.ReadFile(path)
-	if err != nil {
-		return
+	var removes []string
+	for _, pkg := range packages {
+		safeName := strings.ReplaceAll(pkg, ".", "\\.")
+		removes = append(removes, 
+			"dependencies."+safeName, 
+			"devDependencies."+safeName, 
+			"optionalDependencies."+safeName, 
+			"peerDependencies."+safeName,
+		)
 	}
 
-	var raw map[string]json.RawMessage
-	if err := json.Unmarshal(data, &raw); err != nil {
-		return
-	}
-
-	sections := []string{"dependencies", "devDependencies", "peerDependencies", "optionalDependencies"}
-	modified := false
-
-	for _, section := range sections {
-		if raw[section] == nil {
-			continue
-		}
-		var deps map[string]string
-		if err := json.Unmarshal(raw[section], &deps); err != nil {
-			continue
-		}
-		for _, pkg := range packages {
-			if _, ok := deps[pkg]; ok {
-				delete(deps, pkg)
-				modified = true
-			}
-		}
-		encoded, _ := json.Marshal(deps)
-		raw[section] = json.RawMessage(encoded)
-	}
-
-	if modified {
-		out, _ := json.MarshalIndent(raw, "", "  ")
-		os.WriteFile(path, out, 0644)
+	if len(removes) > 0 {
+		utils.RemoveFromJsonFile(path, removes)
 		pterm.Printf("   %s Updated package.json\n", pterm.FgBlue.Sprint("✎"))
 	}
 }

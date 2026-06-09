@@ -264,33 +264,14 @@ func HandleHtmlVerify(projectRoot string, pending []PendingReq, config map[strin
 			return
 		}
 
-		content, err := os.ReadFile(configPath)
-		if err != nil {
-			http.Error(w, "Could not read config", 500)
-			return
-		}
-		var config map[string]interface{}
-		if err := json.Unmarshal(content, &config); err != nil {
-			http.Error(w, "Could not parse config", 500)
-			return
-		}
-
-		internalRaw, ok := config["$internal"]
-		if !ok {
-			internalRaw = make(map[string]interface{})
-		}
-		internal, ok := internalRaw.(map[string]interface{})
-		if !ok {
-			internal = make(map[string]interface{})
-		}
+		updates := make(map[string]interface{})
+		authorizedCount := 0
+		revokedCount := 0
 
 		mu.Lock()
 		currentPlugins := make([]WebPlugin, len(plugins))
 		copy(currentPlugins, plugins)
 		mu.Unlock()
-
-		authorizedCount := 0
-		revokedCount := 0
 
 		for _, p := range currentPlugins {
 			trustKey := "trust-" + p.Name
@@ -308,25 +289,16 @@ func HandleHtmlVerify(projectRoot string, pending []PendingReq, config map[strin
 					if err := RevokeTrust(projectRoot, p.Name, false); err != nil {
 						utils.Error("Failed to revoke trust for %s: %v", p.Name, err)
 					}
-					delete(internal, p.Name)
 					revokedCount++
 					pterm.Warning.Printf("Plugin %s trust revoked via UI\n", p.Name)
 				}
 				continue
 			}
 
-			pluginCfgRaw, ok := internal[p.Name]
-			if !ok { pluginCfgRaw = make(map[string]interface{}) }
-			pluginCfg, ok := pluginCfgRaw.(map[string]interface{})
-			if !ok { pluginCfg = make(map[string]interface{}) }
+			safeName := strings.ReplaceAll(p.Name, ".", "\\.")
 
 			if p.Identity != "" && p.Identity != "-" {
-				sigCfgRaw, ok := pluginCfg["signature"]
-				if !ok { sigCfgRaw = make(map[string]interface{}) }
-				sigCfg, ok := sigCfgRaw.(map[string]interface{})
-				if !ok { sigCfg = make(map[string]interface{}) }
-				sigCfg["author_key"] = p.Identity
-				pluginCfg["signature"] = sigCfg
+				updates[fmt.Sprintf("$internal.%s.signature.author_key", safeName)] = p.Identity
 			}
 
 			var approved []string
@@ -340,14 +312,11 @@ func HandleHtmlVerify(projectRoot string, pending []PendingReq, config map[strin
 				}
 			}
 
-			permCfgRaw, ok := pluginCfg["permissions"]
-			if !ok { permCfgRaw = make(map[string]interface{}) }
-			permCfg, ok := permCfgRaw.(map[string]interface{})
-			if !ok { permCfg = make(map[string]interface{}) }
-			permCfg["allowedHooks"] = approved
-			pluginCfg["permissions"] = permCfg
+			if approved == nil {
+				approved = []string{}
+			}
+			updates[fmt.Sprintf("$internal.%s.permissions.allowedHooks", safeName)] = approved
 
-			internal[p.Name] = pluginCfg
 			authorizedCount++
 			
 			if isNewlyTrusted {
@@ -356,10 +325,9 @@ func HandleHtmlVerify(projectRoot string, pending []PendingReq, config map[strin
 				pterm.Info.Printf("Plugin %s permissions updated: %d hooks allowed\n", p.Name, len(approved))
 			}
 		}
-		config["$internal"] = internal
 
-		if out, err := json.MarshalIndent(config, "", "    "); err == nil {
-			os.WriteFile(configPath, out, 0644)
+		if len(updates) > 0 {
+			utils.UpdateJsonFile(configPath, updates)
 		}
 		
 		// Refresh in-memory plugin list from the new config to sync Approved flags

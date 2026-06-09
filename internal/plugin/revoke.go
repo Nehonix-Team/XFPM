@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"github.com/Nehonix-Team/XFMP/internal/core"
 	"github.com/Nehonix-Team/XFMP/internal/paths"
@@ -16,10 +17,7 @@ import (
 func RevokeTrust(projectRoot string, pkgName string, noPending bool) error {
 	configPath := paths.ConfigPath(projectRoot)
 
-	b, err := os.ReadFile(configPath)
-	if err != nil {
-		return err
-	}
+	// We only need the path, no need to read the whole file to memory manually anymore.
 
 	// Pre-revocation check: Ensure it's an actual plugin in node_modules
 	pkgDir := filepath.Join(projectRoot, "node_modules", pkgName)
@@ -38,22 +36,8 @@ func RevokeTrust(projectRoot string, pkgName string, noPending bool) error {
 	}
 	pkgVer := pj.Version
 
-	var config map[string]interface{}
-	json.Unmarshal(b, &config)
-
-	internal, ok := config["$internal"].(map[string]interface{})
-	if !ok {
-		return fmt.Errorf("no trusted plugins found in project configuration")
-	}
-
-	if _, exists := internal[pkgName]; !exists {
-		return fmt.Errorf("plugin %s is not currently trusted in this project", pkgName)
-	}
-
-	delete(internal, pkgName)
-	config["$internal"] = internal
-	if out, err := json.MarshalIndent(config, "", "    "); err == nil {
-		os.WriteFile(configPath, out, 0644)
+	safeName := strings.ReplaceAll(pkgName, ".", "\\.")
+	if err := utils.RemoveFromJsonFile(configPath, []string{"$internal." + safeName}); err == nil {
 		utils.Success("\nTrust revoked and permissions retired for %s.\n", pkgName)
 	}
 

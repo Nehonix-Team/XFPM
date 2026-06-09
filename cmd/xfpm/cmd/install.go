@@ -418,6 +418,9 @@ var installCmd = &cobra.Command{
 		}
 		// Update package.json
 		if pkg != nil && len(directPkgs) > 0 && (len(args) > 0 || update || hasRedirects || hasLatest) {
+			updates := make(map[string]interface{})
+			var removes []string
+
 			for name := range directPkgs {
 				version := "latest"
 				if v, ok := rootVersions[name]; ok {
@@ -425,69 +428,67 @@ var installCmd = &cobra.Command{
 				}
 
 				origReq := ""
-				if r, ok := rootDeps[name]; ok { origReq = r }
+				if r, ok := rootDeps[name]; ok {
+					origReq = r
+				}
 				if strings.HasPrefix(origReq, "file:") || strings.HasPrefix(origReq, "workspace:") {
 					version = origReq
 				}
 
-				// If len(args) == 0, we don't move packages between sections.
-				// We just find where it exists and update it there.
 				if len(args) == 0 {
+					// Update in place where it already exists
 					if _, ok := pkg.Dependencies[name]; ok {
-						pkg.Dependencies[name] = version
+						updates["dependencies."+strings.ReplaceAll(name, ".", "\\.")] = version
 					} else if _, ok := pkg.DevDependencies[name]; ok {
-						pkg.DevDependencies[name] = version
+						updates["devDependencies."+strings.ReplaceAll(name, ".", "\\.")] = version
 					} else if _, ok := pkg.OptionalDependencies[name]; ok {
-						pkg.OptionalDependencies[name] = version
+						updates["optionalDependencies."+strings.ReplaceAll(name, ".", "\\.")] = version
 					} else if _, ok := pkg.PeerDependencies[name]; ok {
-						pkg.PeerDependencies[name] = version
+						updates["peerDependencies."+strings.ReplaceAll(name, ".", "\\.")] = version
 					}
 				} else {
 					var targetSection string
 
 					if isDev {
-						targetSection = "dev"
+						targetSection = "devDependencies"
 					} else if isOptional {
-						targetSection = "optional"
+						targetSection = "optionalDependencies"
 					} else if isPeer {
-						targetSection = "peer"
+						targetSection = "peerDependencies"
 					} else {
-						// determine original section
 						if _, ok := pkg.Dependencies[name]; ok {
-							targetSection = "dep"
+							targetSection = "dependencies"
 						} else if _, ok := pkg.DevDependencies[name]; ok {
-							targetSection = "dev"
+							targetSection = "devDependencies"
 						} else if _, ok := pkg.OptionalDependencies[name]; ok {
-							targetSection = "optional"
+							targetSection = "optionalDependencies"
 						} else if _, ok := pkg.PeerDependencies[name]; ok {
-							targetSection = "peer"
+							targetSection = "peerDependencies"
 						} else {
-							targetSection = "dep" // default
+							targetSection = "dependencies"
 						}
 					}
 
-					delete(pkg.Dependencies, name)
-					delete(pkg.DevDependencies, name)
-					delete(pkg.OptionalDependencies, name)
-					delete(pkg.PeerDependencies, name)
+					safeName := strings.ReplaceAll(name, ".", "\\.")
+					
+					// Remove from all sections first
+					removes = append(removes, 
+						"dependencies."+safeName, 
+						"devDependencies."+safeName, 
+						"optionalDependencies."+safeName, 
+						"peerDependencies."+safeName,
+					)
 
-					switch targetSection {
-					case "dev":
-						if pkg.DevDependencies == nil { pkg.DevDependencies = make(map[string]string) }
-						pkg.DevDependencies[name] = version
-					case "optional":
-						if pkg.OptionalDependencies == nil { pkg.OptionalDependencies = make(map[string]string) }
-						pkg.OptionalDependencies[name] = version
-					case "peer":
-						if pkg.PeerDependencies == nil { pkg.PeerDependencies = make(map[string]string) }
-						pkg.PeerDependencies[name] = version
-					default:
-						if pkg.Dependencies == nil { pkg.Dependencies = make(map[string]string) }
-						pkg.Dependencies[name] = version
-					}
+					updates[targetSection+"."+safeName] = version
 				}
 			}
-			pkg.Save(pkgJsonPath)
+
+			if len(removes) > 0 {
+				utils.RemoveFromJsonFile(pkgJsonPath, removes)
+			}
+			if len(updates) > 0 {
+				utils.UpdateJsonFile(pkgJsonPath, updates)
+			}
 		}
 
 		if len(args) == 1 {
