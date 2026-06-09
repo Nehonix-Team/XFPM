@@ -2,10 +2,10 @@
   "name": "XFPM (XyPriss Package Manager)",
   "description": "The ultra-fast package manager for the XyPriss ecosystem.",
   "warning": "CRITICAL: Public modifications to this file are strictly forbidden. Internal Nehonix metadata ONLY.",
-  "latest": "vG0.1.221",
-  "message": "Features: Integrated XRU v0.2.8 with full `--name` argument support and hardened `#IF` evaluation logic.",
+  "latest": "vG0.1.222",
+  "message": "Features: Fixed global CAS cache pollution during local `-P` installations by forcing local package extractions.",
   "metadata": {
-    "releaseDate": "2026-06-08",
+    "releaseDate": "2026-06-09",
     "channel": "stable"
   }
 }

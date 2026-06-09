@@ -1,3 +1,9 @@
+## [G0.1.222] - 2026-06-09
+
+### Caching & Local Installation Fix
+- **CAS Pollution Prevention**: Fixed a critical caching issue where installing packages via local path (`xfpm install -P`) would incorrectly cache the source files in the global Content Addressable Storage (CAS) index. This previously caused subsequent normal `npm` installations of the same version to fetch stale local files instead of downloading the fresh registry tarball.
+- **Forced Local Extraction**: Modified `ensureExtracted` to completely bypass the `package.json` cache check when `-P` is supplied. Local paths will now forcefully extract and link their current source files every time, guaranteeing the latest code is reflected without manual cache clearing.
+
 ## [G0.1.221] - 2026-06-08
 
 ### Engine Upgrades
