@@ -408,8 +408,10 @@ var installCmd = &cobra.Command{
 
 		autoVerify, _ := cmd.Flags().GetBool("verify")
 		noInteract, _ := cmd.Flags().GetBool("no-interact")
+		ignoreScripts, _ := cmd.Flags().GetBool("ignore-scripts")
 		installer.AutoVerify = autoVerify
 		installer.NoInteract = noInteract
+		installer.IgnoreScripts = ignoreScripts
 
 		if err := installer.Install(context.Background(), resolved); err != nil {
 			return err
@@ -521,4 +523,5 @@ func init() {
 	installCmd.Flags().StringP("path", "P", "", "Install from a local path")
 	installCmd.Flags().BoolP("verify", "v", false, "Automatically verify plugins during installation")
 	installCmd.Flags().BoolP("no-interact", "n", false, "Disable interactive prompts and auto-verify valid signatures")
+	installCmd.Flags().BoolP("ignore-scripts", "I", false, "Ignore package lifecycle scripts (preinstall, install, postinstall)")
 }

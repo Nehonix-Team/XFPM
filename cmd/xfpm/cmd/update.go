@@ -37,6 +37,9 @@ var updateCmd = &cobra.Command{
 		if global, _ := cmd.Flags().GetBool("global"); global {
 			installCmd.Flags().Lookup("global").Value.Set("true")
 		}
+		if ignore, _ := cmd.Flags().GetBool("ignore-scripts"); ignore {
+			installCmd.Flags().Lookup("ignore-scripts").Value.Set("true")
+		}
 		return installCmd.RunE(installCmd, args)
 	},
 }
@@ -46,4 +49,5 @@ func init() {
 	updateCmd.Flags().BoolP("global", "g", false, "Update packages globally")
 	updateCmd.Flags().Bool("verify", false, "Automatically verify plugins during update")
 	updateCmd.Flags().BoolP("no-interact", "n", false, "Disable interactive prompts and auto-verify valid signatures")
+	updateCmd.Flags().BoolP("ignore-scripts", "I", false, "Ignore package lifecycle scripts (preinstall, install, postinstall)")
 }
