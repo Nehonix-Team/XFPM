@@ -82,6 +82,9 @@ func (p *PackageJson) AllDependencies() map[string]string {
 	return all
 }
 
+// Save écriture l'intégralité du struct dans le fichier.
+// Deprecated: L'utilisation de Save écrase les champs non définis dans le struct (et détruit les commentaires).
+// Utilisez plutôt utils.UpdateJsonFile pour modifier uniquement les champs spécifiques.
 func (p *PackageJson) Save(path string) error {
 	data, err := json.MarshalIndent(p, "", "  ")
 	if err != nil {

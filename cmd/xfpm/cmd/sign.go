@@ -11,7 +11,6 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
-	"regexp"
 	"sort"
 	"strings"
 	"time"
@@ -118,8 +117,9 @@ var signCmd = &cobra.Command{
 				if fixFlag {
 					utils.Warn("Duplicate permissions detected. Auto-correcting package.json because --fix is enabled.")
 					pkg.Xfpm.Permissions = uniquePerms
-					pkgData, _ := json.MarshalIndent(pkg, "", "  ")
-					os.WriteFile(absPkgPath, pkgData, 0644)
+					utils.UpdateJsonFile(absPkgPath, map[string]interface{}{
+						"xfpm.permissions": uniquePerms,
+					})
 				} else {
 					return fmt.Errorf("duplicate permissions detected in package.json. Remove duplicates manually or run with --fix to auto-correct")
 				}
@@ -150,8 +150,9 @@ var signCmd = &cobra.Command{
 				}
 				if !found {
 					pkg.Files = append(pkg.Files, configBase)
-					pkgData, _ := json.MarshalIndent(pkg, "", "  ")
-					os.WriteFile(absPkgPath, pkgData, 0644)
+					utils.UpdateJsonFile(absPkgPath, map[string]interface{}{
+						"files": pkg.Files,
+					})
 				}
 			}
 		} else {
@@ -161,49 +162,9 @@ var signCmd = &cobra.Command{
 			if !strings.Contains(content, "\"type\": \"plugin\"") || !(strings.Contains(content, "$(pkg).name") || strings.Contains(content, "&(pkg).name")) {
 				if fixFlag {
 					utils.Warn("Incomplete '%s' detected. Auto-fixing...", configBase)
-					var cfg map[string]interface{}
-					
-					// Simple JSONC stripping for parsing
-					lines := strings.Split(content, "\n")
-					var cleanLines []string
-					for _, l := range lines {
-						trimmed := strings.TrimSpace(l)
-						if !strings.HasPrefix(trimmed, "//") && trimmed != "" {
-							if idx := strings.Index(l, "//"); idx != -1 {
-								cleanLines = append(cleanLines, l[:idx])
-							} else {
-								cleanLines = append(cleanLines, l)
-							}
-						}
-					}
-					
-					// Remove trailing commas before } or ]
-					cleanStr := strings.Join(cleanLines, "\n")
-					importRegexp := regexp.MustCompile(`,(\s*[}\]])`)
-					cleanStr = importRegexp.ReplaceAllString(cleanStr, "$1")
-
-					if err := json.Unmarshal([]byte(cleanStr), &cfg); err != nil {
-						return fmt.Errorf("failed to parse '%s' during auto-fix (possibly invalid JSON): %w", configBase, err)
-					}
-					
-					if cfg == nil {
-						cfg = make(map[string]interface{})
-					}
-
-					internal, ok := cfg["$internal"].(map[string]interface{})
-					if !ok {
-						internal = make(map[string]interface{})
-						cfg["$internal"] = internal
-					}
-					pkgNode, ok := internal["&(pkg).name"].(map[string]interface{})
-					if !ok {
-						pkgNode = make(map[string]interface{})
-						internal["&(pkg).name"] = pkgNode
-					}
-					pkgNode["type"] = "plugin"
-
-					newData, _ := json.MarshalIndent(cfg, "", "  ")
-					os.WriteFile(configPath, newData, 0644)
+					utils.UpdateJsonFile(configPath, map[string]interface{}{
+						"$internal.&(pkg)\\.name.type": "plugin",
+					})
 				} else {
 					return fmt.Errorf("mandatory '$internal' plugin metadata is missing in '%s'. Run with --fix to correct it", configBase)
 				}

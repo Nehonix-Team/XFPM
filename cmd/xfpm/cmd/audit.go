@@ -729,12 +729,14 @@ var auditFixCmd = &cobra.Command{
 			// and trigger the installer to apply changes to node_modules and the virtual store.
 			updateSpinner, _ := pterm.DefaultSpinner.Start(fmt.Sprintf("Updating %s...", pkgName))
 			// Update pkgJson
-			if _, ok := pkgJson.Dependencies[pkgName]; ok { pkgJson.Dependencies[pkgName] = "^" + latestVersion }
-			if _, ok := pkgJson.DevDependencies[pkgName]; ok { pkgJson.DevDependencies[pkgName] = "^" + latestVersion }
-			if _, ok := pkgJson.OptionalDependencies[pkgName]; ok { pkgJson.OptionalDependencies[pkgName] = "^" + latestVersion }
-			if _, ok := pkgJson.PeerDependencies[pkgName]; ok { pkgJson.PeerDependencies[pkgName] = "^" + latestVersion }
+			updates := make(map[string]interface{})
+			safeName := strings.ReplaceAll(pkgName, ".", "\\.")
+			if _, ok := pkgJson.Dependencies[pkgName]; ok { updates["dependencies."+safeName] = "^" + latestVersion }
+			if _, ok := pkgJson.DevDependencies[pkgName]; ok { updates["devDependencies."+safeName] = "^" + latestVersion }
+			if _, ok := pkgJson.OptionalDependencies[pkgName]; ok { updates["optionalDependencies."+safeName] = "^" + latestVersion }
+			if _, ok := pkgJson.PeerDependencies[pkgName]; ok { updates["peerDependencies."+safeName] = "^" + latestVersion }
 
-			if err := pkgJson.Save(pkgJsonPath); err != nil {
+			if err := utils.UpdateJsonFile(pkgJsonPath, updates); err != nil {
 				updateSpinner.Fail("Failed to update package.json")
 				continue
 			}
@@ -795,11 +797,13 @@ var auditFixCmd = &cobra.Command{
 }
 
 func uninstallPackage(pkgName string, pkgJson *core.PackageJson, pkgJsonPath string) {
-	delete(pkgJson.Dependencies, pkgName)
-	delete(pkgJson.DevDependencies, pkgName)
-	delete(pkgJson.OptionalDependencies, pkgName)
-	delete(pkgJson.PeerDependencies, pkgName)
-	pkgJson.Save(pkgJsonPath)
+	safeName := strings.ReplaceAll(pkgName, ".", "\\.")
+	utils.RemoveFromJsonFile(pkgJsonPath, []string{
+		"dependencies."+safeName,
+		"devDependencies."+safeName,
+		"optionalDependencies."+safeName,
+		"peerDependencies."+safeName,
+	})
 	utils.Success("%s removed from package.json for security reasons. Please run 'xfpm install' to clean node_modules.", pkgName)
 }
 

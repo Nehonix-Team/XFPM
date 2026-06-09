@@ -1,3 +1,9 @@
+## [G0.1.224] - 2026-06-09
+
+### Core Stability & Data Preservation
+- **JSONC Integrity Conservation**: Replaced standard `encoding/json` serialization with high-performance `tidwall/sjson` manipulation across the entire codebase. When updating configurations (`package.json`, `xypriss.config.jsonc`), XFPM now surgically injects or removes values without touching the rest of the document.
+- **Zero-Loss Configuration**: This totally resolves the critical issue where comments, custom indentation, and unknown fields were systematically destroyed during automated CLI updates (`install`, `uninstall`, `sign`, `plugin trust/revoke`).
+
 ## [G0.1.223] - 2026-06-09
 
 ### Feature Additions
