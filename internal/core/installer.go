@@ -294,11 +294,12 @@ func (i *Installer) ensureExtracted(ctx context.Context, pkg *ResolvedPackage, t
 	pkgVStoreName := strings.ReplaceAll(pkg.Name, "/", "+") + "@" + pkg.Version
 	pkgDir := filepath.Join(targetVStore, pkgVStoreName, "node_modules", pkg.Name)
 
+	if pkg.LocalPath != "" { return i.extractLocal(pkg, targetVStore) }
+
 	if !i.Force {
 		if _, err := os.Stat(filepath.Join(pkgDir, "package.json")); err == nil { return nil }
 	}
 
-	if pkg.LocalPath != "" { return i.extractLocal(pkg, targetVStore) }
 
 	// [OPTIM] Check Global CAS first before network download
 	if !i.Force && i.cas.HasIndex(pkg.Name, pkg.Version) {
@@ -807,7 +808,7 @@ func (i *Installer) extractLocal(pkg *ResolvedPackage, targetVStore string) erro
 		fileMap["package/"+relPath] = hash
 		return nil
 	})
-	i.cas.StoreIndex(pkg.Name, pkg.Version, fileMap)
+	// i.cas.StoreIndex(pkg.Name, pkg.Version, fileMap) // DO NOT cache index for local installs to prevent poisoning NPM cache
 	i.LinkFilesToDir(pkgDir, fileMap)
 	i.changedPackages.Store(pkg.Name+"@"+pkg.Version, true)
 
@@ -1047,7 +1048,7 @@ func (i *Installer) VerifySignatureInternal(sigPath string, pkg *ResolvedPackage
 			pluginCfg["permissions"] = permCfg
 		}
 
-		internal[pkg.Name] = pluginCfg
+		internal[pkg.Name] = pluginCfg 
 		config["$internal"] = internal
 
 		if out, err := json.MarshalIndent(config, "", "    "); err == nil {
