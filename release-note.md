@@ -1,3 +1,8 @@
+## [G0.1.223] - 2026-06-09
+
+### Feature Additions
+- **Lifecycle Scripts Control**: Added `--ignore-scripts` (`-I`) flag to `xfpm install` and `xfpm update` commands. This allows developers to bypass `preinstall`, `install`, and `postinstall` scripts during package resolution, drastically speeding up repetitive local installations where binary recompilation isn't necessary.
+
 ## [G0.1.222] - 2026-06-09
 
 ### Caching & Local Installation Fix

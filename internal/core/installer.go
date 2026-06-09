@@ -46,6 +46,7 @@ type Installer struct {
 	lpMu            sync.Mutex
 	AutoVerify      bool
 	NoInteract      bool
+	IgnoreScripts   bool
 	TargetPackages  map[string]bool
 	globalDirCache  sync.Map
 
@@ -209,8 +210,10 @@ func (i *Installer) Install(ctx context.Context, packages []*ResolvedPackage) (e
 	i.progress.Wait()
 
 	// ALWAYS run lifecycle scripts BEFORE exporting global binaries
-	if err := i.runLifecycleScripts(ctx, packages); err != nil {
-		return err
+	if !i.IgnoreScripts {
+		if err := i.runLifecycleScripts(ctx, packages); err != nil {
+			return err
+		}
 	}
 
 	if i.IsGlobal {
