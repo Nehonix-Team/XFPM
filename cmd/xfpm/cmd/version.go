@@ -15,29 +15,31 @@ var versionCmd = &cobra.Command{
 	Use:   "version",
 	Short: "Show detailed XFPM version and check for updates",
 	Run: func(cmd *cobra.Command, args []string) {
-		pterm.DefaultBox.WithTitle(pterm.LightBlue(" XFPM ENVIRONMENT ")).Println(
-			fmt.Sprintf("%s %s\n%s",
-				pterm.Bold.Sprint("XyPriss Fast Package Manager"),
-				pterm.Gray(utils.BinVersion),
-				pterm.Italic.Sprint("The ultra-fast package manager for the XyPriss ecosystem."),
-			),
-		)
-
 		s, _ := pterm.DefaultSpinner.Start("Checking registry for updates...")
 
 		client := http.Client{Timeout: 3 * time.Second}
 		resp, err := client.Get(utils.VersionCheckURL)
 		
+		desc := "The ultra-fast package manager for the XyPriss ecosystem."
+		
 		if err != nil || resp.StatusCode != http.StatusOK {
 			s.Fail("Could not connect to Nehonix Registry. You are currently offline or the server is unreachable.")
+			pterm.DefaultBox.WithTitle(pterm.LightBlue(" XFPM ENVIRONMENT ")).Println(
+				fmt.Sprintf("%s %s\n%s",
+					pterm.Bold.Sprint("XyPriss Fast Package Manager"),
+					pterm.Gray(utils.BinVersion),
+					pterm.Italic.Sprint(desc),
+				),
+			)
 			return
 		}
 		defer resp.Body.Close()
 
 		var data struct {
-			Latest  string `json:"latest"`
-			Message string `json:"message"`
-			Metadata struct {
+			Latest      string `json:"latest"`
+			Message     string `json:"message"`
+			Description string `json:"description"`
+			Metadata    struct {
 				ReleaseDate string `json:"releaseDate"`
 				Channel     string `json:"channel"`
 			} `json:"metadata"`
@@ -50,6 +52,18 @@ var versionCmd = &cobra.Command{
 
 		s.Success("Connected to Nehonix Registry")
 		pterm.Println()
+
+		if data.Description != "" {
+			desc = data.Description
+		}
+
+		pterm.DefaultBox.WithTitle(pterm.LightBlue(" XFPM ENVIRONMENT ")).Println(
+			fmt.Sprintf("%s %s\n%s",
+				pterm.Bold.Sprint("XyPriss Fast Package Manager"),
+				pterm.Gray(utils.BinVersion),
+				pterm.Italic.Sprint(desc),
+			),
+		)
 
 		var tableData [][]string
 		
