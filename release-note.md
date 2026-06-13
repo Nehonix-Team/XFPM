@@ -1,3 +1,8 @@
+## [G0.1.227] - 2026-06-13
+
+### Core Fixes & Stability
+- **Strict Lockfile Pruning**: Fixed an issue where `xfpm rm` (or manual removal of dependencies from `package.json`) did not correctly invalidate the existing `xfpm.resolve.lock` file, leaving "dead weight" packages in the dependency tree. The `xfpm uninstall` command now explicitly purges the lockfile, and the XLock resolver strictly enforces length equivalence (`len(rootDeps) == len(lockfile.RootVersions)`) to ensure perfect synchronization between `package.json` and the lockfile.
+
 ## [G0.1.226] - 2026-06-13
 
 ### Auto-Migration & Developer Experience
