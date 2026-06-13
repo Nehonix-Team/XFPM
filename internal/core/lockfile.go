@@ -19,6 +19,7 @@ type LockfileEntry struct {
 	Tarball              string            `json:"tarball"`
 	ResolvedDependencies map[string]string `json:"resolved_dependencies"`
 	DependencyRealNames  map[string]string `json:"dependency_real_names,omitempty"`
+	Bin                  json.RawMessage   `json:"bin,omitempty"`
 }
 
 // ReadLockfile reads and parses the xfpm.resolve.lock file from the project root.
@@ -65,6 +66,7 @@ func WriteLockfile(projectRoot string, pkgName string, pkgVersion string, resolv
 			Tarball:              tarball,
 			ResolvedDependencies: pkg.ResolvedDependencies,
 			DependencyRealNames:  pkg.DependencyRealNames,
+			Bin:                  pkg.Metadata.Bin,
 		}
 
 		lockfile.Dependencies[key] = entry
