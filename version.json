@@ -1,5 +1,5 @@
 {
-  "name": "XFPM (XyPriss Package Manager)",
+  "name": "XFPM (XyPriss Fast Package Manager)",
   "description": "The Fast Package Manager for the XyPriss ecosystem.",
   "warning": "CRITICAL: Public modifications to this file are strictly forbidden. Internal Nehonix metadata ONLY.",
   "latest": "vG0.1.227",
