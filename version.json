@@ -1,6 +1,6 @@
 {
   "name": "XFPM (XyPriss Package Manager)",
-  "description": "The ultra-fast package manager for the XyPriss ecosystem.",
+  "description": "The Fast Package Manager for the XyPriss ecosystem.",
   "warning": "CRITICAL: Public modifications to this file are strictly forbidden. Internal Nehonix metadata ONLY.",
   "latest": "vG0.1.227",
   "message": "Core: Strict lockfile validation. Uninstalling packages now correctly purges lockfile dead weight and triggers regeneration.",
