@@ -1,3 +1,8 @@
+## [G0.1.228] - 2026-06-13
+
+### CLI & User Experience
+- **Dynamic Version Metadata**: The `xfpm version` UI now dynamically fetches the environment description and latest release metadata directly from the Nehonix Proxy (`dll.nehonix.com`) instead of relying on hardcoded GitHub URLs. This ensures the CLI always displays perfectly synchronized official messaging.
+
 ## [G0.1.227] - 2026-06-13
 
 ### Core Fixes & Stability
