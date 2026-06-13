@@ -2,8 +2,8 @@
   "name": "XFPM (XyPriss Package Manager)",
   "description": "The ultra-fast package manager for the XyPriss ecosystem.",
   "warning": "CRITICAL: Public modifications to this file are strictly forbidden. Internal Nehonix metadata ONLY.",
-  "latest": "vG0.1.225",
-  "message": "Core: Fixed missing binary links and script executions in XLock mode by including Bin metadata in xfpm.resolve.lock.",
+  "latest": "vG0.1.226",
+  "message": "Core: Added lockfileVersion schema for silent, seamless migration of legacy xfpm.resolve.lock files.",
   "metadata": {
     "releaseDate": "2026-06-13",
     "channel": "stable"
