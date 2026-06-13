@@ -2,11 +2,13 @@ package core
 
 import (
 	"encoding/json"
+	"fmt"
 	"os"
 	"path/filepath"
 )
 
 type Lockfile struct {
+	LockfileVersion int                      `json:"lockfileVersion"`
 	Name         string                   `json:"name"`
 	Version      string                   `json:"version"`
 	Dependencies map[string]LockfileEntry `json:"dependencies"`
@@ -35,16 +37,21 @@ func ReadLockfile(projectRoot string) (*Lockfile, error) {
 		return nil, err
 	}
 
+	if lockfile.LockfileVersion < 2 {
+		return nil, fmt.Errorf("outdated lockfile version, requires regeneration")
+	}
+
 	return &lockfile, nil
 }
 
 // WriteLockfile generates and writes the xfpm.resolve.lock file based on resolved packages.
 func WriteLockfile(projectRoot string, pkgName string, pkgVersion string, resolvedPackages []*ResolvedPackage, rootVersions map[string]string) error {
 	lockfile := Lockfile{
-		Name:         pkgName,
-		Version:      pkgVersion,
-		Dependencies: make(map[string]LockfileEntry),
-		RootVersions: rootVersions,
+		LockfileVersion: 2,
+		Name:            pkgName,
+		Version:         pkgVersion,
+		Dependencies:    make(map[string]LockfileEntry),
+		RootVersions:    rootVersions,
 	}
 
 	for _, pkg := range resolvedPackages {
