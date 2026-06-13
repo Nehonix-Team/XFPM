@@ -212,11 +212,14 @@ func (r *Resolver) ResolveTree(ctx context.Context, projectRoot string, rootDeps
 	if projectRoot != "" {
 		lockfile, err := ReadLockfile(projectRoot)
 		if err == nil && lockfile != nil {
-			// Basic validation: check if all rootDeps match the lockfile rootVersions
+			// Basic validation: check if all rootDeps match the lockfile rootVersions exactly
 			valid := true
-			for name, req := range rootDeps {
-				resolvedVersion := lockfile.RootVersions[name]
-				if resolvedVersion == "" {
+			if len(rootDeps) != len(lockfile.RootVersions) {
+				valid = false
+			} else {
+				for name, req := range rootDeps {
+					resolvedVersion := lockfile.RootVersions[name]
+					if resolvedVersion == "" {
 					valid = false
 					break
 				}
@@ -231,6 +234,7 @@ func (r *Resolver) ResolveTree(ctx context.Context, projectRoot string, rootDeps
 					}
 				}
 			}
+		}
 			if valid && !r.Update && len(r.ForcePackages) == 0 {
 				utils.Info("Using 'XLock' resolution.")
 				

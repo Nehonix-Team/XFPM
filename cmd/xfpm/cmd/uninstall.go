@@ -100,6 +100,10 @@ var uninstallCmd = &cobra.Command{
 		// Update package.json
 		if !global && pkgJsonPath != "" {
 			updatePackageJsonRemove(pkgJsonPath, args)
+			// Remove lockfile so it's regenerated cleanly on next install
+			lockfile := filepath.Join(projectRoot, "xfpm.resolve.lock")
+			os.Remove(lockfile)
+			pterm.Printf("   %s Removed xfpm.resolve.lock (will regenerate on next install)\n", pterm.FgYellow.Sprint("🗑"))
 		}
 
 		fmt.Println()
