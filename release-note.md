@@ -1,3 +1,8 @@
+## [G0.1.226] - 2026-06-13
+
+### Auto-Migration & Developer Experience
+- **Seamless Lockfile Migration**: Introduced a schema versioning mechanism (`lockfileVersion`) to `xfpm.resolve.lock`. XFPM now intelligently detects legacy lockfiles (v1) and transparently falls back to global resolution to regenerate a compliant v2 lockfile automatically. This eliminates the need for developers to manually delete old lockfiles (`rm xfpm.resolve.lock`) to resolve missing binary linking issues introduced in previous updates.
+
 ## [G0.1.225] - 2026-06-13
 
 ### Core Fixes & Stability
