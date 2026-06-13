@@ -252,6 +252,7 @@ func (r *Resolver) ResolveTree(ctx context.Context, projectRoot string, rootDeps
 								Integrity: entry.Integrity,
 								Tarball:   entry.Tarball,
 							},
+							Bin: entry.Bin,
 						},
 						ResolvedDependencies: entry.ResolvedDependencies,
 						DependencyRealNames:  entry.DependencyRealNames,

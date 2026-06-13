@@ -1,3 +1,8 @@
+## [G0.1.225] - 2026-06-13
+
+### Core Fixes & Stability
+- **XLock Binary Resolution**: Fixed a critical bug in `xlock` mode where installed packages would fail to link their executable binaries (e.g., `next: not found`). The `xfpm.resolve.lock` file now correctly serializes and deserializes the `bin` field, ensuring that ultra-fast installations maintain 100% binary compatibility.
+
 ## [G0.1.224] - 2026-06-09
 
 ### Core Stability & Data Preservation
