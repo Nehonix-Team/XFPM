@@ -49,7 +49,7 @@ var versionCmd = &cobra.Command{
 			s.Fail("Received malformed data from registry.")
 			return
 		}
-
+ 
 		s.Success("Connected to Nehonix Registry")
 		pterm.Println()
 
