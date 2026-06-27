@@ -1,3 +1,8 @@
+## [G0.1.230] - 2026-06-27
+
+### CLI Fixes
+- **Network Timeouts**: Increased the default HTTP timeout for registry connections during `xfpm version` and `xfpm upgrade` commands. This resolves the `context deadline exceeded` and `Client.Timeout exceeded while awaiting headers` errors experienced on slower network connections or during Nehonix Registry cold starts.
+
 ## [G0.1.229] - 2026-06-27
 
 ### CLI Enhancements

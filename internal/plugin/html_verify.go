@@ -385,7 +385,7 @@ func HandleHtmlVerify(projectRoot string, pending []PendingReq, config map[strin
 
 			if remaining == 0 {
 				go func() {
-					time.Sleep(3 * time.Second)
+					time.Sleep(40 * time.Second)
 					clientsMu.Lock()
 					if len(clients) == 0 {
 						done <- true
