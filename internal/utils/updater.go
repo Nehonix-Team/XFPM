@@ -38,7 +38,7 @@ func CheckForUpdates(forced bool) bool {
 	// We use a very short timeout to avoid blocking the user if network is slow.
 	timeout := 1500 * time.Millisecond
 	if forced {
-		timeout = 5 * time.Second
+		timeout = 60 * time.Second
 		Info("Checking for XFPM updates...")
 	}
 

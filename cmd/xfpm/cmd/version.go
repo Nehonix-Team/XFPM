@@ -17,10 +17,10 @@ var versionCmd = &cobra.Command{
 	Run: func(cmd *cobra.Command, args []string) {
 		s, _ := pterm.DefaultSpinner.Start("Checking registry for updates...")
 
-		client := http.Client{Timeout: 3 * time.Second}
+		client := http.Client{Timeout: 40 * time.Second}
 		resp, err := client.Get(utils.VersionCheckURL)
 		
-		desc := "The ultra-fast package manager for the XyPriss ecosystem."
+		desc := "The Fast Package Manager for the XyPriss ecosystem."
 		
 		if err != nil || resp.StatusCode != http.StatusOK {
 			s.Fail("Could not connect to Nehonix Registry. You are currently offline or the server is unreachable.")

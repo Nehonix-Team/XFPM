@@ -34,6 +34,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/Nehonix-Team/XFMP/internal/utils"
 	"github.com/google/uuid"
 )
 
@@ -53,7 +54,7 @@ func DownloadLatestTemplate() (string, error) {
 	
 	// 1. Get latest release metadata
 	req, _ := http.NewRequest("GET", RepoURL, nil)
-	req.Header.Set("User-Agent", "XFPM-Client/1.0")
+	req.Header.Set("User-Agent", fmt.Sprintf("XFPM@CLIENT1.0/%s", utils.BinVersion))
 	
 	resp, err := client.Do(req)
 	if err != nil {
