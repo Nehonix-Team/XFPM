@@ -2,10 +2,10 @@
   "name": "XFPM (XyPriss Fast Package Manager)",
   "description": "The Fast Package Manager for the XyPriss ecosystem.",
   "warning": "CRITICAL: Public modifications to this file are strictly forbidden. Internal Nehonix metadata ONLY.",
-  "latest": "vG0.1.228",
-  "message": "CLI: The 'xfpm version' command now dynamically fetches the environment description directly from the Nehonix Proxy to stay perfectly synced with official metadata.",
+  "latest": "vG0.1.229",
+  "message": "CLI: Introducing the new 'xfpm serve' command, a modern, lightweight, frictionless local file server with recursive search, folder navigation, and a built-in media viewer. Stay synced and explore your projects with a professional UI right from your terminal.",
   "metadata": {
-    "releaseDate": "2026-06-13",
+    "releaseDate": "2026-06-27",
     "channel": "stable"
   }
 }
