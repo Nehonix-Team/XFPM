@@ -1,3 +1,10 @@
+## [G0.1.229] - 2026-06-27
+
+### CLI Enhancements
+- **New `xfpm serve` Command**: Introduced a modern, lightweight local file server to explore project directories securely and efficiently. 
+- **Built-in File Explorer UI**: Navigate folders, preview text files, source code, images, and videos directly within a beautiful, glassmorphism-styled web interface.
+- **Recursive Search Engine**: Added an instantaneous, deep recursive search functionality (up to depth 3) to find and navigate to any file instantly.
+
 ## [G0.1.228] - 2026-06-13
 
 ### CLI & User Experience
