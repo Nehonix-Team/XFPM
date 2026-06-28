@@ -2,10 +2,10 @@
   "name": "XFPM (XyPriss Fast Package Manager)",
   "description": "The Fast Package Manager for the XyPriss ecosystem.",
   "warning": "CRITICAL: Public modifications to this file are strictly forbidden. Internal Nehonix metadata ONLY.",
-  "latest": "vG0.1.230",
-  "message": "CLI: Fixed 'context deadline exceeded' error during 'xfpm version' and 'xfpm upgrade' by increasing network timeout limits.",
+  "latest": "vG0.1.231",
+  "message": "CLI: Enhanced 'xfpm serve' UI with custom icons for XFPM environments and integrated audio playback support.",
   "metadata": {
-    "releaseDate": "2026-06-27",
+    "releaseDate": "2026-06-28",
     "channel": "stable"
   }
 }
