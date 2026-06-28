@@ -163,7 +163,8 @@ func StartServer(port int, dir string, tmplContent string) error {
 
 	actualPort := listener.Addr().(*net.TCPAddr).Port
 	utils.Success("XFPM Server started successfully!")
-	fmt.Printf("➜  Local:   http://localhost:%d\n", actualPort)
+	// fmt.Printf("➜  Local:   http://localhost:%d\n", actualPort)
+	fmt.Printf("➜  Serving HTTP on :: port %d (http://[::]:%d/)\n", actualPort, actualPort)
 	fmt.Printf("➜  Serving: %s\n", dir)
 	fmt.Println("Press Ctrl+C to stop.")
 

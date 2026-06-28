@@ -1,3 +1,9 @@
+## [G0.1.232] - 2026-06-28
+
+### CLI Enhancements
+- **PDF Viewer**: `xfpm serve` now renders PDF files directly in the browser using pdf.js. All pages are rendered progressively to `<canvas>` elements, with zoom controls (50% to 300%) and a scroll-based page indicator. Falls back gracefully to a download link when offline or if pdf.js cannot be loaded.
+- **Server Output**: Updated the startup message of `xfpm serve` to display the full IPv6-style listening address for clarity.
+
 ## [G0.1.231] - 2026-06-28
 
 ### CLI Enhancements

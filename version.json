@@ -2,8 +2,8 @@
   "name": "XFPM (XyPriss Fast Package Manager)",
   "description": "The Fast Package Manager for the XyPriss ecosystem.",
   "warning": "CRITICAL: Public modifications to this file are strictly forbidden. Internal Nehonix metadata ONLY.",
-  "latest": "vG0.1.231",
-  "message": "CLI: Enhanced 'xfpm serve' UI with custom icons for XFPM environments and integrated audio playback support.",
+  "latest": "vG0.1.232",
+  "message": "CLI: 'xfpm serve' now features a built-in PDF viewer with multi-page rendering and zoom controls.",
   "metadata": {
     "releaseDate": "2026-06-28",
     "channel": "stable"
