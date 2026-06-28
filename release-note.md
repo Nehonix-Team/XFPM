@@ -1,3 +1,10 @@
+## [G0.1.231] - 2026-06-28
+
+### CLI Enhancements
+- **XFPM Serve**: Improved the local file server (`xfpm serve`) UI. Added specific iconography and styling for `.xfpm` folders and `xfpm.resolve.lock` files to make navigating XyPriss environments clearer.
+- **Audio Previews**: Integrated a new audio player in the `xfpm serve` UI to easily preview `.mp3`, `.wav`, `.ogg`, `.flac`, and `.aac` files directly from the browser.
+- **UI Fixes**: Corrected flexbox layout issues in the breadcrumb navigation bar, ensuring smooth horizontal rendering.
+
 ## [G0.1.230] - 2026-06-27
 
 ### CLI Fixes
