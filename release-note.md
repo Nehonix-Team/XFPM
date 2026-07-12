@@ -1,3 +1,8 @@
+## [G0.1.233] - 2026-07-12
+
+### Performance Optimization: Lockfile System
+- **Partial Lockfile Caching**: XFPM now intelligently re-uses unchanged parts of the `xfpm.resolve.lock` even when individual dependencies are updated. This eliminates full-tree network resolution, cutting processing times from ~36 seconds to under 2 seconds.
+
 ## [G0.1.232] - 2026-06-28
 
 ### CLI Enhancements

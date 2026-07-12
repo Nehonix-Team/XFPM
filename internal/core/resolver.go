@@ -22,6 +22,7 @@ type ResolvedPackage struct {
 	ResolvedDependencies map[string]string
 	LocalPath            string // If set, this package is installed from a local path
 	IsRevoked            bool
+	IsFromLockfile       bool
 	RevokedBy            string // Latest version that revoked this one
 	DependencyRealNames  map[string]string // Mapping from dependency alias to real package name
 }
@@ -260,11 +261,57 @@ func (r *Resolver) ResolveTree(ctx context.Context, projectRoot string, rootDeps
 						},
 						ResolvedDependencies: entry.ResolvedDependencies,
 						DependencyRealNames:  entry.DependencyRealNames,
+						IsFromLockfile:       true,
 					}
 					all = append(all, pkg)
 					r.resolved.Store(key, pkg)
 				}
 				return all, lockfile.RootVersions, nil
+			} else if !r.Update && len(r.ForcePackages) == 0 {
+				utils.Info("Partial 'XLock' resolution (some dependencies changed).")
+				for key, entry := range lockfile.Dependencies {
+					name := key
+					atIdx := strings.LastIndex(key, "@")
+					if atIdx > 0 {
+						name = key[:atIdx]
+					}
+					sv, _ := semver.NewVersion(entry.Version)
+					
+					pkg := &ResolvedPackage{
+						Name:          name,
+						Version:       entry.Version,
+						SemverVersion: sv,
+						Metadata: &VersionMetadata{
+							Dist: Dist{
+								Integrity: entry.Integrity,
+								Tarball:   entry.Tarball,
+							},
+							Bin: entry.Bin,
+						},
+						ResolvedDependencies: entry.ResolvedDependencies,
+						DependencyRealNames:  entry.DependencyRealNames,
+						IsFromLockfile:       true,
+					}
+					r.resolved.Store(key, pkg)
+					
+					current, _ := r.resolvedByName.LoadOrStore(name, []*ResolvedPackage{})
+					list := current.([]*ResolvedPackage)
+					r.resolvedByName.Store(name, append(list, pkg))
+				}
+				
+				for name, req := range rootDeps {
+					resolvedVersion := lockfile.RootVersions[name]
+					if resolvedVersion != "" {
+						if req == "latest" || strings.HasPrefix(req, "file:") || strings.HasPrefix(req, "workspace:") {
+							continue
+						}
+						constraint, cErr := semver.NewConstraint(req)
+						sv, sErr := semver.NewVersion(resolvedVersion)
+						if cErr == nil && sErr == nil && constraint.Check(sv) {
+							r.resolutionCache.Store(name+"@"+req, resolvedVersion)
+						}
+					}
+				}
 			}
 		}
 	}
@@ -335,6 +382,10 @@ func (r *Resolver) ResolveTree(ctx context.Context, projectRoot string, rootDeps
 			defer wg.Done()
 			sem <- struct{}{}
 			defer func() { <-sem }()
+
+			if pkg.IsFromLockfile {
+				return
+			}
 
 			resolvedDeps := make(map[string]string)
 			
