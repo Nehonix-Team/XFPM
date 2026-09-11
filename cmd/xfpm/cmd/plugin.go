@@ -188,44 +188,25 @@ var pluginVerifyCmd = &cobra.Command{
 						Show()
 
 					if len(selected) > 0 {
-						internalRaw, ok := config["$internal"]
-						if !ok { internalRaw = make(map[string]interface{}) }
-						internal, ok := internalRaw.(map[string]interface{})
-						if !ok { internal = make(map[string]interface{}) }
-
 						selectedSet := make(map[string]bool)
 						for _, s := range selected { selectedSet[s] = true }
 
+						updates := make(map[string]interface{})
 						for _, req := range requiresPrompt {
 							if !selectedSet[req.Name] { continue }
 
-							pluginCfgRaw, ok := internal[req.Name]
-							if !ok { pluginCfgRaw = make(map[string]interface{}) }
-							pluginCfg, ok := pluginCfgRaw.(map[string]interface{})
-							if !ok { pluginCfg = make(map[string]interface{}) }
-
-							sigCfgRaw, ok := pluginCfg["signature"]
-							if !ok { sigCfgRaw = make(map[string]interface{}) }
-							sigCfg, ok := sigCfgRaw.(map[string]interface{})
-							if !ok { sigCfg = make(map[string]interface{}) }
-							sigCfg["author_key"] = req.Identity
-							pluginCfg["signature"] = sigCfg
+							safeName := strings.ReplaceAll(req.Name, ".", "\\.")
+							updates["$internal."+safeName+".signature.author_key"] = req.Identity
 
 							if req.Privileges != "" && req.Privileges != "none" {
-								permCfgRaw, ok := pluginCfg["permissions"]
-								if !ok { permCfgRaw = make(map[string]interface{}) }
-								permCfg, ok := permCfgRaw.(map[string]interface{})
-								if !ok { permCfg = make(map[string]interface{}) }
-								permCfg["allowedHooks"] = strings.Split(req.Privileges, ",")
-								pluginCfg["permissions"] = permCfg
+								updates["$internal."+safeName+".permissions.allowedHooks"] = strings.Split(req.Privileges, ",")
 							}
-							internal[req.Name] = pluginCfg
 						}
-						config["$internal"] = internal
 
-						if out, err := json.MarshalIndent(config, "", "    "); err == nil {
-							os.WriteFile(configPath, out, 0644)
+						if err := utils.UpdateJsonFile(configPath, updates); err == nil {
 							utils.Success("Authorization granted for %d plugin(s).", len(selected))
+						} else {
+							utils.Error("Failed to update config file %s: %v", configPath, err)
 						}
 					} else {
 						utils.Info("No plugins selected for authorization.")

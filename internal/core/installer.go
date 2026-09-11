@@ -1028,35 +1028,21 @@ func (i *Installer) VerifySignatureInternal(sigPath string, pkg *ResolvedPackage
 		if i.NoInteract {
 			utils.Info("Auto-verifying plugin %s (Non-interactive mode)...", pkg.Name)
 		}
-		pluginCfgRaw, ok := internal[pkg.Name]
-		if !ok { pluginCfgRaw = make(map[string]interface{}) }
-		pluginCfg, ok := pluginCfgRaw.(map[string]interface{})
-		if !ok { pluginCfg = make(map[string]interface{}) }
 
-		sigCfgRaw, ok := pluginCfg["signature"]
-		if !ok { sigCfgRaw = make(map[string]interface{}) }
-		sigCfg, ok := sigCfgRaw.(map[string]interface{})
-		if !ok { sigCfg = make(map[string]interface{}) }
-
-		sigCfg["author_key"] = sigData.AuthorKey
-		pluginCfg["signature"] = sigCfg
-
-		if sigData.Privileges != "" && sigData.Privileges != "none" {
-			permCfgRaw, ok := pluginCfg["permissions"]
-			if !ok { permCfgRaw = make(map[string]interface{}) }
-			permCfg, ok := permCfgRaw.(map[string]interface{})
-			if !ok { permCfg = make(map[string]interface{}) }
-
-			permCfg["allowedHooks"] = strings.Split(sigData.Privileges, ",")
-			pluginCfg["permissions"] = permCfg
+		safeName := strings.ReplaceAll(pkg.Name, ".", "\\.")
+		updates := map[string]interface{}{
+			"$internal." + safeName + ".signature.author_key": sigData.AuthorKey,
 		}
 
-		internal[pkg.Name] = pluginCfg 
-		config["$internal"] = internal
+		if sigData.Privileges != "" && sigData.Privileges != "none" {
+			updates["$internal."+safeName+".permissions.allowedHooks"] = strings.Split(sigData.Privileges, ",")
+		}
 
-		if out, err := json.MarshalIndent(config, "", "    "); err == nil {
-			os.WriteFile(configPath, out, 0644)
+		if err := utils.UpdateJsonFile(configPath, updates); err == nil {
 			utils.Success("Plugin %s trusted successfully. Developer ID pinned.", pkg.Name)
+		} else {
+			utils.Error("Failed to update config file %s: %v", configPath, err)
+			return err
 		}
 		return nil
 	} else {
