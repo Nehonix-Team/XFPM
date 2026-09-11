@@ -1,3 +1,9 @@
+## [G0.1.234] - 2026-09-11
+
+### Security & Config Preservation
+- **Non-Destructive Plugin Verification**: Resolved a critical issue in `xfpm plugin verify` where `xypriss.config.jsonc` was completely re-serialized using `json.MarshalIndent`. This previously stripped all header comments, reordered object keys alphabetically, and escaped ampersands (`&` to `\u0026`).
+- **Enhanced JSONC Scanner**: Upgraded `UpdateJsonFile`, `RemoveFromJsonFile`, and `GetJsonValue` with `findJsonRoot` to correctly isolate and preserve top-level comments (headers, license blocks) and trailing comments in JSONC files.
+
 ## [G0.1.233] - 2026-07-12
 
 ### Performance Optimization: Lockfile System
