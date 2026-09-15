@@ -215,6 +215,8 @@ var pluginVerifyCmd = &cobra.Command{
 			}
 		}
 
+		var verifiedPlugins []*core.ResolvedPackage
+
 		for _, p := range pending {
 			// pterm.Print("\033[H\033[2J") // Clear
 			pkgName := p["name"]
@@ -238,6 +240,13 @@ var pluginVerifyCmd = &cobra.Command{
 			rootDest := paths.NodeModulesPkgDir(projectRoot, pkgName)
 			utils.Link(pkgDir, rootDest)
 			utils.Success("Plugin %s@%s fully installed.", pkgName, pkgVer)
+			verifiedPlugins = append(verifiedPlugins, pkg)
+		}
+
+		if len(verifiedPlugins) > 0 {
+			if err := installer.RunPluginLifecycleScripts(context.Background(), verifiedPlugins); err != nil {
+				utils.Warn("Plugin lifecycle script execution warning: %v", err)
+			}
 		}
 
 		os.Remove(pendingPath)

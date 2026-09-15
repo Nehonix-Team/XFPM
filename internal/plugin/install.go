@@ -1,6 +1,7 @@
 package plugin
 
 import (
+	"context"
 	"fmt"
 
 	"github.com/Nehonix-Team/XFMP/internal/core"
@@ -34,6 +35,8 @@ func InstallPendingPlugin(projectRoot, pkgName, pkgVer string) error {
 	
 	rootDest := paths.NodeModulesPkgDir(projectRoot, pkgName)
 	utils.Link(pkgDir, rootDest)
+
+	_ = inst.RunPluginLifecycleScripts(context.Background(), []*core.ResolvedPackage{pkg})
 	
 	utils.Success("Plugin %s@%s successfully linked to project.", pkgName, pkgVer)
 	return nil
