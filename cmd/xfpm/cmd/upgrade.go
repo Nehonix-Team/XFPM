@@ -11,15 +11,23 @@ import (
 	"github.com/spf13/cobra"
 )
 
+var forceUpgrade bool
+
 var upgradeCmd = &cobra.Command{
 	Use:   "upgrade",
 	Short: "Standard check and installation of the latest XFPM version",
-	Long:  `The upgrade command forces a check against the Nehonix GitHub registry to see if a newer version of XFPM is available. If found, it will prompt to execute the official install script to update the binary in-place.`,
+	Long:  `The upgrade command forces a check against the Nehonix GitHub registry to see if a newer version of XFPM is available. If found, it will prompt to execute the official install script to update the binary in-place. Use --force (-f) to bypass version checks and install the latest version directly.`,
 	Run: func(cmd *cobra.Command, args []string) {
+		if forceUpgrade {
+			utils.Info("Forcing XFPM upgrade (bypassing version check)...")
+			utils.PerformSelfUpdate()
+			return
+		}
 		utils.CheckForUpdates(true)
 	},
 }
 
 func init() {
+	upgradeCmd.Flags().BoolVarP(&forceUpgrade, "force", "f", false, "Force installation of the latest XFPM version bypassing version check")
 	RootCmd.AddCommand(upgradeCmd)
 }
