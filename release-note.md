@@ -3,6 +3,9 @@
 ### Plugin Lifecycle & Verification
 - **Verified Plugin Hook Execution (`postinstall`)**: Resolved issue #13 in `xfpm plugin verify` (CLI interactive, web dashboard `-w`/`--html`, and non-interactive `-n` mode) and auto-verification where plugin `postinstall` (and `preinstall`/`install`) lifecycle scripts were skipped. Added `RunPluginLifecycleScripts` to ensure verified plugin binaries are dynamically retrieved or set up immediately upon authorization.
 
+### CLI Enhancements
+- **Forced Upgrade Flag (`xfpm upgrade --force` / `-f`)**: Added `--force` (`-f`) flag to `xfpm upgrade` allowing users to bypass version checks and directly download and execute the latest installer script.
+
 ## [G0.1.234] - 2026-09-11
 
 ### Security & Config Preservation
