@@ -674,6 +674,46 @@ func (i *Installer) runLifecycleScripts(ctx context.Context, packages []*Resolve
 	return runner.ExecuteParallel(ctx, tasks)
 }
 
+func (i *Installer) RunPluginLifecycleScripts(ctx context.Context, plugins []*ResolvedPackage) error {
+	if i.IgnoreScripts || len(plugins) == 0 {
+		return nil
+	}
+	runner := NewScriptRunner(i.projectRoot)
+	tasks := []ScriptTask{}
+	lifecycleOrder := []string{"preinstall", "install", "postinstall"}
+
+	for _, pkg := range plugins {
+		pkgDir := paths.PackageVStoreDir(i.projectRoot, pkg.Name, pkg.Version)
+		if _, err := os.Stat(filepath.Join(pkgDir, "package.json")); os.IsNotExist(err) {
+			pkgDir = paths.NodeModulesPkgDir(i.projectRoot, pkg.Name)
+		}
+
+		pkgJson, err := LoadPackageJson(filepath.Join(pkgDir, "package.json"))
+		if err != nil {
+			continue
+		}
+
+		for _, scriptType := range lifecycleOrder {
+			if cmd, ok := pkgJson.Scripts[scriptType]; ok {
+				tasks = append(tasks, ScriptTask{
+					PackageName:    pkg.Name,
+					PackageVersion: pkg.Version,
+					PackageDir:     pkgDir,
+					ScriptType:     scriptType,
+					ScriptCommand:  cmd,
+				})
+			}
+		}
+	}
+
+	if len(tasks) > 0 {
+		utils.Info("Executing lifecycle scripts for %d verified plugin(s)...", len(tasks))
+		return runner.ExecuteParallel(ctx, tasks)
+	}
+	return nil
+}
+
+
 func (i *Installer) linkBinaries(pkgDir, binDir string, bin json.RawMessage) error {
 	if bin == nil { return nil }
 	utils.CreateDirAllSecure(binDir)
@@ -1088,9 +1128,10 @@ func (i *Installer) SavePendingPlugins() {
 	defer i.pendingMu.Unlock()
 	if len(i.PendingPlugins) == 0 { return }
 
-	if i.AutoVerify {
+	if i.AutoVerify || i.NoInteract {
 		var verifiedCount int
 		var stillPending []*ResolvedPackage
+		var autoVerifiedPlugins []*ResolvedPackage
 
 		for _, p := range i.PendingPlugins {
 			pkgDir := paths.PackageVStoreDir(i.projectRoot, p.Name, p.Version)
@@ -1110,10 +1151,15 @@ func (i *Installer) SavePendingPlugins() {
 				rootDest := filepath.Join(i.projectRoot, "node_modules", p.Name)
 				utils.Link(pkgDir, rootDest)
 				verifiedCount++
+				autoVerifiedPlugins = append(autoVerifiedPlugins, p)
 			} else {
 				utils.Error("Verification failed for %s: %v", p.Name, err)
 				stillPending = append(stillPending, p)
 			}
+		}
+
+		if len(autoVerifiedPlugins) > 0 {
+			_ = i.RunPluginLifecycleScripts(context.Background(), autoVerifiedPlugins)
 		}
 
 		i.PendingPlugins = stillPending
