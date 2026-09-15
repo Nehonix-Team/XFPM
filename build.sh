@@ -22,7 +22,7 @@ ENTRY_POINT="./cmd/xfpm"
 # Extract version from Go source
 VERSION=$(grep "BinVersion =" internal/utils/lib_version.go | cut -d'"' -f2)
 
-echo -e "\n${BLUE}${BOLD} 🚀 XFPM BUILD ENGINE ${NC} ${DIM}v${VERSION}${NC}"
+echo -e "\n${BLUE}${BOLD} 🚀 XFPM BUILD ENGINE ${NC} ${DIM}${VERSION}${NC}"
 echo -e "${DIM} ──────────────────────────────────────────────────${NC}\n"
 
 # Check for compress flag
