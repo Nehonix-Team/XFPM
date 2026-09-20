@@ -6,6 +6,12 @@
 - **Multi-Target Environment Masking**: Recursive multi-target `.env` discovery across monorepos and subprojects (`FindDescendantEnvTargets`), preventing cross-package secret leaks.
 - **Deterministic IPC Authentication**: Replaced legacy hashing with XSec (`xypriss-security`) deterministic Ed25519/HMAC key derivation for IPC socket discovery between libXESS and XyPriss processes.
 
+### Fixes & Confinement Resiliency
+- **Nested Confinement Conflict Prevention**: Resolved `move_mount() failed: No such file or directory` (exit status 32) when running nested `xfpm` commands (e.g. `xfpm run build` invoking `xfpm exec rollup`). Confinement state is now tracked via `LIBXESS_ACTIVE=1`, allowing nested invocations to transparently inherit the active namespace without attempting duplicate `unshare -r -m` mounts.
+- **Scoped User Temp Directory**: Scoped all libXESS canary decoys and IPC sockets inside the user-isolated directory (`/tmp/nehonix.xypriss.data/xuser/<id>/xess`), completely eliminating root-level orphaned temp folders and aligning lifecycle management with server shutdown hooks.
+- **Graceful Shutdown & Signal Propagation**: Fixed `SIGINT`/`SIGTERM` handling in `xfpm run` and `xfpm dev` to propagate signals reliably to child runtime processes, allowing `FastServer.stop()` and resource cleanups to finish cleanly.
+- **Scanner Directory Filtering**: Hardened `FindDescendantEnvTargets` to skip non-runtime directories (`tests`, `test`, `fixtures`, `scratch`, `tmp`, `temp`, `coverage`), preventing decoy mounts over test suites and build artifacts.
+
 
 ## [G0.1.236] - 2026-09-15
 
