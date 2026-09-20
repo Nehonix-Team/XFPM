@@ -197,5 +197,9 @@ func buildRunEnv(dir string) []string {
 	}
 
 	env := utils.FormatPathEnv(os.Environ(), path)
-	return append(env, "XFPM_VERSION="+utils.BinVersion)
+	tempDir := libxess.DefaultTempDir()
+	env = append(env, "XFPM_VERSION="+utils.BinVersion)
+	env = append(env, "XESS_TEMP_DIR="+tempDir)
+	env = append(env, "XYPRISS_USER_TMP="+filepath.Dir(tempDir))
+	return env
 }
