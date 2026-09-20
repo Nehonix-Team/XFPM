@@ -11,10 +11,12 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 
 	"github.com/Nehonix-Team/XFMP/internal/core"
 	"github.com/Nehonix-Team/XFMP/internal/paths"
 	"github.com/Nehonix-Team/XFMP/internal/utils"
+	libxess "github.com/Nehonix-Team/libXESS"
 	"github.com/spf13/cobra"
 )
 
@@ -87,9 +89,40 @@ func init() {
 }
 
 func executeShell(command, dir string) error {
+	baseEnv := buildRunEnv(dir)
+	envPath := filepath.Join(dir, ".env")
+
+	if _, err := os.Stat(envPath); err == nil {
+		var shellCmd []string
+		if runtime.GOOS == "windows" {
+			shellCmd = []string{"cmd.exe", "/c", command}
+		} else {
+			shellCmd = []string{"sh", "-c", command}
+		}
+
+		sup, err := libxess.NewSupervisor(libxess.Config{
+			ProjectDir:  dir,
+			EnvFileName: ".env",
+			Command:     shellCmd,
+			BaseEnv:     baseEnv,
+		})
+		if err == nil {
+			cmd, err := sup.Start()
+			if err == nil {
+				defer sup.Stop()
+				utils.Success("🛡️  libXESS Shield active (Bipolar Zero-Trust Confinement)")
+				cmd.Stdout = os.Stdout
+				cmd.Stderr = os.Stderr
+				cmd.Stdin = os.Stdin
+				return cmd.Run()
+			}
+			utils.Warn("libXESS confinement fallback: %v", err)
+		}
+	}
+
 	cmd := utils.GetShellCommandRaw(command)
 	cmd.Dir = dir
-	cmd.Env = buildRunEnv(dir)
+	cmd.Env = baseEnv
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
 	cmd.Stdin = os.Stdin
@@ -97,9 +130,34 @@ func executeShell(command, dir string) error {
 }
 
 func executeCommand(name string, args []string, dir string) error {
+	baseEnv := buildRunEnv(dir)
+	envPath := filepath.Join(dir, ".env")
+
+	if _, err := os.Stat(envPath); err == nil {
+		fullCmd := append([]string{name}, args...)
+		sup, err := libxess.NewSupervisor(libxess.Config{
+			ProjectDir:  dir,
+			EnvFileName: ".env",
+			Command:     fullCmd,
+			BaseEnv:     baseEnv,
+		})
+		if err == nil {
+			cmd, err := sup.Start()
+			if err == nil {
+				defer sup.Stop()
+				utils.Success("🛡️  libXESS Shield active (Bipolar Zero-Trust Confinement)")
+				cmd.Stdout = os.Stdout
+				cmd.Stderr = os.Stderr
+				cmd.Stdin = os.Stdin
+				return cmd.Run()
+			}
+			utils.Warn("libXESS confinement fallback: %v", err)
+		}
+	}
+
 	cmd := exec.Command(name, args...)
 	cmd.Dir = dir
-	cmd.Env = buildRunEnv(dir)
+	cmd.Env = baseEnv
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
 	cmd.Stdin = os.Stdin
