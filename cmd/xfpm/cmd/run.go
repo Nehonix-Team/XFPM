@@ -99,15 +99,12 @@ func executeShell(command, dir string) error {
 			shellCmd = []string{"sh", "-c", command}
 		}
 
-		xyTempDir := filepath.Join(os.TempDir(), "nehonix.xypriss.data", "xess")
-		_ = os.MkdirAll(xyTempDir, 0700)
-
 		sup, err := libxess.NewSupervisor(libxess.Config{
 			ProjectDir:  dir,
 			EnvFileName: ".env",
 			Command:     shellCmd,
 			BaseEnv:     baseEnv,
-			TempDir:     xyTempDir,
+			TempDir:     libxess.DefaultTempDir(),
 		})
 		if err == nil {
 			cmd, err := sup.Start()
@@ -138,15 +135,12 @@ func executeCommand(name string, args []string, dir string) error {
 
 	if _, err := os.Stat(envPath); err == nil {
 		fullCmd := append([]string{name}, args...)
-		xyTempDir := filepath.Join(os.TempDir(), "nehonix.xypriss.data", "xess")
-		_ = os.MkdirAll(xyTempDir, 0700)
-
 		sup, err := libxess.NewSupervisor(libxess.Config{
 			ProjectDir:  dir,
 			EnvFileName: ".env",
 			Command:     fullCmd,
 			BaseEnv:     baseEnv,
-			TempDir:     xyTempDir,
+			TempDir:     libxess.DefaultTempDir(),
 		})
 		if err == nil {
 			cmd, err := sup.Start()
