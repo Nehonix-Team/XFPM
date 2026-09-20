@@ -111,10 +111,7 @@ func executeShell(command, dir string) error {
 			if err == nil {
 				defer sup.Stop()
 				utils.Success("libXESS loaded (Bipolar Zero-Trust Confinement)")
-				cmd.Stdout = os.Stdout
-				cmd.Stderr = os.Stderr
-				cmd.Stdin = os.Stdin
-				return cmd.Run()
+				return runProcess(cmd)
 			}
 			utils.Warn("libXESS confinement fallback: %v", err)
 		}
@@ -123,10 +120,7 @@ func executeShell(command, dir string) error {
 	cmd := utils.GetShellCommandRaw(command)
 	cmd.Dir = dir
 	cmd.Env = baseEnv
-	cmd.Stdout = os.Stdout
-	cmd.Stderr = os.Stderr
-	cmd.Stdin = os.Stdin
-	return cmd.Run()
+	return runProcess(cmd)
 }
 
 func executeCommand(name string, args []string, dir string) error {
@@ -147,10 +141,7 @@ func executeCommand(name string, args []string, dir string) error {
 			if err == nil {
 				defer sup.Stop()
 				utils.Success("libXESS loaded (Bipolar Zero-Trust Confinement)")
-				cmd.Stdout = os.Stdout
-				cmd.Stderr = os.Stderr
-				cmd.Stdin = os.Stdin
-				return cmd.Run()
+				return runProcess(cmd)
 			}
 			utils.Warn("libXESS confinement fallback: %v", err)
 		}
@@ -159,10 +150,35 @@ func executeCommand(name string, args []string, dir string) error {
 	cmd := exec.Command(name, args...)
 	cmd.Dir = dir
 	cmd.Env = baseEnv
+	return runProcess(cmd)
+}
+
+func runProcess(cmd *exec.Cmd) error {
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
 	cmd.Stdin = os.Stdin
-	return cmd.Run()
+
+	sigChan := utils.SignalManager.Subscribe()
+	defer utils.SignalManager.Unsubscribe(sigChan)
+
+	if err := cmd.Start(); err != nil {
+		return err
+	}
+
+	done := make(chan struct{})
+	go func() {
+		select {
+		case sig, ok := <-sigChan:
+			if ok && sig != nil && cmd.Process != nil {
+				_ = cmd.Process.Signal(sig)
+			}
+		case <-done:
+		}
+	}()
+
+	err := cmd.Wait()
+	close(done)
+	return err
 }
 
 func buildRunEnv(dir string) []string {
