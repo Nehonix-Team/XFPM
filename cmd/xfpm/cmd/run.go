@@ -91,7 +91,7 @@ func executeShell(command, dir string) error {
 	baseEnv := buildRunEnv(dir)
 	envPath := filepath.Join(dir, ".env")
 
-	if _, err := os.Stat(envPath); err == nil {
+	if _, err := os.Stat(envPath); err == nil && !libxess.IsActive() {
 		var shellCmd []string
 		if runtime.GOOS == "windows" {
 			shellCmd = []string{"cmd.exe", "/c", command}
@@ -127,7 +127,7 @@ func executeCommand(name string, args []string, dir string) error {
 	baseEnv := buildRunEnv(dir)
 	envPath := filepath.Join(dir, ".env")
 
-	if _, err := os.Stat(envPath); err == nil {
+	if _, err := os.Stat(envPath); err == nil && !libxess.IsActive() {
 		fullCmd := append([]string{name}, args...)
 		sup, err := libxess.NewSupervisor(libxess.Config{
 			ProjectDir:  dir,
