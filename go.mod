@@ -4,6 +4,7 @@ go 1.24.4
 
 require (
 	github.com/Masterminds/semver/v3 v3.4.0
+	github.com/Nehonix-Team/libXESS v0.0.0
 	github.com/Nehonix-Team/xru v0.2.9
 	github.com/google/uuid v1.6.0
 	github.com/nyaosorg/go-windows-junction v0.2.0
@@ -13,6 +14,9 @@ require (
 	github.com/zeebo/blake3 v0.2.4
 	golang.org/x/sys v0.41.0
 )
+
+replace github.com/Nehonix-Team/libXESS => ./lib/libXESS
+
 
 require (
 	atomicgo.dev/cursor v0.2.0 // indirect
