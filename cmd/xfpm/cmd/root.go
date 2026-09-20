@@ -12,6 +12,7 @@ import (
 
 	"github.com/Nehonix-Team/XFMP/internal/core"
 	"github.com/Nehonix-Team/XFMP/internal/utils"
+	"github.com/Nehonix-Team/libXESS"
 	"github.com/spf13/cobra"
 )
 
@@ -49,6 +50,9 @@ var RootCmd = &cobra.Command{
 		if cmdName != "completion" && cmdName != "__complete" && cmdName != "help" && cmdName != "version" && cmdName != "upgrade" {
 			utils.CheckForUpdates(false)
 		}
+
+		// Sweep dead/orphaned session folders left from past crashed processes
+		libxess.SweepOrphanSessions()
 
 		return nil
 	},
