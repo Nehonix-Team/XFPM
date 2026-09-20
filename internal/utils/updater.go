@@ -170,6 +170,20 @@ func PerformSelfUpdate() {
 		pterm.Println()
 	} else {
 		pterm.Println()
+		// If the command executed by the user was specifically "upgrade", do not re-run it
+		isUpgradeCmd := false
+		for _, arg := range os.Args[1:] {
+			if arg == "upgrade" {
+				isUpgradeCmd = true
+				break
+			}
+		}
+		if isUpgradeCmd {
+			Success("XFPM updated successfully! Please restart your terminal to use the new version.")
+			pterm.Println()
+			return
+		}
+
 		Success("XFPM updated successfully! Proceeding with task...")
 		pterm.Println()
 		ContinueTask()
@@ -193,6 +207,13 @@ func ContinueTask() {
 	if runtime.GOOS == "windows" {
 		// On Windows, hard to re-exec in-place safely without side effects
 		return
+	}
+
+	// Never re-execute if the command was an upgrade
+	for _, arg := range os.Args[1:] {
+		if arg == "upgrade" {
+			return
+		}
 	}
 
 	binary, err := exec.LookPath(os.Args[0])
