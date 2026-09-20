@@ -1,3 +1,12 @@
+## [G0.2.0] - 2026-09-20
+
+### Security & Confinement (libXESS v3.0)
+- **libXESS Zero-Trust Confinement**: Full kernel namespace isolation and strict filesystem sandboxing. Enforces bipolar zero-trust boundaries between host system and running application processes.
+- **Canary Tarpit Honeypot**: Active decoy generation for unauthorized environment variable probes. Probing unexposed system variables without `__sys__` authorization traps callers into decoy honeypot values.
+- **Multi-Target Environment Masking**: Recursive multi-target `.env` discovery across monorepos and subprojects (`FindDescendantEnvTargets`), preventing cross-package secret leaks.
+- **Deterministic IPC Authentication**: Replaced legacy hashing with XSec (`xypriss-security`) deterministic Ed25519/HMAC key derivation for IPC socket discovery between libXESS and XyPriss processes.
+
+
 ## [G0.1.236] - 2026-09-15
 
 ### Plugin Lifecycle & Verification

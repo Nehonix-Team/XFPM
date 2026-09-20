@@ -26,6 +26,7 @@ var RootCmd = &cobra.Command{
 		utils.SetSilent(silent)
 
 		utils.SetupUI()
+		os.Setenv("XFPM_VERSION", utils.BinVersion)
 
 		cwd, _ := cmd.Flags().GetString("cwd")
 		if cwd != "" {

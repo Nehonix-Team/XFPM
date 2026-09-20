@@ -50,7 +50,6 @@ var runCmd = &cobra.Command{
 		if _, err := os.Stat(scriptName); err == nil {
 			ext := filepath.Ext(scriptName)
 			if ext == ".ts" || ext == ".js" {
-				// Use bun if available
 				return executeCommand("bun", []string{"run", scriptName}, projectRoot)
 			}
 			return executeShell(scriptName, projectRoot)
@@ -110,7 +109,7 @@ func executeShell(command, dir string) error {
 			cmd, err := sup.Start()
 			if err == nil {
 				defer sup.Stop()
-				utils.Success("🛡️  libXESS Shield active (Bipolar Zero-Trust Confinement)")
+				utils.Success("libXESS loaded (Bipolar Zero-Trust Confinement)")
 				cmd.Stdout = os.Stdout
 				cmd.Stderr = os.Stderr
 				cmd.Stdin = os.Stdin
@@ -145,7 +144,7 @@ func executeCommand(name string, args []string, dir string) error {
 			cmd, err := sup.Start()
 			if err == nil {
 				defer sup.Stop()
-				utils.Success("🛡️  libXESS Shield active (Bipolar Zero-Trust Confinement)")
+				utils.Success("libXESS loaded (Bipolar Zero-Trust Confinement)")
 				cmd.Stdout = os.Stdout
 				cmd.Stderr = os.Stderr
 				cmd.Stdin = os.Stdin
@@ -179,5 +178,6 @@ func buildRunEnv(dir string) []string {
 		path = globalBin + string(os.PathListSeparator) + path
 	}
 
-	return utils.FormatPathEnv(os.Environ(), path)
+	env := utils.FormatPathEnv(os.Environ(), path)
+	return append(env, "XFPM_VERSION="+utils.BinVersion)
 }

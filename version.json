@@ -2,10 +2,10 @@
   "name": "XFPM (XyPriss Fast Package Manager)",
   "description": "The Fast Package Manager for the XyPriss ecosystem.",
   "warning": "CRITICAL: Public modifications to this file are strictly forbidden. Internal Nehonix metadata ONLY.",
-  "latest": "vG0.1.236",
-  "message": "Lifecycle: Executing verified plugin lifecycle hooks (postinstall) upon authorization.",
+  "latest": "vG0.2.0",
+  "message": "Security: libXESS Bipolar Zero-Trust Confinement, Canary Tarpits, and mandatory minimum CLI enforcement in XHSC.",
   "metadata": {
-    "releaseDate": "2026-09-15",
+    "releaseDate": "2026-09-20",
     "channel": "stable"
   }
 }
