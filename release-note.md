@@ -1,3 +1,8 @@
+## [G0.2.1] - 2026-09-20
+
+### CLI Fixes & Self-Update Stability
+- **Self-Update Infinite Loop Resolution**: Fixed an issue where running `xfpm upgrade` (or `xfpm upgrade -f`) re-executed itself infinitely via `ContinueTask()`. `PerformSelfUpdate` and `ContinueTask` now detect when the initial command was `upgrade` and terminate gracefully upon completing installation instead of triggering recursive `syscall.Exec`.
+
 ## [G0.2.0] - 2026-09-20
 
 ### Security & Confinement (libXESS v3.0)
