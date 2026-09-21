@@ -1,1 +1,1 @@
-go build -o xfpm ./cmd/xfpm && echo "Builded"
+./build.sh --current && echo "Built & Obfuscated"
