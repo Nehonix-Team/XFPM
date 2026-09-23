@@ -98,6 +98,8 @@ func (c *Cas) StoreStream(reader io.Reader, isExecutable bool) (string, error) {
 				c.ensurePermissions(destPath, isExecutable)
 				return hashHex, nil
 			}
+			// Cached file is corrupted (size mismatch or empty when buffer has data)
+			os.Remove(destPath)
 		}
 
 		if err := c.ensureParentDirs(hashHex); err != nil {
@@ -212,6 +214,13 @@ func (c *Cas) ensurePermissions(path string, isExecutable bool) {
 }
 
 func (c *Cas) copyAndCleanup(src, dst string) error {
+	if fiSrc, sErr := os.Stat(src); sErr == nil {
+		if fiDst, dErr := os.Stat(dst); dErr == nil && os.SameFile(fiSrc, fiDst) {
+			os.Remove(src)
+			return nil
+		}
+	}
+
 	in, err := os.Open(src)
 	if err != nil {
 		return err

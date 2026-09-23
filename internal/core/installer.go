@@ -412,12 +412,22 @@ func (i *Installer) LinkFilesToDir(destDir string, index map[string]string) erro
 	type linkJob struct{ relPath, hash string }
 	jobs := make([]linkJob, 0, len(index))
 
+	seenDests := make(map[string]bool, len(index))
 	for r, h := range index {
 		normalized := r
 		if idx := strings.Index(r, "/"); idx != -1 {
 			normalized = r[idx+1:]
 		}
+		normalized = filepath.Clean(filepath.ToSlash(normalized))
+		if normalized == "." || normalized == "" || strings.HasPrefix(normalized, "..") {
+			continue
+		}
 		destPath := filepath.Join(destDir, normalized)
+		if seenDests[destPath] {
+			continue
+		}
+		seenDests[destPath] = true
+
 		parentDir := filepath.Dir(destPath)
 		dirsToCreate[parentDir] = struct{}{}
 		jobs = append(jobs, linkJob{normalized, h})
@@ -471,6 +481,15 @@ func (i *Installer) LinkFilesToDir(destDir string, index map[string]string) erro
 				if err := os.Link(sourcePath, destPath); err == nil {
 					i.applyPermissions(sourcePath, destPath)
 					continue
+				}
+
+				// If destination already exists (e.g. race or already linked)
+				if os.IsExist(err) {
+					if fiSrc, sErr := os.Stat(sourcePath); sErr == nil {
+						if fiDst, dErr := os.Stat(destPath); dErr == nil && os.SameFile(fiSrc, fiDst) {
+							continue
+						}
+					}
 				}
 
 				if err := i.copyFile(sourcePath, destPath); err == nil {
@@ -809,6 +828,13 @@ func (i *Installer) exportGlobalBinaries(packages []*ResolvedPackage) {
 // [OPTIM] copyFile uses a pooled buffer (256KB on Linux, 1MB on Windows).
 // The default io.Copy uses 32KB which is too small for NTFS sequential writes.
 func (i *Installer) copyFile(src, dst string) error {
+	// Guard against truncating source if dst is hardlinked to src!
+	if fiSrc, sErr := os.Stat(src); sErr == nil {
+		if fiDst, dErr := os.Stat(dst); dErr == nil && os.SameFile(fiSrc, fiDst) {
+			return nil
+		}
+	}
+
 	in, err := os.Open(src)
 	if err != nil { return err }
 	defer in.Close()
