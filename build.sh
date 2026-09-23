@@ -177,10 +177,14 @@ for TARGET in "${TARGETS[@]}"; do
         fi
     fi
 
-    # If building for host, update local root ./xfpm
+    # If building for host, update local root ./xfpm and ~/.xfpm/bin/xfpm
     if [ "$OS" = "$(go env GOOS)" ] && [ "$ARCH" = "$(go env GOARCH)" ]; then
         cp "$TARGET_PATH" "./${BINARY_NAME}"
         chmod +x "./${BINARY_NAME}"
+        if [ -d "$HOME/.xfpm/bin" ]; then
+            cp -f "$TARGET_PATH" "$HOME/.xfpm/bin/${BINARY_NAME}"
+            chmod +x "$HOME/.xfpm/bin/${BINARY_NAME}"
+        fi
     fi
 done
 
