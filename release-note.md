@@ -1,3 +1,15 @@
+## [G0.2.2] - 2026-09-23
+
+### Core Fixes: CAS & Linking Race Condition Prevention
+- **CAS Cache Truncation Guard**: Resolved a critical race condition where npm packages containing duplicate path entries in tarballs (e.g. `package/./dist/index.js` and `package/dist/index.js` as in `agent-base@7.1.4`) caused concurrent linking workers to race on the same destination file.
+- **Same-File Self-Truncation Prevention**: Added `os.SameFile(fiSrc, fiDst)` checks in `copyFile` and `copyAndCleanup` across `installer.go`, `cas.go`, and `fs.go`. Prevents `os.Create` from opening an existing hardlink with `O_TRUNC` and destroying the underlying CAS content.
+- **Extraction Path Sanitization & Deduplication**: Upgraded `StreamingExtractor` and `LinkFilesToDir` with `filepath.Clean(filepath.ToSlash(...))` and path deduplication sets to guarantee workers never process identical destination paths simultaneously.
+- **Corrupted Cache Auto-Healing**: CAS `StoreStream` now detects and automatically purges corrupted 0-byte cache entries when valid non-empty stream data is being extracted.
+
+### Build Architecture & Security
+- **Garble AST Obfuscation Pipeline**: Integrated automated `garble -literals -tiny` AST encryption, symbol hashing, and Go buildinfo/module dependency table (`path\t`, `mod\t`, `dep\t`) scrubbing.
+- **Target Selection Flag (`--current` / `-c`)**: Added single-target compilation for rapid local host updates without cross-compilation overhead.
+
 ## [G0.2.1] - 2026-09-20
 
 ### CLI Fixes & Self-Update Stability
