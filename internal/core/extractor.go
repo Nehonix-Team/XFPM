@@ -5,6 +5,7 @@ import (
 	"compress/gzip"
 	"fmt"
 	"io"
+	"path/filepath"
 )
 
 type StreamingExtractor struct {
@@ -39,15 +40,19 @@ func (e *StreamingExtractor) Extract(reader io.Reader) (map[string]string, error
 			continue
 		}
 
-		path := header.Name
+		cleanPath := filepath.ToSlash(filepath.Clean(header.Name))
+		if _, exists := fileMap[cleanPath]; exists {
+			continue
+		}
+
 		isExecutable := (header.Mode & 0111) != 0
 
 		// Store in CAS
 		hash, err := e.cas.StoreStream(tr, isExecutable)
 		if err != nil {
-			return nil, fmt.Errorf("failed to store %s in CAS: %w", path, err)
+			return nil, fmt.Errorf("failed to store %s in CAS: %w", cleanPath, err)
 		}
-		fileMap[path] = hash
+		fileMap[cleanPath] = hash
 	}
 
 	return fileMap, nil

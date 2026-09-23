@@ -87,6 +87,11 @@ func Link(oldname, newname string) error {
 
 // copyFile is a helper to copy a single file.
 func copyFile(src, dst string) error {
+	if fiSrc, sErr := os.Stat(src); sErr == nil {
+		if fiDst, dErr := os.Stat(dst); dErr == nil && os.SameFile(fiSrc, fiDst) {
+			return nil
+		}
+	}
 	s, err := os.Open(src)
 	if err != nil {
 		return err
