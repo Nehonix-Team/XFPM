@@ -156,13 +156,15 @@ func executeShell(command, workDir, projDir string) error {
 
 	// Host-privileged libPort supervisor for port arbitration inside sessionDir
 	portSock := filepath.Join(sess.Dir, "libport.sock")
-	portSup := libport.NewSupervisor(projDir, portSock)
-	if err := portSup.Start(); err == nil {
-		defer portSup.Stop()
-		onShutdownList = append(onShutdownList, portSup.Stop)
+	if !sess.IsAdopted {
+		portSup := libport.NewSupervisor(projDir, portSock)
+		if err := portSup.Start(); err == nil {
+			defer portSup.Stop()
+			onShutdownList = append(onShutdownList, portSup.Stop)
+		}
 	}
 
-	if _, err := os.Stat(envPath); err == nil && !libxess.IsActive() {
+	if _, err := os.Stat(envPath); err == nil && !libxess.IsActive() && !sess.IsAdopted {
 		var shellCmd []string
 		if runtime.GOOS == "windows" {
 			shellCmd = []string{"cmd.exe", "/c", command}
@@ -184,7 +186,7 @@ func executeShell(command, workDir, projDir string) error {
 				defer sup.Stop()
 				onShutdownList = append(onShutdownList, sup.Stop)
 				utils.Success("libXESS loaded (Bipolar Zero-Trust Confinement)")
-				return runProcess(cmd, sess.Dir, onShutdown)
+				return runProcess(cmd, sess, onShutdown)
 			}
 			utils.Warn("libXESS confinement fallback: %v", err)
 		}
@@ -193,7 +195,7 @@ func executeShell(command, workDir, projDir string) error {
 	cmd := utils.GetShellCommandRaw(command)
 	cmd.Dir = workDir
 	cmd.Env = baseEnv
-	return runProcess(cmd, sess.Dir, onShutdown)
+	return runProcess(cmd, sess, onShutdown)
 }
 
 func executeCommand(name string, args []string, workDir, projDir string) error {
@@ -214,13 +216,15 @@ func executeCommand(name string, args []string, workDir, projDir string) error {
 
 	// Host-privileged libPort supervisor for port arbitration inside sessionDir
 	portSock := filepath.Join(sess.Dir, "libport.sock")
-	portSup := libport.NewSupervisor(projDir, portSock)
-	if err := portSup.Start(); err == nil {
-		defer portSup.Stop()
-		onShutdownList = append(onShutdownList, portSup.Stop)
+	if !sess.IsAdopted {
+		portSup := libport.NewSupervisor(projDir, portSock)
+		if err := portSup.Start(); err == nil {
+			defer portSup.Stop()
+			onShutdownList = append(onShutdownList, portSup.Stop)
+		}
 	}
 
-	if _, err := os.Stat(envPath); err == nil && !libxess.IsActive() {
+	if _, err := os.Stat(envPath); err == nil && !libxess.IsActive() && !sess.IsAdopted {
 		fullCmd := append([]string{name}, args...)
 		sup, err := libxess.NewSupervisor(libxess.Config{
 			ProjectDir:  projDir,
@@ -236,7 +240,7 @@ func executeCommand(name string, args []string, workDir, projDir string) error {
 				defer sup.Stop()
 				onShutdownList = append(onShutdownList, sup.Stop)
 				utils.Success("libXESS loaded (Bipolar Zero-Trust Confinement)")
-				return runProcess(cmd, sess.Dir, onShutdown)
+				return runProcess(cmd, sess, onShutdown)
 			}
 			utils.Warn("libXESS confinement fallback: %v", err)
 		}
@@ -245,15 +249,16 @@ func executeCommand(name string, args []string, workDir, projDir string) error {
 	cmd := exec.Command(name, args...)
 	cmd.Dir = workDir
 	cmd.Env = baseEnv
-	return runProcess(cmd, sess.Dir, onShutdown)
+	return runProcess(cmd, sess, onShutdown)
 }
 
-func runProcess(cmd *exec.Cmd, sessionDir string, onShutdown func()) error {
+func runProcess(cmd *exec.Cmd, sess *libproc.Session, onShutdown func()) error {
 	sigChan := utils.SignalManager.Subscribe()
 	defer utils.SignalManager.Unsubscribe(sigChan)
 
 	return libproc.RunCmd(cmd, libproc.RunOptions{
-		SessionDir:      sessionDir,
+		SessionDir:      sess.Dir,
+		IsAdopted:       sess.IsAdopted,
 		GracefulTimeout: 1500 * time.Millisecond,
 		StopSignal:      sigChan,
 		OnShutdown:      onShutdown,
