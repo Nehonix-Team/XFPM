@@ -1,3 +1,19 @@
+## [G0.2.4] - 2026-09-26
+
+### Core Architecture: libProc Session Adoption & Isolation
+- **Session Adoption in Nested Invocations**: Resolved session split issues when commands run through wrapper scripts (e.g. `xfpm dev` -> `fileonix` -> `xfpm run`). Nested child processes automatically detect an active parent supervisor via `XYPRISS_USER_TMP` and adopt its session context instead of generating colliding or unconfined directories.
+- **Instance-Level Hybrid Isolation**: Integrated hybrid session hashing `sha256(cleanProjectDir + ":" + supervisorPID)[:8]` ensuring deterministic, collision-free user runtime directories under `/tmp/nehonix.xypriss.data/xuser/<hash>`.
+- **Orphan Session Sweeping**: Added automatic garbage collection (`SweepOrphans`) on CLI execution to sweep stale orphaned session sockets and decoy mounts left by non-graceful exits.
+- **Direct Runtime Confinement Enforcement**: Prevented bypass attempts when launching engines directly outside `xfpm`. Runtimes and native engines strictly verify parent supervisor liveness.
+
+## [G0.2.3] - 2026-09-25
+
+### Core Architecture: libPort Native Port Broker & Conflict Supervisor
+- **Native libPort Integration**: Introduced `libPort` (XyPriss Port Management & Conflict Broker) operating as a host-level privileged supervisor during `xfpm run` and server lifecycle execution.
+- **Bipolar Zero-Trust Port Resolution**: Completely resolves port conflict deadlocks under `libXESS` sandbox confinement by delegating socket inspection and `SIGKILL` arbitration to the unconfined host supervisor via local Unix domain socket IPC (`xpm_ipc_*.sock`).
+- **Atomic Multi-Process Kill**: Eliminates all concurrent orphan and zombie listeners on collision in under 1 millisecond (< 0.5ms typical), removing the need for polling retry loops (`Attempt 1/15...`) and eliminating socket race conditions.
+- **Port Manager & Sandbox Decoupling**: Restored strict single-responsibility boundaries by purging temporary socket killing hooks from `libXESS` (secrets & sandboxing) and unprivileged fallback bypasses from `XHSC` (HTTP engine).
+
 ## [G0.2.2] - 2026-09-23
 
 ### Core Fixes: CAS & Linking Race Condition Prevention

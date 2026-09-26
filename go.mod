@@ -15,11 +15,17 @@ require (
 	github.com/vbauerster/mpb/v8 v8.12.0
 	github.com/zeebo/blake3 v0.2.4
 	golang.org/x/sys v0.41.0
+	github.com/NEHONIX/libPort v0.0.0
+	github.com/NEHONIX/libProc v0.0.0
 )
 
 replace github.com/Nehonix-Team/libXESS => ./lib/libXESS
 
 replace github.com/Nehonix-Team/FileOnix => ./lib/FileOnix
+
+replace github.com/NEHONIX/libPort => ./lib/libPort
+
+replace github.com/NEHONIX/libProc => ./lib/libProc
 
 require (
 	atomicgo.dev/cursor v0.2.0 // indirect

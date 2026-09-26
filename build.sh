@@ -182,7 +182,7 @@ for TARGET in "${TARGETS[@]}"; do
         cp "$TARGET_PATH" "./${BINARY_NAME}"
         chmod +x "./${BINARY_NAME}"
         if [ -d "$HOME/.xfpm/bin" ]; then
-            cp -f "$TARGET_PATH" "$HOME/.xfpm/bin/${BINARY_NAME}"
+            cp --remove-destination "$TARGET_PATH" "$HOME/.xfpm/bin/${BINARY_NAME}" 2>/dev/null || cp -f "$TARGET_PATH" "$HOME/.xfpm/bin/${BINARY_NAME}"
             chmod +x "$HOME/.xfpm/bin/${BINARY_NAME}"
         fi
     fi
@@ -191,5 +191,8 @@ done
 echo -e "\n${GREEN}${BOLD} ✅ BUILD PIPELINE COMPLETE ${NC}"
 echo -e "${DIM} Artifacts stored in: ./${DIST_DIR}${NC}\n"
 
+if [ -f "./dist/xfpm-linux-amd64" ] && [ -d "../../bin" ]; then
+    cp --remove-destination "./dist/xfpm-linux-amd64" ../../bin/xfpm 2>/dev/null || cp -f "./dist/xfpm-linux-amd64" ../../bin/xfpm
+fi
 ls -lh "$DIST_DIR" | grep "$BINARY_NAME" | awk '{print "  " $5 "\t" $9}'
 echo ""

@@ -9,6 +9,7 @@ package main
 import (
 	"github.com/Nehonix-Team/XFMP/cmd/xfpm/cmd"
 	"github.com/Nehonix-Team/XFMP/internal/utils"
+	libproc "github.com/NEHONIX/libProc"
 )
 
 func main() {
@@ -17,5 +18,6 @@ func main() {
 	// or runtime default handler can intercept them.
 	utils.SignalManager.Start()
 	utils.CleanupOldBinary()
+	libproc.SweepOrphans("")
 	cmd.Execute()
 }

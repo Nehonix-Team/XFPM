@@ -71,7 +71,7 @@ var versionCmd = &cobra.Command{
 		if data.Latest != utils.BinVersion && data.Latest != "" {
 			// A simple lexicographical comparison since we use vG0.1.x
 			if data.Latest > utils.BinVersion {
-				status = pterm.FgYellow.Sprint("Update Available (Run 'xfpm upgrade')")
+				status = pterm.FgYellow.Sprint("Update Available (Run 'xfpm upgrade -f')")
 			} else {
 				status = pterm.FgCyan.Sprint("Ahead of stable release")
 			}
