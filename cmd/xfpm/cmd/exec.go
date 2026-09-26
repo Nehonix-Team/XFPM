@@ -55,12 +55,12 @@ var execCmd = &cobra.Command{
 
 		if _, err := os.Stat(binPath); err == nil {
 			utils.Info("Executing: %s", binName)
-			return executeCommand(binPath, binArgs, projectRoot)
+			return executeCommand(binPath, binArgs, projectRoot, projectRoot)
 		}
 
 		// Fallback: try to execute directly if it's in the system PATH
 		if _, err := exec.LookPath(binName); err == nil {
-			return executeCommand(binName, binArgs, projectRoot)
+			return executeCommand(binName, binArgs, projectRoot, projectRoot)
 		}
 
 		return fmt.Errorf("command '%s' not found", binName)
