@@ -1,3 +1,11 @@
+## [G0.2.5] - 2026-09-27
+
+### Security & IPC Confinement: libXESS Kernel Peer Authentication & Ephemeral Handshake
+- **Kernel-Level IPC Authentication (`SO_PEERCRED`)**: Integrated native Linux socket peer credential verification into `libXESS` IPC. Unix domain socket connections are strictly restricted to the supervisor process tree, immediately severing unauthorized external processes or non-descendant callers.
+- **Ephemeral One-Time Token (OTT) Handshake**: Implemented cryptographic 256-bit ephemeral tokens generated per supervisor session. Tokens are injected into the runtime and purged immediately from environment and disk upon initialization.
+- **IPC Secret Caching & Optimization**: Optimized secret retrieval in `XessIpcClient` with in-memory caching per target workspace, eliminating redundant socket roundtrips during multi-server startup.
+- **Supply-Chain & Decoy Protection**: Strengthened isolation against malicious plugins attempting unauthorized in-process or out-of-process environment secret exfiltration.
+
 ## [G0.2.4] - 2026-09-26
 
 ### Core Architecture: libProc Session Adoption & Isolation

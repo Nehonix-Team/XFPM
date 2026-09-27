@@ -2,10 +2,10 @@
   "name": "XFPM (XyPriss Fast Package Manager)",
   "description": "The Fast Package Manager for the XyPriss ecosystem.",
   "warning": "CRITICAL: Public modifications to this file are strictly forbidden. Internal Nehonix metadata ONLY.",
-  "latest": "vG0.2.4",
-  "message": "Core: Integrated hybrid session isolation & session adoption across nested processes in libProc.",
+  "latest": "vG0.2.5",
+  "message": "Security: Kernel peercred verification (SO_PEERCRED) and ephemeral token handshake for zero-trust IPC in libXESS.",
   "metadata": {
-    "releaseDate": "2026-09-26",
+    "releaseDate": "2026-09-27",
     "channel": "stable"
   }
 }
