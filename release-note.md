@@ -1,3 +1,9 @@
+## [G0.2.7] - 2026-09-28
+
+### Security & Cross-Platform Confinement: Windows libXESS Win32 Token & Ancestor Verification
+- **Win32 Security Token Validation (`OpenProcessToken` / `EqualSid`)**: Enhanced `libXESS` Windows peer verification (`peercred_windows.go`) with native Win32 user token inspection (`OpenProcessToken` and `windows.EqualSid`). Ensures callers strictly belong to the same Windows user session even if transient intermediate shells (`cmd.exe`) terminate rapidly and sever the `Toolhelp32` process ancestry link.
+- **Resilient Toolhelp32 Process Ancestry**: Upgraded descendant inspection to gracefully traverse parent chains through sub-shells without false-positive connection resets, preserving zero-trust confinement without requiring any socket timeout relaxation.
+
 ## [G0.2.6] - 2026-09-28
 
 ### Security & Cross-Platform Confinement: libXESS Darwin & Windows Peer Verification
