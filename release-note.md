@@ -1,3 +1,15 @@
+## [G0.2.6] - 2026-09-28
+
+### Security & Cross-Platform Confinement: libXESS Darwin & Windows Peer Verification
+- **macOS / Darwin Socket Credentials (`LOCAL_PEERPID` & `LOCAL_PEERCRED`)**: Integrated native Darwin kernel peer PID (`LOCAL_PEERPID`) and UID/GID (`LOCAL_PEERCRED` / `unix.GetsockoptXucred`) socket inspection, alongside `sysctl` process ancestor verification (`kp.Eproc.Ppid`).
+- **Windows Socket Credentials (`SIO_AF_UNIX_GETPEERPID`)**: Added native Winsock ioctl (`0x58000100`) peer process discovery on AF_UNIX sockets, coupled with Win32 `CreateToolhelp32Snapshot` process tree ancestry validation.
+- **Multi-Instance Session Bridge**: Implemented caller-isolated in-process session bridge (`assertInternalCaller`) allowing secondary module instances in symlinked virtual stores to share authentic sessions without triggering redundant handshake collisions.
+
+### Development & Watcher Architecture: FileOnix Hot Reloading & Decoupled Execution
+- **Watcher Process Decoupling**: Updated `executeShell` and `executeCommand` to prevent wrapping file watchers (`fileonix`, `nodemon`) in single-use static `libXESS` supervisors, allowing each spawned server instance to manage its own isolated lifecycle.
+- **FileOnix Dynamic Configuration Reload**: Added active configuration tracking (`checkConfigFile`) and hot-reload (`cfg.Reload()`) in `FileOnix`, dynamically refreshing watch paths, runners, and flags when `fileonix.config.json` is modified.
+- **Clean Child Environment Sanitization**: `FileOnix` automatically cleanses child execution environments by stripping stale supervisor tokens (`LIBXESS_ACTIVE`, `XYPRISS_XESS_AUTH_TOKEN`, `XYPRISS_USER_TMP`), guaranteeing clean supervisor instantiation on every reload.
+
 ## [G0.2.5] - 2026-09-27
 
 ### Security & IPC Confinement: libXESS Kernel Peer Authentication & Ephemeral Handshake

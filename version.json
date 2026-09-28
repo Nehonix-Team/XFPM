@@ -2,10 +2,10 @@
   "name": "XFPM (XyPriss Fast Package Manager)",
   "description": "The Fast Package Manager for the XyPriss ecosystem.",
   "warning": "CRITICAL: Public modifications to this file are strictly forbidden. Internal Nehonix metadata ONLY.",
-  "latest": "vG0.2.5",
-  "message": "Security: Kernel peercred verification (SO_PEERCRED) and ephemeral token handshake for zero-trust IPC in libXESS.",
+  "latest": "vG0.2.6",
+  "message": "Cross-Platform: Native macOS/Windows socket peer verification for libXESS, dynamic FileOnix config hot-reloading, and decoupled watcher execution.",
   "metadata": {
-    "releaseDate": "2026-09-27",
+    "releaseDate": "2026-09-28",
     "channel": "stable"
   }
 }
