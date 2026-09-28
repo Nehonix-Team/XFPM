@@ -138,6 +138,23 @@ func init() {
 	RootCmd.AddCommand(startCmd)
 }
 
+func isWatcherOrMetaCommand(cmdStr string) bool {
+	fields := strings.Fields(cmdStr)
+	if len(fields) == 0 {
+		return false
+	}
+	for i, f := range fields {
+		base := strings.ToLower(filepath.Base(f))
+		if base == "fileonix" || base == "nodemon" || base == "chokidar" || base == "watch" {
+			return true
+		}
+		if (base == "xfpm" || base == "xfpm.exe") && i+1 < len(fields) && (fields[i+1] == "exec" || fields[i+1] == "x") {
+			return true
+		}
+	}
+	return false
+}
+
 func executeShell(command, workDir, projDir string) error {
 	sess, err := libproc.CreateSession(projDir)
 	if err != nil {
@@ -164,7 +181,7 @@ func executeShell(command, workDir, projDir string) error {
 		}
 	}
 
-	if _, err := os.Stat(envPath); err == nil && !libxess.IsActive() && !sess.IsAdopted {
+	if _, err := os.Stat(envPath); err == nil && !libxess.IsActive() && !sess.IsAdopted && !isWatcherOrMetaCommand(command) {
 		var shellCmd []string
 		if runtime.GOOS == "windows" {
 			shellCmd = []string{"cmd.exe", "/c", command}
@@ -224,7 +241,7 @@ func executeCommand(name string, args []string, workDir, projDir string) error {
 		}
 	}
 
-	if _, err := os.Stat(envPath); err == nil && !libxess.IsActive() && !sess.IsAdopted {
+	if _, err := os.Stat(envPath); err == nil && !libxess.IsActive() && !sess.IsAdopted && !isWatcherOrMetaCommand(name) {
 		fullCmd := append([]string{name}, args...)
 		sup, err := libxess.NewSupervisor(libxess.Config{
 			ProjectDir:  projDir,
