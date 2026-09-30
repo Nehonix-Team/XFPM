@@ -1,3 +1,10 @@
+## [G0.2.8] - 2026-09-29
+
+### Security & CLI: Selective libXESS Confinement & Tooling Ergonomics
+- **Target-Aware libXESS Confinement**: `xfpm exec` (`xfpmx`) and `xfpm run` now intelligently inspect command targets. Direct JavaScript/TypeScript scripts (`.ts`, `.js`, `.mjs`, `.cjs`) remain strictly confined in Bipolar Zero-Trust environments, while CLI binaries, compilers, and database migration utilities (e.g. `prisma`, `tsc`, `rollup`, `vite`) execute without honeypot decoy interception.
+- **Explicit Confinement Overrides**: Added support for explicit CLI flags (`--xess`, `-xess`, `--shield` to force zero-trust confinement; `--no-xess`, `-no-xess`, `--no-shield` to bypass it).
+- **FileOnix XyPriss Runner Auto-Sync**: FileOnix automatically detects XyPriss project roots and auto-configures `"runner": "xfpm"` in `fileonix.config.json` without manual configuration.
+
 ## [G0.2.7] - 2026-09-28
 
 ### Security & Cross-Platform Confinement: Windows libXESS Win32 Token & Ancestor Verification
