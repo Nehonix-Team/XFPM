@@ -28,17 +28,32 @@ var runCmd = &cobra.Command{
 	Use:   "run [script]",
 	Short: "Run a script defined in package.json",
 	Aliases: []string{"r"},
-	SilenceUsage:  true,
-	SilenceErrors: true,
+	SilenceUsage:      true,
+	SilenceErrors:     true,
+	DisableFlagParsing: true,
 	Annotations: map[string]string{
 		"requireRuntime": "true",
 	},
 	RunE: func(cmd *cobra.Command, args []string) error {
-		if len(args) == 0 {
+		var runArgs []string
+		forceXess := false
+		disableXess := false
+
+		for _, arg := range args {
+			if arg == "--xess" || arg == "-xess" || arg == "--shield" || arg == "-shield" {
+				forceXess = true
+			} else if arg == "--no-xess" || arg == "-no-xess" || arg == "--no-shield" || arg == "-no-shield" {
+				disableXess = true
+			} else {
+				runArgs = append(runArgs, arg)
+			}
+		}
+
+		if len(runArgs) == 0 {
 			return fmt.Errorf("no script specified")
 		}
 
-		scriptName := args[0]
+		scriptName := runArgs[0]
 		projectRoot, _ := os.Getwd()
 
 		pkgPath := filepath.Join(projectRoot, "package.json")
@@ -47,9 +62,22 @@ var runCmd = &cobra.Command{
 			return err
 		}
 
+		opts := execOptions{
+			ForceXess:   forceXess,
+			DisableXess: disableXess,
+		}
+
 		if scriptCmd, ok := pkg.Scripts[scriptName]; ok {
 			utils.Info("Running script: %s", scriptName)
-			runErr := executeShell(scriptCmd, projectRoot, projectRoot)
+			scriptOpts := opts
+			if (scriptName == "dev" || scriptName == "start") && !opts.DisableXess {
+				scriptOpts.ForceXess = true
+			}
+			fullCmd := scriptCmd
+			if len(runArgs) > 1 {
+				fullCmd = fullCmd + " " + strings.Join(runArgs[1:], " ")
+			}
+			runErr := executeShellWithOptions(fullCmd, projectRoot, projectRoot, scriptOpts)
 			if runErr != nil && isInterrupted(runErr) {
 				return nil
 			}
@@ -62,9 +90,9 @@ var runCmd = &cobra.Command{
 			targetProjectDir := resolveTargetProjectDir(scriptName, projectRoot)
 			ext := filepath.Ext(scriptName)
 			if ext == ".ts" || ext == ".js" {
-				runErr = executeCommand("bun", []string{"run", scriptName}, projectRoot, targetProjectDir)
+				runErr = executeCommandWithOptions("bun", []string{"run", scriptName}, projectRoot, targetProjectDir, opts)
 			} else {
-				runErr = executeShell(scriptName, projectRoot, targetProjectDir)
+				runErr = executeShellWithOptions(scriptName, projectRoot, targetProjectDir, opts)
 			}
 			if runErr != nil && isInterrupted(runErr) {
 				return nil
@@ -155,7 +183,74 @@ func isWatcherOrMetaCommand(cmdStr string) bool {
 	return false
 }
 
+type execOptions struct {
+	ForceXess   bool
+	DisableXess bool
+}
+
+func isServerEntryPoint(filePath string) bool {
+	clean := filepath.ToSlash(strings.ToLower(filePath))
+	// Exclude scripts directory, tools, tasks, migrations, seeds, test
+	parts := strings.Split(clean, "/")
+	for _, p := range parts {
+		if p == "scripts" || p == "script" || p == "tools" || p == "tasks" || p == "seeds" || p == "seed" || p == "migrations" || p == "migration" || p == "tests" || p == "test" {
+			return false
+		}
+	}
+	base := filepath.Base(clean)
+	// Server entrypoint files: server.ts, index.ts, app.ts, main.ts
+	return base == "server.ts" || base == "server.js" ||
+		base == "index.ts" || base == "index.js" ||
+		base == "app.ts" || base == "app.js" ||
+		base == "main.ts" || base == "main.js"
+}
+
+func isScriptTarget(name string, args []string) bool {
+	if isServerEntryPoint(name) {
+		return true
+	}
+	base := strings.ToLower(filepath.Base(name))
+	if base == "bun" || base == "bun.exe" || base == "node" || base == "node.exe" || base == "tsx" || base == "deno" || base == "xfpm" || base == "xfpm.exe" {
+		for _, a := range args {
+			if isServerEntryPoint(a) {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+func isShellScriptTarget(command string) bool {
+	fields := strings.Fields(command)
+	if len(fields) == 0 {
+		return false
+	}
+	for _, f := range fields {
+		if isServerEntryPoint(f) {
+			return true
+		}
+	}
+	return false
+}
+
+func shouldActivateXESS(targetName string, args []string, command string, opts execOptions) bool {
+	if opts.DisableXess {
+		return false
+	}
+	if opts.ForceXess {
+		return true
+	}
+	if command != "" {
+		return isShellScriptTarget(command)
+	}
+	return isScriptTarget(targetName, args)
+}
+
 func executeShell(command, workDir, projDir string) error {
+	return executeShellWithOptions(command, workDir, projDir, execOptions{})
+}
+
+func executeShellWithOptions(command, workDir, projDir string, opts execOptions) error {
 	sess, err := libproc.CreateSession(projDir)
 	if err != nil {
 		return fmt.Errorf("failed to allocate session: %w", err)
@@ -181,7 +276,7 @@ func executeShell(command, workDir, projDir string) error {
 		}
 	}
 
-	if _, err := os.Stat(envPath); err == nil && !libxess.IsActive() && !sess.IsAdopted && !isWatcherOrMetaCommand(command) {
+	if _, err := os.Stat(envPath); err == nil && !libxess.IsActive() && !sess.IsAdopted && !isWatcherOrMetaCommand(command) && shouldActivateXESS("", nil, command, opts) {
 		var shellCmd []string
 		if runtime.GOOS == "windows" {
 			shellCmd = []string{"cmd.exe", "/c", command}
@@ -203,7 +298,7 @@ func executeShell(command, workDir, projDir string) error {
 				defer sup.Stop()
 				onShutdownList = append(onShutdownList, sup.Stop)
 				utils.Success("libXESS loaded (Bipolar Zero-Trust Confinement)")
-				return runProcess(cmd, sess, onShutdown)
+				return runProcessWithOptions(cmd, sess, onShutdown, true)
 			}
 			utils.Warn("libXESS confinement fallback: %v", err)
 		}
@@ -216,6 +311,10 @@ func executeShell(command, workDir, projDir string) error {
 }
 
 func executeCommand(name string, args []string, workDir, projDir string) error {
+	return executeCommandWithOptions(name, args, workDir, projDir, execOptions{})
+}
+
+func executeCommandWithOptions(name string, args []string, workDir, projDir string, opts execOptions) error {
 	sess, err := libproc.CreateSession(projDir)
 	if err != nil {
 		return fmt.Errorf("failed to allocate session: %w", err)
@@ -241,7 +340,7 @@ func executeCommand(name string, args []string, workDir, projDir string) error {
 		}
 	}
 
-	if _, err := os.Stat(envPath); err == nil && !libxess.IsActive() && !sess.IsAdopted && !isWatcherOrMetaCommand(name) {
+	if _, err := os.Stat(envPath); err == nil && !libxess.IsActive() && !sess.IsAdopted && !isWatcherOrMetaCommand(name) && shouldActivateXESS(name, args, "", opts) {
 		fullCmd := append([]string{name}, args...)
 		sup, err := libxess.NewSupervisor(libxess.Config{
 			ProjectDir:  projDir,
@@ -257,7 +356,7 @@ func executeCommand(name string, args []string, workDir, projDir string) error {
 				defer sup.Stop()
 				onShutdownList = append(onShutdownList, sup.Stop)
 				utils.Success("libXESS loaded (Bipolar Zero-Trust Confinement)")
-				return runProcess(cmd, sess, onShutdown)
+				return runProcessWithOptions(cmd, sess, onShutdown, true)
 			}
 			utils.Warn("libXESS confinement fallback: %v", err)
 		}
@@ -270,15 +369,24 @@ func executeCommand(name string, args []string, workDir, projDir string) error {
 }
 
 func runProcess(cmd *exec.Cmd, sess *libproc.Session, onShutdown func()) error {
+	return runProcessWithOptions(cmd, sess, onShutdown, false)
+}
+
+func runProcessWithOptions(cmd *exec.Cmd, sess *libproc.Session, onShutdown func(), isConfined bool) error {
 	sigChan := utils.SignalManager.Subscribe()
 	defer utils.SignalManager.Unsubscribe(sigChan)
 
+	// If the process is not confined by libXESS supervisor, let it share the terminal process group
+	// so interactive commands (like prompts, readline, curses) receive terminal input and signals cleanly.
+	inheritGroup := !isConfined
+
 	return libproc.RunCmd(cmd, libproc.RunOptions{
-		SessionDir:      sess.Dir,
-		IsAdopted:       sess.IsAdopted,
-		GracefulTimeout: 1500 * time.Millisecond,
-		StopSignal:      sigChan,
-		OnShutdown:      onShutdown,
+		SessionDir:          sess.Dir,
+		IsAdopted:           sess.IsAdopted,
+		GracefulTimeout:     1500 * time.Millisecond,
+		InheritProcessGroup: inheritGroup,
+		StopSignal:          sigChan,
+		OnShutdown:          onShutdown,
 	})
 }
 

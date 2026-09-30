@@ -48,19 +48,39 @@ var execCmd = &cobra.Command{
 		}
 
 		binName := args[0]
-		binArgs := args[1:]
+		if binName == "-h" || binName == "--help" || binName == "help" {
+			return cmd.Help()
+		}
+		var binArgs []string
+		forceXess := false
+		disableXess := false
+
+		for _, arg := range args[1:] {
+			if arg == "--xess" || arg == "-xess" || arg == "--shield" || arg == "-shield" {
+				forceXess = true
+			} else if arg == "--no-xess" || arg == "-no-xess" || arg == "--no-shield" || arg == "-no-shield" {
+				disableXess = true
+			} else {
+				binArgs = append(binArgs, arg)
+			}
+		}
 
 		projectRoot, _ := os.Getwd()
 		binPath := filepath.Join(projectRoot, "node_modules", ".bin", binName)
 
+		opts := execOptions{
+			ForceXess:   forceXess,
+			DisableXess: disableXess,
+		}
+
 		if _, err := os.Stat(binPath); err == nil {
 			utils.Info("Executing: %s", binName)
-			return executeCommand(binPath, binArgs, projectRoot, projectRoot)
+			return executeCommandWithOptions(binPath, binArgs, projectRoot, projectRoot, opts)
 		}
 
 		// Fallback: try to execute directly if it's in the system PATH
 		if _, err := exec.LookPath(binName); err == nil {
-			return executeCommand(binName, binArgs, projectRoot, projectRoot)
+			return executeCommandWithOptions(binName, binArgs, projectRoot, projectRoot, opts)
 		}
 
 		return fmt.Errorf("command '%s' not found", binName)
