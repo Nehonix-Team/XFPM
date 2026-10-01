@@ -1,3 +1,12 @@
+## [G0.2.9] - 2026-10-01
+
+### Security & Architecture: Ephemeral Session Authentication & Post-Boot Freeze
+- **Purge of Static Hardcoded Signatures**: Completely eradicated static SHA-512 signatures and `--signature` CLI flags. XHSC execution is now cryptographically bound to ephemeral 256-bit session nonces provisioned on demand by `libXESS`.
+- **Zero-CLI Exposure**: Eliminated all sensitive arguments from `argv` across all native bridges, runner abstractions, and process supervisors. Process table inspection (`ps aux`, `/proc/<pid>/cmdline`) reveals zero sensitive authorization tokens.
+- **Constant-Time Verification**: Integrated `crypto/subtle.ConstantTimeCompare` in XHSC engine initialization to neutralize side-channel timing analysis attacks.
+- **Post-Boot Session Freeze & Shredding**: Integrated irrevocable post-boot session locks (`lockSessionAuth`). Session tokens on disk (`.auth_token`) are overwritten with zeros and unlinked immediately after successful startup, preventing any unauthorized runtime rogue spawns from executing inside the application space.
+- **Coordinated Multi-Server Boot Synchronization**: Enhanced `MultiServerManager` and `MultiServerApp` with `isMultiServerChild` execution tags to prevent premature session invalidation across complex clustered architectures (e.g. `xms`).
+
 ## [G0.2.8] - 2026-09-29
 
 ### Security & CLI: Selective libXESS Confinement & Tooling Ergonomics

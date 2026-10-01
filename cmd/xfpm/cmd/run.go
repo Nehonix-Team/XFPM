@@ -251,7 +251,7 @@ func executeShell(command, workDir, projDir string) error {
 }
 
 func executeShellWithOptions(command, workDir, projDir string, opts execOptions) error {
-	sess, err := libproc.CreateSession(projDir)
+	sess, err := libxess.CreateSession(projDir, os.Getpid())
 	if err != nil {
 		return fmt.Errorf("failed to allocate session: %w", err)
 	}
@@ -315,7 +315,7 @@ func executeCommand(name string, args []string, workDir, projDir string) error {
 }
 
 func executeCommandWithOptions(name string, args []string, workDir, projDir string, opts execOptions) error {
-	sess, err := libproc.CreateSession(projDir)
+	sess, err := libxess.CreateSession(projDir, os.Getpid())
 	if err != nil {
 		return fmt.Errorf("failed to allocate session: %w", err)
 	}
@@ -368,11 +368,11 @@ func executeCommandWithOptions(name string, args []string, workDir, projDir stri
 	return runProcess(cmd, sess, onShutdown)
 }
 
-func runProcess(cmd *exec.Cmd, sess *libproc.Session, onShutdown func()) error {
+func runProcess(cmd *exec.Cmd, sess *libxess.Session, onShutdown func()) error {
 	return runProcessWithOptions(cmd, sess, onShutdown, false)
 }
 
-func runProcessWithOptions(cmd *exec.Cmd, sess *libproc.Session, onShutdown func(), isConfined bool) error {
+func runProcessWithOptions(cmd *exec.Cmd, sess *libxess.Session, onShutdown func(), isConfined bool) error {
 	sigChan := utils.SignalManager.Subscribe()
 	defer utils.SignalManager.Unsubscribe(sigChan)
 
@@ -390,7 +390,7 @@ func runProcessWithOptions(cmd *exec.Cmd, sess *libproc.Session, onShutdown func
 	})
 }
 
-func buildRunEnv(dir string, sess *libproc.Session) []string {
+func buildRunEnv(dir string, sess *libxess.Session) []string {
 	path := os.Getenv("PATH")
 	
 	// Add project node_modules/.bin
@@ -412,6 +412,10 @@ func buildRunEnv(dir string, sess *libproc.Session) []string {
 	env = append(env, "XFPM_VERSION="+utils.BinVersion)
 	env = append(env, "XYPRISS_SESSION_HASH="+sess.Hash)
 	env = append(env, "XYPRISS_USER_TMP="+sess.Dir)
+	if sess.Token != "" {
+		env = append(env, "XYPRISS_INTERNAL_TOKEN="+sess.Token)
+		env = append(env, "XYPRISS_XESS_AUTH_TOKEN="+sess.Token)
+	}
 	env = append(env, "XESS_SESSION_TMP="+sess.Dir)
 	env = append(env, "XESS_TEMP_DIR="+xessDir)
 	env = append(env, "LIBPORT_SOCKET_PATH="+portSock)

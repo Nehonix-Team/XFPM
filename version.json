@@ -2,10 +2,10 @@
   "name": "XFPM (XyPriss Fast Package Manager)",
   "description": "The Fast Package Manager for the XyPriss ecosystem.",
   "warning": "CRITICAL: Public modifications to this file are strictly forbidden. Internal Nehonix metadata ONLY.",
-  "latest": "vG0.2.8",
-  "message": "Selective XESS Confinement: Direct script targets only for zero-trust sandboxing, explicit --xess/--no-xess CLI overrides, and auto-configured FileOnix XyPriss runner.",
+  "latest": "vG0.2.9",
+  "message": "Zero-Trust Confinement: Ephemeral session auth token, zero-argument CLI execution, and post-boot session freeze.",
   "metadata": {
-    "releaseDate": "2026-09-29",
+    "releaseDate": "2026-10-01",
     "channel": "stable"
   }
 }
