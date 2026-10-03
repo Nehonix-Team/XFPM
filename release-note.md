@@ -1,3 +1,11 @@
+## [G0.3.0] - 2026-10-03
+
+### Core & Performance: O(1) Routing Engine & Zero-Cost Body Ingestion
+- **O(1) Static Route Lookup Map**: Integrated instant $O(1)$ Hash Map routing for all static HTTP endpoints, removing linear search overhead and GC array allocations.
+- **Segment-Length Indexed Parametric Router (`paramRoutesByLength`)**: Structured parametric route tables by URL segment depth, eliminating full table traversals and redundant string splits under high concurrency.
+- **Zero-Cycle V8 Body Parser Bypass**: Optimized `HttpServer` and `BodyParser` to recognize pre-decoded Go XHSC payloads instantly, eliminating stream event overhead and asynchronous micro-task scheduling in TypeScript.
+- **Security & CSRF Route Exclusion (`ExcludePaths`)**: Aligned runtime CSRF validation pipelines with granular route exclusion rules across Go and TypeScript bridges.
+
 ## [G0.2.9] - 2026-10-01
 
 ### Security & Architecture: Ephemeral Session Authentication & Post-Boot Freeze
