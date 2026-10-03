@@ -2,10 +2,10 @@
   "name": "XFPM (XyPriss Fast Package Manager)",
   "description": "The Fast Package Manager for the XyPriss ecosystem.",
   "warning": "CRITICAL: Public modifications to this file are strictly forbidden. Internal Nehonix metadata ONLY.",
-  "latest": "vG0.2.9",
-  "message": "Zero-Trust Confinement: Ephemeral session auth token, zero-argument CLI execution, and post-boot session freeze.",
+  "latest": "vG0.3.0",
+  "message": "Performance & Zero-Cost Routing: O(1) Hash map static routing, tokenized parametric path extraction, and zero-cycle V8 body parser bypass.",
   "metadata": {
-    "releaseDate": "2026-10-01",
+    "releaseDate": "2026-10-03",
     "channel": "stable"
   }
 }

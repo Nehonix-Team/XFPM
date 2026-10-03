@@ -176,7 +176,7 @@ func isWatcherOrMetaCommand(cmdStr string) bool {
 		if base == "fileonix" || base == "nodemon" || base == "chokidar" || base == "watch" {
 			return true
 		}
-		if (base == "xfpm" || base == "xfpm.exe") && i+1 < len(fields) && (fields[i+1] == "exec" || fields[i+1] == "x") {
+		if (base == "xfpm" || base == "xfpm.exe") && i+1 < len(fields) && (fields[i+1] == "exec" || fields[i+1] == "x" || fields[i+1] == "run") {
 			return true
 		}
 	}
@@ -276,7 +276,7 @@ func executeShellWithOptions(command, workDir, projDir string, opts execOptions)
 		}
 	}
 
-	if _, err := os.Stat(envPath); err == nil && !libxess.IsActive() && !sess.IsAdopted && !isWatcherOrMetaCommand(command) && shouldActivateXESS("", nil, command, opts) {
+	if _, err := os.Stat(envPath); err == nil && !libxess.IsActive() && !isWatcherOrMetaCommand(command) && shouldActivateXESS("", nil, command, opts) {
 		var shellCmd []string
 		if runtime.GOOS == "windows" {
 			shellCmd = []string{"cmd.exe", "/c", command}
@@ -340,7 +340,7 @@ func executeCommandWithOptions(name string, args []string, workDir, projDir stri
 		}
 	}
 
-	if _, err := os.Stat(envPath); err == nil && !libxess.IsActive() && !sess.IsAdopted && !isWatcherOrMetaCommand(name) && shouldActivateXESS(name, args, "", opts) {
+	if _, err := os.Stat(envPath); err == nil && !libxess.IsActive() && !isWatcherOrMetaCommand(name) && shouldActivateXESS(name, args, "", opts) {
 		fullCmd := append([]string{name}, args...)
 		sup, err := libxess.NewSupervisor(libxess.Config{
 			ProjectDir:  projDir,
@@ -414,7 +414,11 @@ func buildRunEnv(dir string, sess *libxess.Session) []string {
 	env = append(env, "XYPRISS_USER_TMP="+sess.Dir)
 	if sess.Token != "" {
 		env = append(env, "XYPRISS_INTERNAL_TOKEN="+sess.Token)
-		env = append(env, "XYPRISS_XESS_AUTH_TOKEN="+sess.Token)
+		if existingToken := os.Getenv("XYPRISS_XESS_AUTH_TOKEN"); existingToken != "" {
+			env = append(env, "XYPRISS_XESS_AUTH_TOKEN="+existingToken)
+		} else {
+			env = append(env, "XYPRISS_XESS_AUTH_TOKEN="+sess.Token)
+		}
 	}
 	env = append(env, "XESS_SESSION_TMP="+sess.Dir)
 	env = append(env, "XESS_TEMP_DIR="+xessDir)
