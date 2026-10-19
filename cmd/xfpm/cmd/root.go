@@ -9,6 +9,7 @@ package cmd
 import (
 	"fmt"
 	"os"
+	"strings"
 
 	"github.com/Nehonix-Team/XFMP/internal/core"
 	"github.com/Nehonix-Team/XFMP/internal/utils"
@@ -63,6 +64,27 @@ var RootCmd = &cobra.Command{
 }
 
 func Execute() {
+	if len(os.Args) > 1 {
+		firstArg := os.Args[1]
+		if !strings.HasPrefix(firstArg, "-") {
+			isKnownSubCmd := false
+			for _, c := range RootCmd.Commands() {
+				if c.Name() == firstArg || c.HasAlias(firstArg) {
+					isKnownSubCmd = true
+					break
+				}
+			}
+			if !isKnownSubCmd {
+				if _, err := os.Stat(firstArg); err == nil || strings.Contains(firstArg, "/") || strings.Contains(firstArg, "\\") || strings.HasSuffix(firstArg, ".ts") || strings.HasSuffix(firstArg, ".js") {
+					newArgs := make([]string, 0, len(os.Args)+1)
+					newArgs = append(newArgs, os.Args[0], "run")
+					newArgs = append(newArgs, os.Args[1:]...)
+					os.Args = newArgs
+				}
+			}
+		}
+	}
+
 	if err := RootCmd.Execute(); err != nil {
 		utils.Error("%v", err)
 		os.Exit(1)
