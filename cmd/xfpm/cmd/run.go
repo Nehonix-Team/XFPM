@@ -268,13 +268,14 @@ func executeShellWithOptions(command, workDir, projDir string, opts execOptions)
 
 	// Host-privileged libPort supervisor for port arbitration inside sessionDir
 	portSock := filepath.Join(sess.Dir, "libport.sock")
-	if !sess.IsAdopted {
+	if _, err := os.Stat(portSock); os.IsNotExist(err) {
 		portSup := libport.NewSupervisor(projDir, portSock)
 		if err := portSup.Start(); err == nil {
 			defer portSup.Stop()
 			onShutdownList = append(onShutdownList, portSup.Stop)
 		}
 	}
+
 
 	if _, err := os.Stat(envPath); err == nil && !libxess.IsActive() && !isWatcherOrMetaCommand(command) && shouldActivateXESS("", nil, command, opts) {
 		var shellCmd []string
@@ -332,13 +333,14 @@ func executeCommandWithOptions(name string, args []string, workDir, projDir stri
 
 	// Host-privileged libPort supervisor for port arbitration inside sessionDir
 	portSock := filepath.Join(sess.Dir, "libport.sock")
-	if !sess.IsAdopted {
+	if _, err := os.Stat(portSock); os.IsNotExist(err) {
 		portSup := libport.NewSupervisor(projDir, portSock)
 		if err := portSup.Start(); err == nil {
 			defer portSup.Stop()
 			onShutdownList = append(onShutdownList, portSup.Stop)
 		}
 	}
+
 
 	if _, err := os.Stat(envPath); err == nil && !libxess.IsActive() && !isWatcherOrMetaCommand(name) && shouldActivateXESS(name, args, "", opts) {
 		fullCmd := append([]string{name}, args...)

@@ -17,6 +17,8 @@ require (
 	golang.org/x/sys v0.41.0
 	github.com/NEHONIX/libPort v0.0.0
 	github.com/NEHONIX/libProc v0.0.0
+	github.com/Nehonix-Team/libSynapx v0.0.0
+	github.com/Nehonix-Team/XyPriss/tools/XHSC v0.0.0
 )
 
 replace github.com/Nehonix-Team/libXESS => ./lib/libXESS
@@ -26,6 +28,10 @@ replace github.com/Nehonix-Team/FileOnix => ./lib/FileOnix
 replace github.com/NEHONIX/libPort => ./lib/libPort
 
 replace github.com/NEHONIX/libProc => ./lib/libProc
+
+replace github.com/Nehonix-Team/libSynapx => ./lib/libSynapx
+
+replace github.com/Nehonix-Team/XyPriss/tools/XHSC => ../XHSC
 
 require (
 	atomicgo.dev/cursor v0.2.0 // indirect

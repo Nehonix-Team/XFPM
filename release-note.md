@@ -1,3 +1,32 @@
+## [G0.3.2] - 2026-10-19
+refactor(init): consolidate initialization logic and improve CLI routing
+
+Refactor the project initialization workflow by consolidating the 
+downloader, engine, and project logic into a single unified 
+`internal/init/init.go` module. This simplifies the internal 
+package structure and reduces complexity.
+
+Additionally, enhance the CLI experience by implementing transparent 
+script delegation in the root command, allowing users to execute 
+files directly without the explicit `run` subcommand. Improved 
+port supervisor lifecycle management by checking for existing 
+socket files to prevent redundant supervisor instantiation.
+
+- Refactor `internal/init` into a single `init.go` file
+- Implement transparent CLI routing for script files in `root.go`
+- Update `libPort` supervisor logic in `run.go` to check for existing sockets
+- Add `libSynapx` and `XHSC` dependencies to `go.mod`
+
+NB: xfpm init is now delegated to init.xru
+
+## [G0.3.1] - 2026-10-04
+
+### Core & IPC: Zero-Trust libSynapx Supervisor & Transparent CLI Script Delegation
+- **Host-Privileged libSynapx Supervisor (`synapx.sock`)**: Integrated automatic lifecycle management for the native libSynapx IPC server within the supervisor session (`sess.Dir`), guaranteeing persistent, multiplexed RPC availability for runtime native FS/Path calls from the very first cycle of process initialization.
+- **Transparent Script & Entrypoint Delegation**: Enhanced CLI argument processing to transparently route script targets (e.g. `xfpm path/to/server.ts`, `.js` or files containing path separators) directly into `runCmd` without requiring explicit `run` subcommands or triggering Cobra `unknown command` errors.
+- **Cross-Platform IPC Arbitration**: Synchronized socket path resolution with isolated session directories across Unix domain sockets and Windows named pipes, preventing collision with stale `/tmp` artifacts after unexpected reboots.
+- **Automated Orphan Session Sweeping**: Integrated preemptive session hygiene sweeping dead processes on CLI bootstrap without touching active running multi-server instances.
+
 ## [G0.3.0] - 2026-10-03
 
 ### Core & Performance: O(1) Routing Engine & Zero-Cost Body Ingestion
