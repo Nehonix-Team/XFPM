@@ -66,29 +66,48 @@ func ensureInitScript() (string, error) {
 	}
 
 	scriptPath := filepath.Join(cacheDir, "init.xru")
-	if _, err := os.Stat(scriptPath); os.IsNotExist(err) {
-		utils.Log("!", "Fetching initialization orchestrator from GitHub...")
-		client := &http.Client{Timeout: 30 * time.Second}
-		resp, err := client.Get(InitScriptURL)
-		if err != nil {
-			return "", fmt.Errorf("failed to download init.xru: %w", err)
-		}
+
+	utils.Log("!", "Fetching initialization orchestrator from GitHub...")
+	client := &http.Client{Timeout: 30 * time.Second}
+	resp, err := client.Get(InitScriptURL)
+
+	var downloadErr error
+	if err != nil {
+		downloadErr = err
+	} else {
 		defer resp.Body.Close()
-
 		if resp.StatusCode != http.StatusOK {
-			return "", fmt.Errorf("GitHub returned HTTP %d", resp.StatusCode)
-		}
-
-		out, err := os.Create(scriptPath)
-		if err != nil {
-			return "", err
-		}
-		defer out.Close()
-
-		if _, err := io.Copy(out, resp.Body); err != nil {
-			return "", err
+			downloadErr = fmt.Errorf("GitHub returned HTTP %d", resp.StatusCode)
+		} else {
+			tmpPath := scriptPath + ".tmp"
+			out, createErr := os.Create(tmpPath)
+			if createErr != nil {
+				downloadErr = createErr
+			} else {
+				if _, copyErr := io.Copy(out, resp.Body); copyErr != nil {
+					out.Close()
+					_ = os.Remove(tmpPath)
+					downloadErr = copyErr
+				} else {
+					out.Close()
+					if renameErr := os.Rename(tmpPath, scriptPath); renameErr != nil {
+						_ = os.Remove(tmpPath)
+						downloadErr = renameErr
+					} else {
+						// Downloaded and saved successfully
+						return scriptPath, nil
+					}
+				}
+			}
 		}
 	}
 
-	return scriptPath, nil
+	// Network failure: check if cached version is available
+	if _, statErr := os.Stat(scriptPath); statErr == nil {
+		utils.Warn("Failed to fetch latest init.xru from GitHub (%v). Falling back to cached version.", downloadErr)
+		return scriptPath, nil
+	}
+
+	// No cache available: abort
+	return "", fmt.Errorf("failed to download init.xru (%w) and no cached version is available", downloadErr)
 }
