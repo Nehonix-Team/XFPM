@@ -1,3 +1,12 @@
+## [G0.3.3] - 2026-10-20
+
+Update the initialization orchestrator download logic to use a temporary 
+file for atomic writes, preventing corruption during interrupted 
+downloads. Additionally, implement a fallback mechanism where the 
+previously cached `init.xru` is used if the network request to GitHub 
+fails, ensuring better resilience in offline or unstable network 
+environments.
+
 ## [G0.3.2] - 2026-10-19
 refactor(init): consolidate initialization logic and improve CLI routing
 
