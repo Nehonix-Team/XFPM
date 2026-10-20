@@ -2,10 +2,10 @@
   "name": "XFPM (XyPriss Fast Package Manager)",
   "description": "The Fast Package Manager for the XyPriss ecosystem.",
   "warning": "CRITICAL: Public modifications to this file are strictly forbidden. Internal Nehonix metadata ONLY.",
-  "latest": "vG0.3.2",
-  "message": "Consolidated project initialization into a unified module, enabled direct script execution without the run subcommand, and optimized the port supervisor lifecycle by checking for existing socket files.",
+  "latest": "vG0.3.3",
+  "message": "Implement atomic file writes and fallback to cached init script",
   "metadata": {
-    "releaseDate": "2026-10-04",
+    "releaseDate": "2026-10-20",
     "channel": "stable"
   }
 }
