@@ -646,7 +646,7 @@ var auditFixCmd = &cobra.Command{
 		spinner, _ := pterm.DefaultSpinner.Start("Checking for fixable vulnerabilities...")
 
 		registry := core.NewRegistryClient("", 3)
-		registry.SetCacheDir(paths.RegistryCacheDir(paths.LocalXpmDir(projectRoot)))
+		registry.SetCacheDir(paths.GlobalCacheDir())
 		cas, _ := core.NewCas(paths.StorageDir())
 		resolver := core.NewResolver(registry, cas)
 
