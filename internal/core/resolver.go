@@ -156,6 +156,40 @@ func (p Platform) IsCompatible(meta *VersionMetadata) bool {
 	return true
 }
 
+func (p Platform) IsIncompatiblePackageName(pkgName string) bool {
+	name := strings.ToLower(pkgName)
+
+	// Incompatible OS indicators in package name
+	otherOS := []string{"darwin", "win32", "windows", "android", "freebsd", "openbsd", "netbsd", "sunos", "aix"}
+	for _, osName := range otherOS {
+		if osName != p.OS {
+			if strings.Contains(name, "-"+osName) || strings.Contains(name, osName+"-") || strings.Contains(name, "/"+osName) {
+				return true
+			}
+		}
+	}
+
+	// Incompatible Arch indicators
+	otherArch := []string{"arm64", "aarch64", "armv7", "arm", "ia32", "x86", "ppc64", "s390x", "riscv64", "loong64", "mips", "wasm32", "wasm"}
+	for _, archName := range otherArch {
+		if (p.Arch == "x64" || p.Arch == "x86_64") {
+			if strings.Contains(name, "-"+archName) || strings.Contains(name, archName+"-") || strings.Contains(name, "/"+archName) {
+				return true
+			}
+		}
+	}
+
+	// Libc mismatch
+	if p.Libc == "glibc" && strings.Contains(name, "-musl") {
+		return true
+	}
+	if p.Libc == "musl" && (strings.Contains(name, "-gnu") || strings.Contains(name, "-glibc")) {
+		return true
+	}
+
+	return false
+}
+
 type job struct {
 	name       string
 	req        string
@@ -210,9 +244,11 @@ func (r *Resolver) SetOverrides(overrides map[string]string) {
 
 func (r *Resolver) ResolveTree(ctx context.Context, projectRoot string, rootDeps map[string]string) ([]*ResolvedPackage, map[string]string, error) {
 	// Try to load lockfile
+	var lockfile *Lockfile
 	if projectRoot != "" {
-		lockfile, err := ReadLockfile(projectRoot)
-		if err == nil && lockfile != nil {
+		lf, err := ReadLockfile(projectRoot)
+		if err == nil && lf != nil {
+			lockfile = lf
 			// Basic validation: check if all rootDeps match the lockfile rootVersions exactly
 			valid := true
 			if len(rootDeps) != len(lockfile.RootVersions) {
@@ -221,21 +257,22 @@ func (r *Resolver) ResolveTree(ctx context.Context, projectRoot string, rootDeps
 				for name, req := range rootDeps {
 					resolvedVersion := lockfile.RootVersions[name]
 					if resolvedVersion == "" {
-					valid = false
-					break
-				}
-				// If the requirement changed (e.g. ^1.0.5 -> ^2.0.0), check the locked version still satisfies it
-				if req != "latest" && !strings.HasPrefix(req, "file:") && !strings.HasPrefix(req, "workspace:") {
-					constraint, cErr := semver.NewConstraint(req)
-					sv, sErr := semver.NewVersion(resolvedVersion)
-					if cErr == nil && sErr == nil && !constraint.Check(sv) {
-						// Locked version no longer satisfies the requirement — must re-resolve
 						valid = false
 						break
 					}
+					// If the requirement changed (e.g. ^1.0.5 -> ^2.0.0), check the locked version still satisfies it
+					if req != "latest" && !strings.HasPrefix(req, "file:") && !strings.HasPrefix(req, "workspace:") {
+						constraint, cErr := semver.NewConstraint(req)
+						sv, sErr := semver.NewVersion(resolvedVersion)
+						if cErr == nil && sErr == nil && !constraint.Check(sv) {
+							// Locked version no longer satisfies the requirement — must re-resolve
+							valid = false
+							break
+						}
+					}
 				}
 			}
-		}
+
 			if valid && !r.Update && len(r.ForcePackages) == 0 {
 				utils.Info("Using 'XLock' resolution.")
 				
@@ -323,41 +360,71 @@ func (r *Resolver) ResolveTree(ctx context.Context, projectRoot string, rootDeps
 	var mu sync.Mutex
 	
 	for name, req := range rootDeps {
-		key := name + "@" + req
-		if _, loaded := r.visited.LoadOrStore(key, true); !loaded {
-			queue <- job{name: name, req: req, isRoot: true}
-			active++
+		shouldResolve := false
+
+		if r.Update || (r.ForcePackages != nil && r.ForcePackages[name]) {
+			shouldResolve = true
+		} else if lockfile != nil && lockfile.RootVersions != nil {
+			if lockedVer, ok := lockfile.RootVersions[name]; ok && lockedVer != "" {
+				if req == "latest" || strings.HasPrefix(req, "file:") || strings.HasPrefix(req, "workspace:") {
+					shouldResolve = true
+				} else {
+					constraint, cErr := semver.NewConstraint(req)
+					sv, sErr := semver.NewVersion(lockedVer)
+					if cErr != nil || sErr != nil || !constraint.Check(sv) {
+						shouldResolve = true
+					} else {
+						versionKey := name + "@" + lockedVer
+						if _, exists := r.resolved.Load(versionKey); !exists {
+							shouldResolve = true
+						}
+					}
+				}
+			} else {
+				shouldResolve = true
+			}
+		} else {
+			shouldResolve = true
+		}
+
+		if shouldResolve {
+			key := name + "@" + req
+			if _, loaded := r.visited.LoadOrStore(key, true); !loaded {
+				queue <- job{name: name, req: req, isRoot: true}
+				active++
+			}
+		} else {
+			key := name + "@" + req
+			r.visited.Store(key, true)
 		}
 	}
 
-	if active == 0 {
-		return nil, nil, nil
-	}
+	if active > 0 {
+		for i := 0; i < r.concurrency; i++ {
+			go func() {
+				for j := range queue {
+					err := r.resolvePackage(ctx, j.name, j.req, j.isOptional, j.isRoot, queue, &active, &mu)
+					results <- err
+				}
+			}()
+		}
 
-	for i := 0; i < r.concurrency; i++ {
-		go func() {
-			for j := range queue {
-				err := r.resolvePackage(ctx, j.name, j.req, j.isOptional, j.isRoot, queue, &active, &mu)
-				results <- err
-			}
-		}()
-	}
-
-	for active > 0 {
-		select {
-		case err := <-results:
-			mu.Lock()
-			active--
-			if err != nil {
+		for active > 0 {
+			select {
+			case err := <-results:
+				mu.Lock()
+				active--
+				if err != nil {
+					mu.Unlock()
+					return nil, nil, err
+				}
+				if active == 0 {
+					close(queue)
+				}
 				mu.Unlock()
-				return nil, nil, err
+			case <-ctx.Done():
+				return nil, nil, ctx.Err()
 			}
-			if active == 0 {
-				close(queue)
-			}
-			mu.Unlock()
-		case <-ctx.Done():
-			return nil, nil, ctx.Err()
 		}
 	}
 
@@ -440,7 +507,7 @@ func (r *Resolver) ResolveTree(ctx context.Context, projectRoot string, rootDeps
 		}
 	}
 
-	if projectRoot != "" && !r.Update && len(r.ForcePackages) == 0 {
+	if projectRoot != "" {
 		// Write lockfile — read real name/version from package.json if available
 		pkgName := "project"
 		pkgVersion := "1.0.0"
@@ -494,6 +561,9 @@ func (r *Resolver) findCompatibleVersion(name, req string) (string, bool) {
 
 func (r *Resolver) resolvePackage(ctx context.Context, name, req string, isOptional bool, isRoot bool, queue chan job, active *int, mu *sync.Mutex) error {
 	realName, realReq := r.parseAlias(name, req)
+	if isOptional && r.platform.IsIncompatiblePackageName(realName) {
+		return nil
+	}
 	if r.onProgress != nil {
 		r.onProgress(realName)
 	}
@@ -508,6 +578,15 @@ func (r *Resolver) resolvePackage(ctx context.Context, name, req string, isOptio
 			version := val.(string)
 			versionKey := realName + "@" + version
 			if _, loaded := r.resolved.Load(versionKey); loaded {
+				return nil
+			}
+		}
+
+		// Fast-path: If another dependency has already resolved this package with a compatible version,
+		// reuse it immediately without hitting registry, network, or re-resolving its dependency tree.
+		if !isRoot {
+			if compatVer, ok := r.findCompatibleVersion(realName, realReq); ok {
+				r.resolutionCache.Store(cacheKey, compatVer)
 				return nil
 			}
 		}
@@ -608,11 +687,13 @@ func (r *Resolver) resolvePackage(ctx context.Context, name, req string, isOptio
 	pkgInfo.mu.RUnlock()
 
 	// NPM abbreviated packument strips custom properties like "xfpm"
-	// So if this is a direct dependency (isRoot), we fetch the full version-specific packument (small size: 1-2KB).
+	// Only fetch full version-specific packument if it's potentially a XyPriss-related package
 	if isRoot {
 		if _, isLocal := r.LocalPackages[realName]; !isLocal {
-			if fullMeta, err := r.registry.FetchVersionMetadata(ctx, realName, version); err == nil {
-				meta.Xfpm = fullMeta.Xfpm
+			if strings.Contains(realName, "xy") || strings.Contains(realName, "fileonix") || strings.Contains(realName, "nehonix") || strings.Contains(realName, "plugin") {
+				if fullMeta, err := r.registry.FetchVersionMetadata(ctx, realName, version); err == nil {
+					meta.Xfpm = fullMeta.Xfpm
+				}
 			}
 		}
 	}
@@ -722,23 +803,37 @@ func (r *Resolver) resolvePackage(ctx context.Context, name, req string, isOptio
 		}
 	}
 	for dName, dReq := range meta.OptionalDependencies {
+		if r.platform.IsIncompatiblePackageName(dName) {
+			continue
+		}
 		dKey := dName + "@" + dReq
 		if _, loaded := r.visited.LoadOrStore(dKey, true); !loaded {
 			*active++
 			queue <- job{name: dName, req: dReq, isOptional: true}
 		}
 	}
-	for dName, dReq := range meta.PeerDependencies {
-		dKey := dName + "@" + dReq
-		if _, loaded := r.visited.LoadOrStore(dKey, true); !loaded {
+	// Only consider peer dependencies for direct project dependencies (isRoot) that are not marked optional.
+	// Transitive packages' peer dependencies are meant to be provided by the consumer / ancestor environment,
+	// and must NOT trigger cascading downloads of unrelated ecosystems (e.g. React, Vue, Vitest, AWS, Cloudflare).
+	if isRoot {
+		for dName, dReq := range meta.PeerDependencies {
 			isPeerOptional := false
 			if meta.PeerDependenciesMeta != nil {
 				if m, ok := meta.PeerDependenciesMeta[dName]; ok {
 					isPeerOptional = m.Optional
 				}
 			}
-			*active++
-			queue <- job{name: dName, req: dReq, isOptional: isPeerOptional || true} // Keep true for now to avoid breaking existing behavior, but we distinguish it
+			if isPeerOptional {
+				continue
+			}
+			if _, ok := r.findCompatibleVersion(dName, dReq); ok {
+				continue
+			}
+			dKey := dName + "@" + dReq
+			if _, loaded := r.visited.LoadOrStore(dKey, true); !loaded {
+				*active++
+				queue <- job{name: dName, req: dReq, isOptional: true}
+			}
 		}
 	}
 	mu.Unlock()

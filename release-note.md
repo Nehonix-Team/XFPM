@@ -1,3 +1,22 @@
+## [G0.3.5] - 2026-10-24
+
+### Security & Confinement: Zero-Trust libPort SandboxGuard & /proc Environ Secret Protection
+- **`libPort` Sandbox Confinement (`SandboxGuard`)**: Integrated the `SandboxGuard` security boundary into `libPort`. When handling port conflicts with `autoKillConflict`, `libPort` strictly queries `libXESS` (`CanTerminatePID`) before issuing process termination signals, categorically preventing the termination of external host processes (Postgres, Docker, Python, etc.) and enforcing automatic port switching (`AutoPortSwitch`) upon external collisions.
+- **Remediation of CWE-862 (Missing Authorization)**: Neutralized arbitrary process termination vectors by ensuring the supervisor socket only accepts commands and executes termination on verified descendants of the supervised process hierarchy.
+- **Zero Secret Leakage in `/proc/<pid>/environ`**: Removed one-time authentication tokens (`XYPRISS_XESS_AUTH_TOKEN`) from the child process's `execve` environment block, relying exclusively on kernel-level `SO_PEERCRED` descendant validation for socket handshake and in-memory session key exchange.
+
+## [G0.3.4] - 2026-10-24
+
+### Performance & Engine: Ultra-Fast Dependency Resolution & Deterministic Delta Locking
+- **Strict Peer Dependencies Pruning**: Eliminated deep recursive resolution of transitive `peerDependencies`. Transitive packages no longer trigger cascading downloads of unrelated ecosystem giants (e.g. React, Vue, Vitest, AWS SDK) unless explicitly required by the root project.
+- **Early Platform & Architecture Candidate Filtering**: Integrated `Platform.IsIncompatiblePackageName` to reject non-matching platform candidates (`darwin`, `win32`, `android`, `freebsd`, `arm64`, `loong64`, `musl`, etc.) *before* queuing network requests for optional platform dependencies.
+- **Instant Graph Deduplication Short-Circuit**: Replaced redundant registry queries with an $O(1)$ compatibility cache (`findCompatibleVersion`), instantly reusing already satisfied packages across the graph without network roundtrips.
+- **Global Metadata & Registry Cache (`~/.xfpm/cache`)**: Replaced project-local metadata caching (`node_modules/.xfpm/cache`) with a persistent user-wide global cache (`paths.GlobalCacheDir`), eliminating duplicate metadata network fetches across projects and workspaces.
+- **Selective Packument Inspection**: Streamlined `FetchVersionMetadata` to only query XyPriss-specific packuments for Nehonix ecosystem packages, avoiding dozens of unnecessary roundtrips on third-party dependencies.
+- **Deterministic Lockfile Delta Resolution**: Upgraded `xfpm.resolve.lock` resolution to only enqueue changed or newly added root packages into worker pools, freezing already locked sub-trees without re-resolution.
+- **Scoped Package `package.json` Serialization Fix**: Fixed character escaping (`@`, `.`, `:`) in `sjson` key path generation for scoped dependencies (`@scope/pkg`), ensuring `devDependencies` and `dependencies` in `package.json` are cleanly and reliably updated upon `xfpm install -D`.
+- **Guaranteed Lockfile Synchronization**: Ensured `xfpm.resolve.lock` is always written and updated upon direct package additions and upgrades.
+
 ## [G0.3.3] - 2026-10-20
 
 Update the initialization orchestrator download logic to use a temporary 
@@ -81,7 +100,7 @@ NB: xfpm init is now delegated to init.xru
 ## [G0.2.5] - 2026-09-27
 
 ### Security & IPC Confinement: libXESS Kernel Peer Authentication & Ephemeral Handshake
-- **Kernel-Level IPC Authentication (`SO_PEERCRED`)**: Integrated native Linux socket peer credential verification into `libXESS` IPC. Unix domain socket connections are strictly restricted to the supervisor process tree, immediately severing unauthorized external processes or non-descendant callers.
+- **Kernel-Level IPC Authentication**: Integrated native Linux socket peer credential verification into `libXESS` IPC. Unix domain socket connections are strictly restricted to the supervisor process tree, immediately severing unauthorized external processes or non-descendant callers.
 - **Ephemeral One-Time Token (OTT) Handshake**: Implemented cryptographic 256-bit ephemeral tokens generated per supervisor session. Tokens are injected into the runtime and purged immediately from environment and disk upon initialization.
 - **IPC Secret Caching & Optimization**: Optimized secret retrieval in `XessIpcClient` with in-memory caching per target workspace, eliminating redundant socket roundtrips during multi-server startup.
 - **Supply-Chain & Decoy Protection**: Strengthened isolation against malicious plugins attempting unauthorized in-process or out-of-process environment secret exfiltration.

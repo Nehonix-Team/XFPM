@@ -77,9 +77,8 @@ func DownloadAndInstallBun() error {
 		return fmt.Errorf("failed to init storage: %w", err)
 	}
 
-	xpmDir := paths.LocalXpmDir(projectRoot)
 	registry := NewRegistryClient("", 3)
-	registry.SetCacheDir(paths.RegistryCacheDir(xpmDir))
+	registry.SetCacheDir(paths.GlobalCacheDir())
 
 	utils.Info("Bootstrapping Bun runtime via XFPM engine...")
 

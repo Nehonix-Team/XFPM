@@ -131,9 +131,8 @@ var installCmd = &cobra.Command{
 			return err
 		}
 
-		xpmDir := paths.LocalXpmDir(projectRoot)
 		registry := core.NewRegistryClient("", 3)
-		registry.SetCacheDir(paths.RegistryCacheDir(xpmDir))
+		registry.SetCacheDir(paths.GlobalCacheDir())
 
 		resolver := core.NewResolver(registry, cas)
 
@@ -421,6 +420,13 @@ var installCmd = &cobra.Command{
 			updates := make(map[string]interface{})
 			var removes []string
 
+			safeKey := func(k string) string {
+				s := strings.ReplaceAll(k, ".", "\\.")
+				s = strings.ReplaceAll(s, "@", "\\@")
+				s = strings.ReplaceAll(s, ":", "\\:")
+				return s
+			}
+
 			for name := range directPkgs {
 				version := "latest"
 				if v, ok := rootVersions[name]; ok {
@@ -435,16 +441,18 @@ var installCmd = &cobra.Command{
 					version = origReq
 				}
 
+				safeName := safeKey(name)
+
 				if len(args) == 0 {
 					// Update in place where it already exists
 					if _, ok := pkg.Dependencies[name]; ok {
-						updates["dependencies."+strings.ReplaceAll(name, ".", "\\.")] = version
+						updates["dependencies."+safeName] = version
 					} else if _, ok := pkg.DevDependencies[name]; ok {
-						updates["devDependencies."+strings.ReplaceAll(name, ".", "\\.")] = version
+						updates["devDependencies."+safeName] = version
 					} else if _, ok := pkg.OptionalDependencies[name]; ok {
-						updates["optionalDependencies."+strings.ReplaceAll(name, ".", "\\.")] = version
+						updates["optionalDependencies."+safeName] = version
 					} else if _, ok := pkg.PeerDependencies[name]; ok {
-						updates["peerDependencies."+strings.ReplaceAll(name, ".", "\\.")] = version
+						updates["peerDependencies."+safeName] = version
 					}
 				} else {
 					var targetSection string
@@ -469,8 +477,6 @@ var installCmd = &cobra.Command{
 						}
 					}
 
-					safeName := strings.ReplaceAll(name, ".", "\\.")
-					
 					// Remove from all sections first
 					removes = append(removes, 
 						"dependencies."+safeName, 

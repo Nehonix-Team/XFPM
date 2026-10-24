@@ -73,7 +73,7 @@ var createCmd = &cobra.Command{
 		os.MkdirAll(tempRoot, 0755)
 
 		registry := core.NewRegistryClient("", 3)
-		registry.SetCacheDir(paths.RegistryCacheDir(tempRoot))
+		registry.SetCacheDir(paths.GlobalCacheDir())
 		
 		resolver := core.NewResolver(registry, cas)
 		
