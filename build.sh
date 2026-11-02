@@ -177,6 +177,25 @@ for TARGET in "${TARGETS[@]}"; do
         fi
     fi
 
+    # Build native libXESS Seccomp Guard runner for Linux
+    if command -v gcc >/dev/null 2>&1 && [ -f "lib/libXESS/internal/confinement/runner/runner.c" ]; then
+        printf "  ${CYAN}%-20s${NC} ${DIM}»${NC} " "Creating xess-runner"
+        if gcc -O2 -s lib/libXESS/internal/confinement/runner/runner.c -o "${DIST_DIR}/xess-runner"; then
+            echo -e "${GREEN}✓ NATIVE C (15KB)${NC}"
+            cp "${DIST_DIR}/xess-runner" "./xess-runner" 2>/dev/null || true
+            if [ -d "$HOME/.xfpm/bin" ]; then
+                cp -f "${DIST_DIR}/xess-runner" "$HOME/.xfpm/bin/xess-runner" 2>/dev/null || true
+                chmod +x "$HOME/.xfpm/bin/xess-runner" 2>/dev/null || true
+            fi
+            if [ -d "../../bin" ]; then
+                cp -f "${DIST_DIR}/xess-runner" "../../bin/xess-runner" 2>/dev/null || true
+                chmod +x "../../bin/xess-runner" 2>/dev/null || true
+            fi
+        else
+            echo -e "${YELLOW}⨯ FAILED (gcc)${NC}"
+        fi
+    fi
+
     # If building for host, update local root ./xfpm and ~/.xfpm/bin/xfpm
     if [ "$OS" = "$(go env GOOS)" ] && [ "$ARCH" = "$(go env GOARCH)" ]; then
         cp "$TARGET_PATH" "./${BINARY_NAME}"
