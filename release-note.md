@@ -1,3 +1,14 @@
+## [G0.3.6] - 2026-11-02
+
+### Security & Architecture: Next-Gen Zero-Trust Confinement, In-Memory Secret Shield & Unified IPC
+- **Bipolar Zero-Trust Process Sandbox**: Reinforced runtime isolation boundaries across the engine. Supervised applications now execute within a hardened two-tier containment layer that strictly restricts filesystem access to authorized project paths and runtime assets, eliminating unauthorized ambient access to host resources and system privileges.
+- **Zero-Disk In-Memory Secret Shield**: Completely eliminated on-disk plaintext environment file exposure. Sensitive configuration and secrets are dynamically sealed inside an isolated, volatile in-memory storage layer, immunizing secrets against disk forensic extraction, cold-boot inspection, and unauthorized runtime modification.
+- **Unified IPC & Resource Arbitration**: Consolidated runtime communication channels under a single centralized supervision authority. Eliminates redundant auxiliary communication endpoints and provides unified, peer-verified arbitration for network port allocations and runtime services.
+- **Resilient Process Teardown & Abrupt Termination Recovery**:
+  - Overhauled process termination cascades across the supervisor engine to gracefully handle abrupt interrupts (`pkill`, `SIGTERM`, `SIGINT`).
+  - Added non-blocking teardown guarantees preventing process hang during child stream cleanup.
+  - Hardened automated session hygiene with kernel timestamp correlation, guaranteeing immediate cleanup of transient resources even in high-churn containerized environments.
+
 ## [G0.3.5] - 2026-10-24
 
 ### Security & Confinement: Zero-Trust libPort SandboxGuard & /proc Environ Secret Protection
