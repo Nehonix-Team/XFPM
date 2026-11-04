@@ -264,17 +264,21 @@ func executeShellWithOptions(command, workDir, projDir string, opts execOptions)
 	if err != nil {
 		return fmt.Errorf("failed to allocate session: %w", err)
 	}
-	defer sess.Destroy()
-	unregCleanup := utils.SignalManager.RegisterCleanup(func() {
+	destroySession := func() {
+		if utils.SignalManager.IsReload() {
+			sess.SetReloading(true)
+		}
 		_ = sess.Destroy()
-	})
+	}
+	defer destroySession()
+	unregCleanup := utils.SignalManager.RegisterCleanup(destroySession)
 	defer unregCleanup()
 
 	baseEnv, pluginRoots := buildRunEnv(workDir, sess)
 	envPath := filepath.Join(projDir, ".env")
 
 	var onShutdownList []func()
-	onShutdownList = append(onShutdownList, func() { _ = sess.Destroy() })
+	onShutdownList = append(onShutdownList, destroySession)
 	onShutdown := func() {
 		for _, fn := range onShutdownList {
 			fn()
@@ -309,7 +313,7 @@ func executeShellWithOptions(command, workDir, projDir string, opts execOptions)
 	}
 
 	// Standalone fallback: only start separate libport supervisor when libXESS is not active
-	if sup == nil {
+	if sup == nil && !isWatcherOrMetaCommand(command) {
 		portSock := filepath.Join(sess.Dir, "libport.sock")
 		if _, err := os.Stat(portSock); os.IsNotExist(err) {
 			portSup := libport.NewSupervisor(projDir, portSock)
@@ -347,17 +351,21 @@ func executeCommandWithOptions(name string, args []string, workDir, projDir stri
 	if err != nil {
 		return fmt.Errorf("failed to allocate session: %w", err)
 	}
-	defer sess.Destroy()
-	unregCleanup := utils.SignalManager.RegisterCleanup(func() {
+	destroySession := func() {
+		if utils.SignalManager.IsReload() {
+			sess.SetReloading(true)
+		}
 		_ = sess.Destroy()
-	})
+	}
+	defer destroySession()
+	unregCleanup := utils.SignalManager.RegisterCleanup(destroySession)
 	defer unregCleanup()
 
 	baseEnv, pluginRoots := buildRunEnv(workDir, sess)
 	envPath := filepath.Join(projDir, ".env")
 
 	var onShutdownList []func()
-	onShutdownList = append(onShutdownList, func() { _ = sess.Destroy() })
+	onShutdownList = append(onShutdownList, destroySession)
 	onShutdown := func() {
 		for _, fn := range onShutdownList {
 			fn()
@@ -386,7 +394,7 @@ func executeCommandWithOptions(name string, args []string, workDir, projDir stri
 	}
 
 	// Standalone fallback: only start separate libport supervisor when libXESS is not active
-	if sup == nil {
+	if sup == nil && !isWatcherOrMetaCommand(name) {
 		portSock := filepath.Join(sess.Dir, "libport.sock")
 		if _, err := os.Stat(portSock); os.IsNotExist(err) {
 			portSup := libport.NewSupervisor(projDir, portSock)
@@ -649,13 +657,6 @@ func buildRunEnv(dir string, sess *libxess.Session) ([]string, []string) {
 	manifestPath, pluginRoots := generatePluginsManifest(dir, sess.Dir)
 	if manifestPath != "" {
 		env = append(env, "XYPRISS_PLUGINS_MANIFEST="+manifestPath)
-	}
-
-	if exe, err := os.Executable(); err == nil {
-		xhscBin := filepath.Join(filepath.Dir(exe), "xhsc")
-		if _, err := os.Stat(xhscBin); err == nil {
-			env = append(env, "XYPRISS_XHSC_PATH="+xhscBin)
-		}
 	}
 
 	return env, pluginRoots
