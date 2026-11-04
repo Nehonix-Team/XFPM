@@ -672,6 +672,10 @@ func (i *Installer) runLifecycleScripts(ctx context.Context, packages []*Resolve
 		if i.TargetPackages != nil && !i.TargetPackages[pkg.Name] {
 			continue
 		}
+		// Skip lifecycle scripts for shadowed transitive versions of direct dependencies
+		if directVer, isDirect := i.DirectDeps[pkg.Name]; isDirect && pkg.Version != directVer {
+			continue
+		}
 		cacheKey := pkg.Name + "@" + pkg.Version
 		if _, wasChanged := i.changedPackages.Load(cacheKey); !wasChanged { continue }
 

@@ -1,3 +1,20 @@
+## [G0.3.8] - 2026-11-04
+
+### Security, Registry & Lifecycle: Native Peer Verification, Metadata Freshness & Hook Deduplication
+- **Strict Native Peer Verification**: Hardened internal supervision channels by enforcing strict binary identity checks on connected peers, ensuring only authorized native system components can interact with privileged runtime vaults while blocking direct connections from userland runtimes and shells.
+- **Extended Runtime Configuration Operations**: Added native support for dynamic in-session configuration mutation and existence queries (`SET`, `DELETE`, `HAS`) across the isolated supervision boundary.
+- **Registry Metadata Cache TTL & Publish Invalidation**: Introduced automatic staleness expiration on cached registry packuments and immediate local cache invalidation upon `xfpm publish`, ensuring newly published package versions are resolved immediately without manual cache clearing.
+- **Deterministic Postinstall Deduplication**: Refined lifecycle script orchestration so each resolved `name@version` package executes its `postinstall` hook at most once per installation cycle across complex dependency graphs.
+- **Strictly Compressed Distribution Assets (`.gz`)**: All cross-platform release targets (`xfpm-*` and `xess-runner*`) are now packaged and distributed as compressed `.gz` archives with on-the-fly streaming extraction in the official installers, significantly reducing release bandwidth and download times.
+
+## [G0.3.7] - 2026-11-03
+
+### Runtime & Lifecycle: Hot-Reload Continuity, Lifecycle Script Deduplication & Decoupled Binary Resolution
+- **Seamless Development Hot-Reload Continuity**: Enhanced runtime session orchestration across development reloads (`FileOnix`), preserving active workspace state across file-watcher restarts while guaranteeing full cleanup upon final process termination.
+- **Transitive Lifecycle Script Deduplication**: Prevented shadowed transitive versions of root direct dependencies from executing redundant `preinstall`/`install`/`postinstall` lifecycle hooks during parallel installation.
+- **Decoupled Native Engine Resolution**: Removed hardcoded runtime binary path overrides from `xfpm run`, delegating native engine discovery and integrity verification strictly to project-level provisioning scripts.
+- **Cross-Platform Build & Confinement Hardening**: Fixed cross-compilation compatibility across `darwin`, `linux`, and `windows` targets and refined native child process lifecycle teardown.
+
 ## [G0.3.6] - 2026-11-02
 
 ### Security & Architecture: Next-Gen Zero-Trust Confinement, In-Memory Secret Shield & Unified IPC

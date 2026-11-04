@@ -18,6 +18,7 @@ type signalManager struct {
 	subscribers []chan os.Signal
 	cleanups    []func()
 	started     bool
+	isReload    bool
 	done        chan struct{} // closed once the signal has been dispatched
 }
 
@@ -87,6 +88,7 @@ func (sm *signalManager) Start() {
 		// Snapshot + clear subscribers atomically so Unsubscribe
 		// on a dispatched channel doesn't touch a stale slice.
 		sm.mu.Lock()
+		sm.isReload = (sig == syscall.SIGHUP)
 		subs := sm.subscribers
 		sm.subscribers = nil
 		sm.mu.Unlock()
@@ -158,6 +160,13 @@ func (sm *signalManager) Unsubscribe(ch chan os.Signal) {
 			return
 		}
 	}
+}
+
+// IsReload reports whether the captured signal was a hot-reload signal (SIGHUP).
+func (sm *signalManager) IsReload() bool {
+	sm.mu.Lock()
+	defer sm.mu.Unlock()
+	return sm.isReload
 }
 
 // Done returns a channel that is closed once the shutdown signal has been
