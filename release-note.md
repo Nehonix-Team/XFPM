@@ -1,3 +1,10 @@
+## [G0.3.10] - 2026-11-05
+
+### Kernel Confinement & Resilient Interception: Hardlink Neutralization, io_uring Isolation & Dynamic Inode Tracking
+- **Comprehensive Hardlink Protection**: Added explicit kernel-level barriers for `SYS_link` and `SYS_linkat`, proactively blocking unauthorized physical hardlink creation targeting sensitive environment files.
+- **io_uring Confinement & Graceful POSIX Fallback**: Enforced deterministic POSIX I/O routing by neutralizing asynchronous `io_uring` setup/enter syscalls, preventing ring-buffer bypass vectors while maintaining full engine stability.
+- **Dynamic Inode Tracking & Hot-Reload Re-Arming**: Integrated automatic real-time inode rediscovery across atomic saves and editor safe-write cycles, guaranteeing perpetual honeypot tarpit enforcement.
+
 ## [G0.3.9] - 2026-11-05
 
 ### Confinement & Security: Canonical VFS Inode Dereferencing & Link-Resilient Canary Tarpit
