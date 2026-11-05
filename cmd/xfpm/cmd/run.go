@@ -7,6 +7,7 @@
 package cmd
 
 import (
+	"encoding/json"
 	"fmt"
 	"os"
 	"os/exec"
@@ -89,10 +90,18 @@ var runCmd = &cobra.Command{
 			var runErr error
 			targetProjectDir := resolveTargetProjectDir(scriptName, projectRoot)
 			ext := filepath.Ext(scriptName)
+
+			// Relativize scriptName against targetProjectDir so the process executes cleanly inside its own project directory
+			absScript, _ := filepath.Abs(scriptName)
+			runScript := scriptName
+			if rel, err := filepath.Rel(targetProjectDir, absScript); err == nil && !strings.HasPrefix(rel, "..") {
+				runScript = rel
+			}
+
 			if ext == ".ts" || ext == ".js" {
-				runErr = executeCommandWithOptions("bun", []string{"run", scriptName}, projectRoot, targetProjectDir, opts)
+				runErr = executeCommandWithOptions("bun", []string{"run", runScript}, targetProjectDir, targetProjectDir, opts)
 			} else {
-				runErr = executeShellWithOptions(scriptName, projectRoot, targetProjectDir, opts)
+				runErr = executeShellWithOptions(runScript, targetProjectDir, targetProjectDir, opts)
 			}
 			if runErr != nil && isInterrupted(runErr) {
 				return nil
@@ -255,18 +264,26 @@ func executeShellWithOptions(command, workDir, projDir string, opts execOptions)
 	if err != nil {
 		return fmt.Errorf("failed to allocate session: %w", err)
 	}
+	destroySession := func() {
+		if utils.SignalManager.IsReload() {
+			sess.SetReloading(true)
+		}
+		_ = sess.Destroy()
+	}
+	defer destroySession()
+	unregCleanup := utils.SignalManager.RegisterCleanup(destroySession)
+	defer unregCleanup()
 
-	baseEnv := buildRunEnv(workDir, sess)
+	baseEnv, pluginRoots := buildRunEnv(workDir, sess)
 	envPath := filepath.Join(projDir, ".env")
 
 	var onShutdownList []func()
+	onShutdownList = append(onShutdownList, destroySession)
 	onShutdown := func() {
 		for _, fn := range onShutdownList {
 			fn()
 		}
 	}
-
-
 
 	var sup *libxess.Supervisor
 	if _, err := os.Stat(envPath); err == nil && !libxess.IsActive() && !isWatcherOrMetaCommand(command) && shouldActivateXESS("", nil, command, opts) {
@@ -277,28 +294,33 @@ func executeShellWithOptions(command, workDir, projDir string, opts execOptions)
 			shellCmd = []string{"sh", "-c", command}
 		}
 
+		runnerBin, _ := os.Executable()
+		roPaths := resolveSandboxedROPaths(projDir, pluginRoots)
+
 		sInstance, err := libxess.NewSupervisor(libxess.Config{
-			ProjectDir:  projDir,
-			EnvFileName: ".env",
-			Command:     shellCmd,
-			BaseEnv:     baseEnv,
-			TempDir:     filepath.Join(sess.Dir, "xess"),
+			ProjectDir:     projDir,
+			EnvFileName:    ".env",
+			Command:        shellCmd,
+			BaseEnv:        baseEnv,
+			TempDir:        filepath.Join(sess.Dir, "xess"),
+			LandlockRunner: runnerBin,
+			LandlockRO:     roPaths,
+			LandlockRW:     []string{projDir, sess.Dir},
 		})
 		if err == nil {
 			sup = sInstance
 		}
 	}
 
-	// Host-privileged libPort supervisor with SandboxGuard linked to libXESS
-	portSock := filepath.Join(sess.Dir, "libport.sock")
-	if _, err := os.Stat(portSock); os.IsNotExist(err) {
-		portSup := libport.NewSupervisor(projDir, portSock)
-		if sup != nil {
-			portSup.SetGuard(sup)
-		}
-		if err := portSup.Start(); err == nil {
-			defer portSup.Stop()
-			onShutdownList = append(onShutdownList, portSup.Stop)
+	// Standalone fallback: only start separate libport supervisor when libXESS is not active
+	if sup == nil && !isWatcherOrMetaCommand(command) {
+		portSock := filepath.Join(sess.Dir, "libport.sock")
+		if _, err := os.Stat(portSock); os.IsNotExist(err) {
+			portSup := libport.NewSupervisor(projDir, portSock)
+			if err := portSup.Start(); err == nil {
+				defer portSup.Stop()
+				onShutdownList = append(onShutdownList, portSup.Stop)
+			}
 		}
 	}
 
@@ -329,44 +351,57 @@ func executeCommandWithOptions(name string, args []string, workDir, projDir stri
 	if err != nil {
 		return fmt.Errorf("failed to allocate session: %w", err)
 	}
+	destroySession := func() {
+		if utils.SignalManager.IsReload() {
+			sess.SetReloading(true)
+		}
+		_ = sess.Destroy()
+	}
+	defer destroySession()
+	unregCleanup := utils.SignalManager.RegisterCleanup(destroySession)
+	defer unregCleanup()
 
-	baseEnv := buildRunEnv(workDir, sess)
+	baseEnv, pluginRoots := buildRunEnv(workDir, sess)
 	envPath := filepath.Join(projDir, ".env")
 
 	var onShutdownList []func()
+	onShutdownList = append(onShutdownList, destroySession)
 	onShutdown := func() {
 		for _, fn := range onShutdownList {
 			fn()
 		}
 	}
 
-
-
 	var sup *libxess.Supervisor
 	if _, err := os.Stat(envPath); err == nil && !libxess.IsActive() && !isWatcherOrMetaCommand(name) && shouldActivateXESS(name, args, "", opts) {
 		fullCmd := append([]string{name}, args...)
+		runnerBin, _ := os.Executable()
+		roPaths := resolveSandboxedROPaths(projDir, pluginRoots)
+
 		sInstance, err := libxess.NewSupervisor(libxess.Config{
-			ProjectDir:  projDir,
-			EnvFileName: ".env",
-			Command:     fullCmd,
-			BaseEnv:     baseEnv,
-			TempDir:     filepath.Join(sess.Dir, "xess"),
+			ProjectDir:     projDir,
+			EnvFileName:    ".env",
+			Command:        fullCmd,
+			BaseEnv:        baseEnv,
+			TempDir:        filepath.Join(sess.Dir, "xess"),
+			LandlockRunner: runnerBin,
+			LandlockRO:     roPaths,
+			LandlockRW:     []string{projDir, sess.Dir},
 		})
 		if err == nil {
 			sup = sInstance
 		}
 	}
 
-	// Host-privileged libPort supervisor with SandboxGuard linked to libXESS
-	portSock := filepath.Join(sess.Dir, "libport.sock")
-	if _, err := os.Stat(portSock); os.IsNotExist(err) {
-		portSup := libport.NewSupervisor(projDir, portSock)
-		if sup != nil {
-			portSup.SetGuard(sup)
-		}
-		if err := portSup.Start(); err == nil {
-			defer portSup.Stop()
-			onShutdownList = append(onShutdownList, portSup.Stop)
+	// Standalone fallback: only start separate libport supervisor when libXESS is not active
+	if sup == nil && !isWatcherOrMetaCommand(name) {
+		portSock := filepath.Join(sess.Dir, "libport.sock")
+		if _, err := os.Stat(portSock); os.IsNotExist(err) {
+			portSup := libport.NewSupervisor(projDir, portSock)
+			if err := portSup.Start(); err == nil {
+				defer portSup.Stop()
+				onShutdownList = append(onShutdownList, portSup.Stop)
+			}
 		}
 	}
 
@@ -410,9 +445,189 @@ func runProcessWithOptions(cmd *exec.Cmd, sess *libxess.Session, onShutdown func
 	})
 }
 
-func buildRunEnv(dir string, sess *libxess.Session) []string {
+// resolveSandboxedROPaths determines the minimal read-only paths required by a sandboxed process.
+// It explicitly grants access only to authorized plugins and workspace build artifacts (mods, src, dist, node_modules),
+// while ensuring any parent secret files (.env, credentials) remain completely unreachable.
+func resolveSandboxedROPaths(projDir string, pluginRoots []string) []string {
+	var roPaths []string
+	roPaths = append(roPaths, pluginRoots...)
+
+	curr := filepath.Dir(projDir)
+	for curr != "/" && curr != "." && curr != "" {
+		roPaths = append(roPaths, curr)
+		parent := filepath.Dir(curr)
+		if parent == curr {
+			break
+		}
+		curr = parent
+	}
+	return roPaths
+}
+
+type PluginMeta struct {
+	Name      string `json:"name"`
+	Version   string `json:"version,omitempty"`
+	Root      string `json:"root"`
+	AuthorKey string `json:"authorKey,omitempty"`
+	IsTrusted bool   `json:"isTrusted"`
+}
+
+type PluginsManifestData struct {
+	ProjectRoot string                `json:"projectRoot"`
+	Plugins     map[string]PluginMeta `json:"plugins"`
+	Roots       map[string]string     `json:"roots"` // Canonical Path -> Name
+}
+
+func generatePluginsManifest(projectRoot string, sessDir string) (string, []string) {
+	manifest := PluginsManifestData{
+		ProjectRoot: projectRoot,
+		Plugins:     make(map[string]PluginMeta),
+		Roots:       make(map[string]string),
+	}
+	var pluginRoots []string
+
+	addPlugin := func(name, version, root, authorKey string, trusted bool) {
+		absRoot, err := filepath.Abs(root)
+		if err != nil {
+			absRoot = root
+		}
+		manifest.Plugins[name] = PluginMeta{
+			Name:      name,
+			Version:   version,
+			Root:      absRoot,
+			AuthorKey: authorKey,
+			IsTrusted: trusted,
+		}
+		manifest.Roots[absRoot] = name
+		pluginRoots = append(pluginRoots, absRoot)
+	}
+
+	// 1. Scan node_modules in projectRoot
+	nmDir := filepath.Join(projectRoot, "node_modules")
+	if entries, err := os.ReadDir(nmDir); err == nil {
+		for _, e := range entries {
+			if !e.IsDir() {
+				continue
+			}
+			if strings.HasPrefix(e.Name(), "@") {
+				// Scoped packages
+				scopeDir := filepath.Join(nmDir, e.Name())
+				if subEntries, err := os.ReadDir(scopeDir); err == nil {
+					for _, sub := range subEntries {
+						if !sub.IsDir() {
+							continue
+						}
+						pkgDir := filepath.Join(scopeDir, sub.Name())
+						sigPath := filepath.Join(pkgDir, paths.SigFileName)
+						cfgPath := paths.ConfigPath(pkgDir)
+						isSig := false
+						if _, err := os.Stat(sigPath); err == nil {
+							isSig = true
+						}
+						isCfg := false
+						if _, err := os.Stat(cfgPath); err == nil {
+							isCfg = true
+						}
+						if isSig || isCfg {
+							pkgName := e.Name() + "/" + sub.Name()
+							ver := ""
+							if pj, err := core.LoadPackageJson(paths.PackageJsonPath(pkgDir)); err == nil && pj != nil {
+								ver = pj.Version
+							}
+							addPlugin(pkgName, ver, pkgDir, "", true)
+						}
+					}
+				}
+			} else if !strings.HasPrefix(e.Name(), ".") {
+				pkgDir := filepath.Join(nmDir, e.Name())
+				sigPath := filepath.Join(pkgDir, paths.SigFileName)
+				cfgPath := paths.ConfigPath(pkgDir)
+				isSig := false
+				if _, err := os.Stat(sigPath); err == nil {
+					isSig = true
+				}
+				isCfg := false
+				if _, err := os.Stat(cfgPath); err == nil {
+					isCfg = true
+				}
+				if isSig || isCfg {
+					ver := ""
+					if pj, err := core.LoadPackageJson(paths.PackageJsonPath(pkgDir)); err == nil && pj != nil {
+						ver = pj.Version
+					}
+					addPlugin(e.Name(), ver, pkgDir, "", true)
+				}
+			}
+		}
+	}
+
+	// 2. Scan workspace/monorepo mods directory
+	checkDirs := []string{
+		filepath.Join(projectRoot, "mods"),
+		filepath.Join(projectRoot, "..", "mods"),
+		filepath.Join(projectRoot, "..", "..", "mods"),
+	}
+	for _, md := range checkDirs {
+		if info, err := os.Stat(md); err == nil && info.IsDir() {
+			if entries, err := os.ReadDir(md); err == nil {
+				for _, e := range entries {
+					if !e.IsDir() {
+						continue
+					}
+					modDir := filepath.Join(md, e.Name())
+					pkgPath := filepath.Join(modDir, "package.json")
+					if _, err := os.Stat(pkgPath); err == nil {
+						name := e.Name()
+						ver := "1.0.0"
+						if pj, err := core.LoadPackageJson(pkgPath); err == nil && pj != nil {
+							if pj.Name != "" {
+								name = pj.Name
+							}
+							if pj.Version != "" {
+								ver = pj.Version
+							}
+						}
+						addPlugin(name, ver, modDir, "", true)
+					}
+				}
+			}
+			break
+		}
+	}
+
+	// 3. Write manifest file
+	data, err := json.MarshalIndent(manifest, "", "  ")
+	if err != nil {
+		return "", pluginRoots
+	}
+
+	manifestPath := filepath.Join(sessDir, "plugins_manifest.json")
+	_ = os.WriteFile(manifestPath, data, 0644)
+
+	// Also write to project's .xfpm dir if node_modules exists
+	localXfpm := paths.LocalXpmDir(projectRoot)
+	_ = os.MkdirAll(localXfpm, 0755)
+	_ = os.WriteFile(filepath.Join(localXfpm, "plugins_manifest.json"), data, 0644)
+
+	return manifestPath, pluginRoots
+}
+
+func buildRunEnv(dir string, sess *libxess.Session) ([]string, []string) {
 	path := os.Getenv("PATH")
 	
+	// Add directory of the current running xfpm binary
+	if exe, err := os.Executable(); err == nil {
+		path = filepath.Dir(exe) + string(os.PathListSeparator) + path
+	}
+
+	// Add user's ~/.bun/bin if present
+	if home, err := os.UserHomeDir(); err == nil {
+		bunBin := filepath.Join(home, ".bun", "bin")
+		if _, err := os.Stat(bunBin); err == nil {
+			path = bunBin + string(os.PathListSeparator) + path
+		}
+	}
+
 	// Add project node_modules/.bin
 	binPath := filepath.Join(dir, "node_modules", ".bin")
 	if _, err := os.Stat(binPath); err == nil {
@@ -437,5 +652,12 @@ func buildRunEnv(dir string, sess *libxess.Session) []string {
 	env = append(env, "LIBPORT_SOCKET_PATH="+portSock)
 	env = append(env, "PORT_SOCKET_PATH="+portSock)
 	env = append(env, "XPM_SOCKET_PATH="+portSock)
-	return env
+	env = append(env, "XYPRISS_PROJECT_ROOT="+dir)
+
+	manifestPath, pluginRoots := generatePluginsManifest(dir, sess.Dir)
+	if manifestPath != "" {
+		env = append(env, "XYPRISS_PLUGINS_MANIFEST="+manifestPath)
+	}
+
+	return env, pluginRoots
 }

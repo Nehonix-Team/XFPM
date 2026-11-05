@@ -5,23 +5,63 @@ import (
 	"os/signal"
 	"sync"
 	"syscall"
+	"time"
 )
 
 // SignalManager is a centralized OS signal distributor.
-// It captures SIGINT and SIGTERM at program startup and
+// It captures SIGINT, SIGTERM, and SIGHUP at program startup and
 // dispatches them to all registered subscribers.
 var SignalManager = newSignalManager()
 
 type signalManager struct {
 	mu          sync.Mutex
 	subscribers []chan os.Signal
+	cleanups    []func()
 	started     bool
+	isReload    bool
 	done        chan struct{} // closed once the signal has been dispatched
 }
 
 func newSignalManager() *signalManager {
 	return &signalManager{
 		done: make(chan struct{}),
+	}
+}
+
+// RegisterCleanup registers a teardown callback (e.g. session dir purge).
+// Returns an unregister function to remove it when the operation completes normally.
+func (sm *signalManager) RegisterCleanup(fn func()) func() {
+	if fn == nil {
+		return func() {}
+	}
+	sm.mu.Lock()
+	sm.cleanups = append(sm.cleanups, fn)
+	sm.mu.Unlock()
+
+	return func() {
+		sm.mu.Lock()
+		defer sm.mu.Unlock()
+		for i, c := range sm.cleanups {
+			// Compare by pointer value if possible, or swap-remove
+			if &c == &fn {
+				sm.cleanups = append(sm.cleanups[:i], sm.cleanups[i+1:]...)
+				return
+			}
+		}
+	}
+}
+
+func (sm *signalManager) runCleanups() {
+	sm.mu.Lock()
+	cleanups := make([]func(), len(sm.cleanups))
+	copy(cleanups, sm.cleanups)
+	sm.cleanups = nil
+	sm.mu.Unlock()
+
+	for _, fn := range cleanups {
+		if fn != nil {
+			fn()
+		}
 	}
 }
 
@@ -37,8 +77,8 @@ func (sm *signalManager) Start() {
 	}
 	sm.started = true
 
-	ch := make(chan os.Signal, 1)
-	signal.Notify(ch, os.Interrupt, syscall.SIGTERM)
+	ch := make(chan os.Signal, 2)
+	signal.Notify(ch, os.Interrupt, syscall.SIGTERM, syscall.SIGHUP)
 
 	go func() {
 		sig := <-ch
@@ -48,6 +88,7 @@ func (sm *signalManager) Start() {
 		// Snapshot + clear subscribers atomically so Unsubscribe
 		// on a dispatched channel doesn't touch a stale slice.
 		sm.mu.Lock()
+		sm.isReload = (sig == syscall.SIGHUP)
 		subs := sm.subscribers
 		sm.subscribers = nil
 		sm.mu.Unlock()
@@ -67,9 +108,15 @@ func (sm *signalManager) Start() {
 		// Signal dispatch is complete; unblock anyone waiting on Done().
 		close(sm.done)
 
-		// Re-register default handler so a second SIGINT terminates the
-		// process forcefully if graceful shutdown hangs.
-		signal.Reset(os.Interrupt, syscall.SIGTERM)
+		// Allow graceful shutdown up to 3.5s, but if a second signal arrives, force terminate
+		select {
+		case <-ch:
+			sm.runCleanups()
+			os.Exit(1)
+		case <-time.After(3500 * time.Millisecond):
+			sm.runCleanups()
+			os.Exit(1)
+		}
 	}()
 }
 
@@ -113,6 +160,13 @@ func (sm *signalManager) Unsubscribe(ch chan os.Signal) {
 			return
 		}
 	}
+}
+
+// IsReload reports whether the captured signal was a hot-reload signal (SIGHUP).
+func (sm *signalManager) IsReload() bool {
+	sm.mu.Lock()
+	defer sm.mu.Unlock()
+	return sm.isReload
 }
 
 // Done returns a channel that is closed once the shutdown signal has been

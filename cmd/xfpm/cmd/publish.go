@@ -1,9 +1,13 @@
 package cmd
 
 import (
+	"encoding/json"
 	"os"
 	"os/exec"
+	"path/filepath"
+	"strings"
 
+	"github.com/Nehonix-Team/XFMP/internal/paths"
 	"github.com/Nehonix-Team/XFMP/internal/utils"
 	"github.com/spf13/cobra"
 )
@@ -35,6 +39,17 @@ var publishCmd = &cobra.Command{
 		if err != nil {
 			utils.Error("\nFailed to publish: %v", err)
 			return err
+		}
+
+		// Invalidate local metadata cache for the published package so subsequent installs fetch the new version immediately
+		if pkgData, readErr := os.ReadFile("package.json"); readErr == nil {
+			var pkgMeta struct {
+				Name string `json:"name"`
+			}
+			if json.Unmarshal(pkgData, &pkgMeta) == nil && pkgMeta.Name != "" {
+				cacheFile := filepath.Join(paths.GlobalCacheDir(), "metadata", strings.ReplaceAll(pkgMeta.Name, "/", "+")+".json")
+				_ = os.Remove(cacheFile)
+			}
 		}
 
 		utils.Success("Package published successfully!")

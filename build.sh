@@ -126,6 +126,7 @@ except Exception:
 
 # Initialization
 mkdir -p "$DIST_DIR"
+rm -f "${DIST_DIR}"/${BINARY_NAME}-* "${DIST_DIR}"/xess-runner* 2>/dev/null || true
 
 # Common hardened Go flags
 # -trimpath: removes host filesystem paths (/home/user/...)
@@ -167,6 +168,11 @@ for TARGET in "${TARGETS[@]}"; do
         fi
     fi
         
+    # Strip ELF symbol tables on Linux targets if strip is available
+    if [ "$OS" = "linux" ] && command -v strip >/dev/null 2>&1; then
+        strip --strip-all "$TARGET_PATH" 2>/dev/null || true
+    fi
+
     # Compression phase (optional UPX)
     if [ "$COMPRESS" = true ]; then
         printf "  ${MAGENTA}%-20s${NC} ${DIM}»${NC} " "UPX Compressing"
@@ -177,7 +183,12 @@ for TARGET in "${TARGETS[@]}"; do
         fi
     fi
 
-    # If building for host, update local root ./xfpm and ~/.xfpm/bin/xfpm
+    # Package standalone compressed distribution asset (.gz)
+    printf "  ${CYAN}%-20s${NC} ${DIM}»${NC} " "Packaging .gz"
+    gzip -c -9 "$TARGET_PATH" > "${TARGET_PATH}.gz"
+    echo -e "${GREEN}✓ COMPRESSED (${OUTPUT}.gz)${NC}"
+
+    # If building for host, update local root ./xfpm, ~/.xfpm/bin/xfpm, and ../../bin/xfpm
     if [ "$OS" = "$(go env GOOS)" ] && [ "$ARCH" = "$(go env GOARCH)" ]; then
         cp "$TARGET_PATH" "./${BINARY_NAME}"
         chmod +x "./${BINARY_NAME}"
@@ -185,14 +196,40 @@ for TARGET in "${TARGETS[@]}"; do
             cp --remove-destination "$TARGET_PATH" "$HOME/.xfpm/bin/${BINARY_NAME}" 2>/dev/null || cp -f "$TARGET_PATH" "$HOME/.xfpm/bin/${BINARY_NAME}"
             chmod +x "$HOME/.xfpm/bin/${BINARY_NAME}"
         fi
+        if [ -d "../../bin" ]; then
+            cp --remove-destination "$TARGET_PATH" "../../bin/${BINARY_NAME}" 2>/dev/null || cp -f "$TARGET_PATH" "../../bin/${BINARY_NAME}"
+            chmod +x "../../bin/${BINARY_NAME}" 2>/dev/null || true
+        fi
     fi
 done
 
-echo -e "\n${GREEN}${BOLD} ✅ BUILD PIPELINE COMPLETE ${NC}"
-echo -e "${DIM} Artifacts stored in: ./${DIST_DIR}${NC}\n"
-
-if [ -f "./dist/xfpm-linux-amd64" ] && [ -d "../../bin" ]; then
-    cp --remove-destination "./dist/xfpm-linux-amd64" ../../bin/xfpm 2>/dev/null || cp -f "./dist/xfpm-linux-amd64" ../../bin/xfpm
+# Build native libXESS Seccomp Guard runner for Linux
+if command -v gcc >/dev/null 2>&1 && [ -f "lib/libXESS/internal/confinement/runner/runner.c" ]; then
+    printf "  ${CYAN}%-20s${NC} ${DIM}»${NC} " "Creating xess-runner"
+    if gcc -O2 -s lib/libXESS/internal/confinement/runner/runner.c -o "${DIST_DIR}/xess-runner"; then
+        echo -e "${GREEN}✓ NATIVE C (15KB)${NC}"
+        cp -f "${DIST_DIR}/xess-runner" "${DIST_DIR}/xess-runner-linux-$(go env GOARCH)" 2>/dev/null || true
+        gzip -c -9 "${DIST_DIR}/xess-runner-linux-$(go env GOARCH)" > "${DIST_DIR}/xess-runner-linux-$(go env GOARCH).gz"
+        cp "${DIST_DIR}/xess-runner" "./xess-runner" 2>/dev/null || true
+        if [ -d "$HOME/.xfpm/bin" ]; then
+            cp -f "${DIST_DIR}/xess-runner" "$HOME/.xfpm/bin/xess-runner" 2>/dev/null || true
+            chmod +x "$HOME/.xfpm/bin/xess-runner" 2>/dev/null || true
+        fi
+        if [ -d "../../bin" ]; then
+            cp -f "${DIST_DIR}/xess-runner" "../../bin/xess-runner" 2>/dev/null || true
+            chmod +x "../../bin/xess-runner" 2>/dev/null || true
+        fi
+    else
+        echo -e "${YELLOW}⨯ FAILED (gcc)${NC}"
+    fi
 fi
-ls -lh "$DIST_DIR" | grep "$BINARY_NAME" | awk '{print "  " $5 "\t" $9}'
+
+# Purge uncompressed raw binaries from dist (retaining strictly .gz distribution assets)
+echo -e "\n ${CYAN}🧹 Purging raw uncompressed binaries from ./${DIST_DIR} (retaining strictly .gz assets)...${NC}"
+find "${DIST_DIR}" -maxdepth 1 -type f \( -name "${BINARY_NAME}-*" -o -name "xess-runner*" \) ! -name "*.gz" -delete
+
+echo -e "\n${GREEN}${BOLD} ✅ BUILD PIPELINE COMPLETE ${NC}"
+echo -e "${DIM} Compressed release artifacts stored in: ./${DIST_DIR}${NC}\n"
+
+ls -lh "$DIST_DIR" | grep -E "\.gz$" | awk '{print "  " $5 "\t" $9}'
 echo ""

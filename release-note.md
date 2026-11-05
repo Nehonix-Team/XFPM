@@ -1,3 +1,45 @@
+## [G0.3.10] - 2026-11-05
+
+### Kernel Confinement & Resilient Interception: Hardlink Neutralization, io_uring Isolation & Dynamic Inode Tracking
+- **Comprehensive Hardlink Protection**: Added explicit kernel-level barriers for `SYS_link` and `SYS_linkat`, proactively blocking unauthorized physical hardlink creation targeting sensitive environment files.
+- **io_uring Confinement & Graceful POSIX Fallback**: Enforced deterministic POSIX I/O routing by neutralizing asynchronous `io_uring` setup/enter syscalls, preventing ring-buffer bypass vectors while maintaining full engine stability.
+- **Dynamic Inode Tracking & Hot-Reload Re-Arming**: Integrated automatic real-time inode rediscovery across atomic saves and editor safe-write cycles, guaranteeing perpetual honeypot tarpit enforcement.
+
+## [G0.3.9] - 2026-11-05
+
+### Confinement & Security: Canonical VFS Inode Dereferencing & Link-Resilient Canary Tarpit
+- **Canonical Inode & Link Dereference Confinement**: Reinforced the native kernel supervisor (`xess-runner`) with canonical virtual filesystem (VFS) inode matching, ensuring that all access paths, hardlinks, and symlink dereference chains pointing to sensitive environment configurations resolve strictly to the active canary honeypot tarpit.
+- **Link Creation & Mutation Interception**: Added native syscall filtering on link creation (`symlink`, `symlinkat`, `link`, `linkat`, `rename`) to prevent unauthorized alias creation or relocation of protected runtime configurations.
+- **Dynamic Inode Telemetry Synchronization**: Enabled automatic multi-target inode telemetry sharing between the supervisor runtime and the tracing engine, guaranteeing complete coverage across diverse filesystem topologies.
+
+## [G0.3.8] - 2026-11-04
+
+### Security, Registry & Lifecycle: Native Peer Verification, Metadata Freshness & Hook Deduplication
+- **Strict Native Peer Verification**: Hardened internal supervision channels by enforcing strict binary identity checks on connected peers, ensuring only authorized native system components can interact with privileged runtime vaults while blocking direct connections from userland runtimes and shells.
+- **Extended Runtime Configuration Operations**: Added native support for dynamic in-session configuration mutation and existence queries (`SET`, `DELETE`, `HAS`) across the isolated supervision boundary.
+- **Registry Metadata Cache TTL & Publish Invalidation**: Introduced automatic staleness expiration on cached registry packuments and immediate local cache invalidation upon `xfpm publish`, ensuring newly published package versions are resolved immediately without manual cache clearing.
+- **Deterministic Postinstall Deduplication**: Refined lifecycle script orchestration so each resolved `name@version` package executes its `postinstall` hook at most once per installation cycle across complex dependency graphs.
+- **Strictly Compressed Distribution Assets (`.gz`)**: All cross-platform release targets (`xfpm-*` and `xess-runner*`) are now packaged and distributed as compressed `.gz` archives with on-the-fly streaming extraction in the official installers, significantly reducing release bandwidth and download times.
+
+## [G0.3.7] - 2026-11-03
+
+### Runtime & Lifecycle: Hot-Reload Continuity, Lifecycle Script Deduplication & Decoupled Binary Resolution
+- **Seamless Development Hot-Reload Continuity**: Enhanced runtime session orchestration across development reloads (`FileOnix`), preserving active workspace state across file-watcher restarts while guaranteeing full cleanup upon final process termination.
+- **Transitive Lifecycle Script Deduplication**: Prevented shadowed transitive versions of root direct dependencies from executing redundant `preinstall`/`install`/`postinstall` lifecycle hooks during parallel installation.
+- **Decoupled Native Engine Resolution**: Removed hardcoded runtime binary path overrides from `xfpm run`, delegating native engine discovery and integrity verification strictly to project-level provisioning scripts.
+- **Cross-Platform Build & Confinement Hardening**: Fixed cross-compilation compatibility across `darwin`, `linux`, and `windows` targets and refined native child process lifecycle teardown.
+
+## [G0.3.6] - 2026-11-02
+
+### Security & Architecture: Next-Gen Zero-Trust Confinement, In-Memory Secret Shield & Unified IPC
+- **Bipolar Zero-Trust Process Sandbox**: Reinforced runtime isolation boundaries across the engine. Supervised applications now execute within a hardened two-tier containment layer that strictly restricts filesystem access to authorized project paths and runtime assets, eliminating unauthorized ambient access to host resources and system privileges.
+- **Zero-Disk In-Memory Secret Shield**: Completely eliminated on-disk plaintext environment file exposure. Sensitive configuration and secrets are dynamically sealed inside an isolated, volatile in-memory storage layer, immunizing secrets against disk forensic extraction, cold-boot inspection, and unauthorized runtime modification.
+- **Unified IPC & Resource Arbitration**: Consolidated runtime communication channels under a single centralized supervision authority. Eliminates redundant auxiliary communication endpoints and provides unified, peer-verified arbitration for network port allocations and runtime services.
+- **Resilient Process Teardown & Abrupt Termination Recovery**:
+  - Overhauled process termination cascades across the supervisor engine to gracefully handle abrupt interrupts (`pkill`, `SIGTERM`, `SIGINT`).
+  - Added non-blocking teardown guarantees preventing process hang during child stream cleanup.
+  - Hardened automated session hygiene with kernel timestamp correlation, guaranteeing immediate cleanup of transient resources even in high-churn containerized environments.
+
 ## [G0.3.5] - 2026-10-24
 
 ### Security & Confinement: Zero-Trust libPort SandboxGuard & /proc Environ Secret Protection

@@ -35,24 +35,21 @@ func EnsureRuntime() error {
 		return nil
 	}
 
-	installedPath, lookErr := exec.LookPath(bunName)
-	
-	var agreed bool
-	// Case 2: Found elsewhere on the system
+	_, lookErr := exec.LookPath(bunName)
 	if lookErr == nil {
-		utils.Premium("RUNTIME", fmt.Sprintf("Bun is installed at %s but is not managed by XFPM.", installedPath))
-		agreed = utils.AskYesNo("For some reasons, we need to uninstall your actual bun binary to reinstall it manually; do u agree? (y/N)")
-	} else {
-		// Case 3: Not found at all
-		utils.Premium("RUNTIME", "XyPriss requires the Bun runtime to execute scripts and servers.")
-		agreed = utils.AskYesNo("Would you like XFPM to automatically install Bun for you? (y/N)")
+		return nil
 	}
-
-	if !agreed {
-		if lookErr == nil {
-			utils.Info("Using existing Bun at %s. Some features may be unstable.", installedPath)
+	if home, err := os.UserHomeDir(); err == nil {
+		userBun := filepath.Join(home, ".bun", "bin", bunName)
+		if _, err := os.Stat(userBun); err == nil {
 			return nil
 		}
+	}
+	
+	utils.Premium("RUNTIME", "XyPriss requires the Bun runtime to execute scripts and servers.")
+	agreed := utils.AskYesNo("Would you like XFPM to automatically install Bun for you? (y/N)")
+
+	if !agreed {
 		utils.Warn("XyPriss may not function correctly without Bun. You can install it later with 'xfpm i -g bun'.")
 		return nil
 	}

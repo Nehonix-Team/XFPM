@@ -136,11 +136,19 @@ func (c *RegistryClient) FetchPackage(ctx context.Context, name string, ignoreCa
 		}
 		if c.cacheDir != "" {
 			path := filepath.Join(c.cacheDir, strings.ReplaceAll(name, "/", "+")+".json")
-			if data, err := os.ReadFile(path); err == nil {
-				var pkg RegistryPackage
-				if err := json.Unmarshal(data, &pkg); err == nil {
-					c.packageCache.Store(name, &pkg)
-					return &pkg, nil
+			if fi, statErr := os.Stat(path); statErr == nil {
+				ttl := 30 * time.Minute
+				if strings.HasPrefix(name, "xypriss") || strings.HasPrefix(name, "fileonix") || strings.HasPrefix(name, "@nehonix/") {
+					ttl = 2 * time.Minute
+				}
+				if time.Since(fi.ModTime()) < ttl {
+					if data, err := os.ReadFile(path); err == nil {
+						var pkg RegistryPackage
+						if err := json.Unmarshal(data, &pkg); err == nil {
+							c.packageCache.Store(name, &pkg)
+							return &pkg, nil
+						}
+					}
 				}
 			}
 		}
