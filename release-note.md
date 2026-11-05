@@ -1,3 +1,10 @@
+## [G0.3.9] - 2026-11-05
+
+### Confinement & Security: Canonical VFS Inode Dereferencing & Link-Resilient Canary Tarpit
+- **Canonical Inode & Link Dereference Confinement**: Reinforced the native kernel supervisor (`xess-runner`) with canonical virtual filesystem (VFS) inode matching, ensuring that all access paths, hardlinks, and symlink dereference chains pointing to sensitive environment configurations resolve strictly to the active canary honeypot tarpit.
+- **Link Creation & Mutation Interception**: Added native syscall filtering on link creation (`symlink`, `symlinkat`, `link`, `linkat`, `rename`) to prevent unauthorized alias creation or relocation of protected runtime configurations.
+- **Dynamic Inode Telemetry Synchronization**: Enabled automatic multi-target inode telemetry sharing between the supervisor runtime and the tracing engine, guaranteeing complete coverage across diverse filesystem topologies.
+
 ## [G0.3.8] - 2026-11-04
 
 ### Security, Registry & Lifecycle: Native Peer Verification, Metadata Freshness & Hook Deduplication
