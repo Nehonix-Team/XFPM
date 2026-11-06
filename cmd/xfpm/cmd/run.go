@@ -214,17 +214,27 @@ func isServerEntryPoint(filePath string) bool {
 		base == "main.ts" || base == "main.js"
 }
 
-func isScriptTarget(name string, args []string) bool {
-	if isServerEntryPoint(name) {
-		return true
-	}
+func isJsRuntime(name string) bool {
 	base := strings.ToLower(filepath.Base(name))
-	if base == "bun" || base == "bun.exe" || base == "node" || base == "node.exe" || base == "tsx" || base == "deno" || base == "xfpm" || base == "xfpm.exe" {
-		for _, a := range args {
-			if isServerEntryPoint(a) {
-				return true
-			}
+	return base == "bun" || base == "bun.exe" ||
+		base == "node" || base == "node.exe" ||
+		base == "tsx" || base == "deno" ||
+		base == "npx" || base == "xfpmx"
+}
+
+func hasJsFile(args []string) bool {
+	for _, a := range args {
+		ext := strings.ToLower(filepath.Ext(a))
+		if ext == ".ts" || ext == ".js" || ext == ".mjs" || ext == ".cjs" {
+			return true
 		}
+	}
+	return false
+}
+
+func isScriptTarget(name string, args []string) bool {
+	if isServerEntryPoint(name) || isJsRuntime(name) || hasJsFile([]string{name}) || hasJsFile(args) {
+		return true
 	}
 	return false
 }
@@ -235,7 +245,7 @@ func isShellScriptTarget(command string) bool {
 		return false
 	}
 	for _, f := range fields {
-		if isServerEntryPoint(f) {
+		if isServerEntryPoint(f) || isJsRuntime(f) || hasJsFile([]string{f}) {
 			return true
 		}
 	}
