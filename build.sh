@@ -206,8 +206,11 @@ done
 # Build native libXESS Seccomp Guard runner for Linux
 if command -v gcc >/dev/null 2>&1 && [ -f "lib/libXESS/internal/confinement/runner/runner.c" ]; then
     printf "  ${CYAN}%-20s${NC} ${DIM}»${NC} " "Creating xess-runner"
-    if gcc -O2 -s lib/libXESS/internal/confinement/runner/runner.c -o "${DIST_DIR}/xess-runner"; then
-        echo -e "${GREEN}✓ NATIVE C (15KB)${NC}"
+    if gcc -O3 -s -fvisibility=hidden -fdata-sections -ffunction-sections -Wl,--gc-sections lib/libXESS/internal/confinement/runner/runner.c -o "${DIST_DIR}/xess-runner"; then
+        if command -v strip >/dev/null 2>&1; then
+            strip --strip-all -R .comment -R .note -R .note.gnu.build-id -R .note.ABI-tag -R .eh_frame -R .eh_frame_hdr "${DIST_DIR}/xess-runner" 2>/dev/null || true
+        fi
+        echo -e "${GREEN}✓ OBFUSCATED NATIVE C (14KB)${NC}"
         cp -f "${DIST_DIR}/xess-runner" "${DIST_DIR}/xess-runner-linux-$(go env GOARCH)" 2>/dev/null || true
         gzip -c -9 "${DIST_DIR}/xess-runner-linux-$(go env GOARCH)" > "${DIST_DIR}/xess-runner-linux-$(go env GOARCH).gz"
         cp "${DIST_DIR}/xess-runner" "./xess-runner" 2>/dev/null || true
