@@ -1,3 +1,9 @@
+## [G0.3.11] - 2026-11-06
+
+### Honeypot Illusion & Hot-Reload Hardening: VFS Metadata Interception & Resilient Session Watcher
+- **Full VFS Metadata Honeypot Parity**: Extended native kernel tracing (`xess-runner`) to comprehensively intercept metadata syscalls (`SYS_newfstatat`, `SYS_statx`, `SYS_stat`, `SYS_lstat`, `SYS_faccessat`, `SYS_faccessat2`). Eliminates observable metadata discrepancies between `stat` and `fstat` and completely neutralizes side-channel secret length deduction.
+- **Watcher-Anchored Session Persistence**: Anchored session persistence to long-lived supervisor/watcher PIDs across hot-reload cycles, preventing premature directory unlinking and eliminating transient startup race conditions.
+
 ## [G0.3.10] - 2026-11-05
 
 ### Kernel Confinement & Resilient Interception: Hardlink Neutralization, io_uring Isolation & Dynamic Inode Tracking
