@@ -340,7 +340,7 @@ func executeShellWithOptions(command, workDir, projDir string, opts execOptions)
 			cmd.Dir = workDir
 			defer sup.Stop()
 			onShutdownList = append(onShutdownList, sup.Stop)
-			utils.Success("libXESS loaded (Bipolar Zero-Trust Confinement)")
+			utils.Success("libXESS loaded")
 			return runProcessWithOptions(cmd, sess, onShutdown, true)
 		}
 		utils.Warn("libXESS confinement fallback: %v", err)
@@ -421,7 +421,7 @@ func executeCommandWithOptions(name string, args []string, workDir, projDir stri
 			cmd.Dir = workDir
 			defer sup.Stop()
 			onShutdownList = append(onShutdownList, sup.Stop)
-			utils.Success("libXESS loaded (Bipolar Zero-Trust Confinement)")
+			utils.Success("libXESS loaded")
 			return runProcessWithOptions(cmd, sess, onShutdown, true)
 		}
 		utils.Warn("libXESS confinement fallback: %v", err)
