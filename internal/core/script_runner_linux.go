@@ -14,3 +14,4 @@ func getSyscallInode(fi os.FileInfo) string {
 	}
 	return ""
 }
+

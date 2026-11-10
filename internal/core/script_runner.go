@@ -255,7 +255,7 @@ func (r *ScriptRunner) ExecuteParallel(ctx context.Context, tasks []ScriptTask) 
 	if !utils.SilentMode {
 		fmt.Printf("\n  [SCRIPTS] Executing %d tasks...\n", len(tasks))
 		if r.xessRunnerPath != "" && r.canaryPath != "" {
-			utils.Log("🔒", "Active Zero-Trust confinement for lifecycle scripts (libXESS sandbox)")
+			utils.Success("libXESS loaded")
 		}
 	}
 
