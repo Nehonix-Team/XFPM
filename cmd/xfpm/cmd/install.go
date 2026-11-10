@@ -198,8 +198,13 @@ var installCmd = &cobra.Command{
 				return fmt.Errorf("no valid package.json found in %s: %w", absPath, err)
 			}
 			localPackages[localPkg.Name] = absPath
+			refPath := absPath
+			if relPath, relErr := filepath.Rel(projectRoot, absPath); relErr == nil && !strings.HasPrefix(relPath, "..") {
+				refPath = "./" + relPath
+			}
+			fileRef := "file:" + refPath
 			rootDeps[localPkg.Name] = localPkg.Version
-			directPkgs[localPkg.Name] = localPkg.Version
+			directPkgs[localPkg.Name] = fileRef
 			if resolver.ForcePackages == nil {
 				resolver.ForcePackages = make(map[string]bool)
 			}
@@ -225,8 +230,13 @@ var installCmd = &cobra.Command{
 						return fmt.Errorf("no valid package.json found in %s: %w", absPath, err)
 					}
 					localPackages[localPkg.Name] = absPath
+					refPath := absPath
+					if relPath, relErr := filepath.Rel(projectRoot, absPath); relErr == nil && !strings.HasPrefix(relPath, "..") {
+						refPath = "./" + relPath
+					}
+					fileRef := "file:" + refPath
 					rootDeps[localPkg.Name] = localPkg.Version
-					directPkgs[localPkg.Name] = localPkg.Version
+					directPkgs[localPkg.Name] = fileRef
 					resolver.ForcePackages[localPkg.Name] = true
 					continue
 				}
@@ -416,7 +426,7 @@ var installCmd = &cobra.Command{
 			return err
 		}
 		// Update package.json
-		if pkg != nil && len(directPkgs) > 0 && (len(args) > 0 || update || hasRedirects || hasLatest) {
+		if pkg != nil && len(directPkgs) > 0 && (len(args) > 0 || localPath != "" || update || hasRedirects || hasLatest) {
 			updates := make(map[string]interface{})
 			var removes []string
 
@@ -429,8 +439,16 @@ var installCmd = &cobra.Command{
 
 			for name := range directPkgs {
 				version := "latest"
-				if v, ok := rootVersions[name]; ok {
+				if origReq, ok := directPkgs[name]; ok && (strings.HasPrefix(origReq, "file:") || strings.HasPrefix(origReq, "workspace:")) {
+					version = origReq
+				} else if v, ok := rootVersions[name]; ok {
 					version = "^" + v
+				} else if v, ok := directPkgs[name]; ok && v != "" {
+					if strings.HasPrefix(v, "^") || strings.HasPrefix(v, "~") || strings.HasPrefix(v, "file:") {
+						version = v
+					} else {
+						version = "^" + v
+					}
 				}
 
 				origReq := ""
@@ -443,7 +461,8 @@ var installCmd = &cobra.Command{
 
 				safeName := safeKey(name)
 
-				if len(args) == 0 {
+				isDirectInstall := len(args) > 0 || localPath != ""
+				if !isDirectInstall {
 					// Update in place where it already exists
 					if _, ok := pkg.Dependencies[name]; ok {
 						updates["dependencies."+safeName] = version
