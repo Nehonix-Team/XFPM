@@ -206,7 +206,8 @@ done
 # Build native libXESS Seccomp Guard runner for Linux
 if command -v gcc >/dev/null 2>&1 && [ -f "lib/libXESS/internal/confinement/runner/runner.c" ]; then
     printf "  ${CYAN}%-20s${NC} ${DIM}»${NC} " "Creating xess-runner"
-    if gcc -O3 -s -fvisibility=hidden -fdata-sections -ffunction-sections -Wl,--gc-sections lib/libXESS/internal/confinement/runner/runner.c -o "${DIST_DIR}/xess-runner"; then
+    C_HARDEN_FLAGS=(-O3 -s -fvisibility=hidden -fno-ident -fno-asynchronous-unwind-tables -fno-unwind-tables -fomit-frame-pointer -fno-stack-protector -fmerge-all-constants -fdata-sections -ffunction-sections -Wl,--gc-sections,-z,relro,-z,now)
+    if gcc "${C_HARDEN_FLAGS[@]}" lib/libXESS/internal/confinement/runner/runner.c -o "${DIST_DIR}/xess-runner"; then
         if command -v strip >/dev/null 2>&1; then
             strip --strip-all -R .comment -R .note -R .note.gnu.build-id -R .note.ABI-tag -R .eh_frame -R .eh_frame_hdr "${DIST_DIR}/xess-runner" 2>/dev/null || true
         fi
