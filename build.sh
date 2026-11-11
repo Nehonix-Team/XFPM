@@ -56,11 +56,7 @@ USE_GARBLE=false
 GARBLE_BIN=""
 
 if [ "$NO_OBFUSCATE" = false ]; then
-    # Ensure standalone toolchain is used if present to allow garble AST overlays
-    if [ -d "$HOME/.local/go1.27.1" ]; then
-        export GOROOT="$HOME/.local/go1.27.1"
-        export PATH="$HOME/.local/go1.27.1/bin:$HOME/go/bin:$PATH"
-    fi
+    export PATH="$HOME/go/bin:$PATH"
 
     if command -v garble >/dev/null 2>&1; then
         GARBLE_BIN="garble"
@@ -150,7 +146,7 @@ for TARGET in "${TARGETS[@]}"; do
 
     if [ "$USE_GARBLE" = true ]; then
         # Obfuscate AST, symbols, types, and string literals
-        if GOOS=$OS GOARCH=$ARCH "$GARBLE_BIN" -literals -tiny build "${GO_FLAGS[@]}" -o "$TARGET_PATH" "$ENTRY_POINT"; then
+        if GOOS=$OS GOARCH=$ARCH "$GARBLE_BIN" -literals build "${GO_FLAGS[@]}" -o "$TARGET_PATH" "$ENTRY_POINT"; then
             strip_go_buildinfo "$TARGET_PATH"
             echo -e "${GREEN}✓ OBFUSCATED${NC}"
         else

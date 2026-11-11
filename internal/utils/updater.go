@@ -26,6 +26,38 @@ const (
 	InstallScriptPS1 = "https://dll.nehonix.com/repo/xypriss/xfpm/scripts/install.ps1"
 )
 
+// parseSemVer parses versions like "vG0.3.14", "v0.3.8", or "0.1.236" into numeric components.
+func parseSemVer(v string) (major, minor, patch int) {
+	v = strings.TrimPrefix(v, "v")
+	v = strings.TrimPrefix(v, "G")
+	v = strings.TrimPrefix(v, "v")
+	parts := strings.Split(v, ".")
+	if len(parts) > 0 {
+		fmt.Sscanf(parts[0], "%d", &major)
+	}
+	if len(parts) > 1 {
+		fmt.Sscanf(parts[1], "%d", &minor)
+	}
+	if len(parts) > 2 {
+		fmt.Sscanf(parts[2], "%d", &patch)
+	}
+	return
+}
+
+// isVersionNewer returns true if remote is strictly newer than local using semver comparison.
+func isVersionNewer(remote, local string) bool {
+	rMaj, rMin, rPatch := parseSemVer(remote)
+	lMaj, lMin, lPatch := parseSemVer(local)
+
+	if rMaj != lMaj {
+		return rMaj > lMaj
+	}
+	if rMin != lMin {
+		return rMin > lMin
+	}
+	return rPatch > lPatch
+}
+
 // CheckForUpdates fetches the latest version from Nehonix GitHub and proposes an update if needed.
 // Returns true if an update was found and handled (or if up-to-date in forced mode).
 func CheckForUpdates(forced bool) bool {
@@ -75,14 +107,10 @@ func CheckForUpdates(forced bool) bool {
 	}
 
 	if data.Latest != "" && data.Latest != BinVersion {
-		// Only show update if the remote version is lexicographically greater (simplistic but works for G0.1.x)
-		// and avoid showing if the local version is already ahead.
-		cleanRemote := strings.TrimPrefix(data.Latest, "v")
-		cleanLocal := strings.TrimPrefix(BinVersion, "v")
-
-		if cleanRemote < cleanLocal {
+		// Use numeric semver comparison to avoid lexicographical string bugs (e.g. "8" > "14")
+		if !isVersionNewer(data.Latest, BinVersion) {
 			if forced {
-				Success("You are ahead of the stable release! (v%s > v%s)", cleanLocal, cleanRemote)
+				Success("You are ahead of the stable release! (%s >= %s)", BinVersion, data.Latest)
 			}
 			return true 
 		}

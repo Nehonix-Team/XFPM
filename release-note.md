@@ -1,3 +1,20 @@
+## [G0.3.14] - 2026-11-10
+
+### Zero-Trust Lifecycle Sandbox & Postinstall Isolation
+- **Zero-Trust Lifecycle Confinement (#52)**: Implemented automated kernel confinement for all package lifecycle hooks (`preinstall`, `install`, `postinstall`).
+  - Restricts ambient filesystem access to authorized package workspace directories and strictly isolates sensitive parent directories.
+  - Intercepts all direct filesystem access attempts to `.env` configurations via `xess-runner` inode traps, transparently serving honeypot decoy canaries to thwart supply-chain credential exfiltration.
+  - Enforces a hardened environment variable whitelist, completely blocking access to host secrets while maintaining full compatibility with native build systems (`node-gyp`, `esbuild`, `cargo`).
+- **CLI Dependency Persistence**: Fixed `-P` flag (`xfpm install -P`) to deterministically persist local packages into `package.json`.
+- **Log Formatting Harmonization**: Standardized `libXESS` sandbox initialization log feedback across CLI outputs.
+- **Update Verification Hardening**: Integrated numeric semver comparison in the self-update checker to prevent false-positive downgrade prompts across minor/patch revisions.
+
+## [G0.3.13] - 2026-11-09
+
+### Security & Supervisor Bindings
+- **Supervisor Bindings Hardening**: Updated `libXESS` dependencies and synchronized engine supervisor bindings for resilient kernel tracing and session management.
+- **Process Isolation Resilience**: Fortified cross-platform signal forwarding and peer handshake channels under high-churn container workloads.
+
 ## [G0.3.12] - 2026-11-06
 
 ### Runtime Confinement Continuity & System Environment Integrity
