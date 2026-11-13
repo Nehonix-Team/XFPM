@@ -224,6 +224,21 @@ if command -v gcc >/dev/null 2>&1 && [ -f "lib/libXESS/internal/confinement/runn
     fi
 fi
 
+# Build native libXESS NT Syscall Guard runner for Windows (x86_64)
+if command -v x86_64-w64-mingw32-gcc >/dev/null 2>&1 && [ -f "lib/libXESS/internal/confinement/runner/runner_windows.c" ]; then
+    printf "  ${CYAN}%-20s${NC} ${DIM}»${NC} " "Creating xess-runner.exe"
+    WIN_C_FLAGS=(-O2 -s -municode -fno-jump-tables -fno-asynchronous-unwind-tables)
+    if x86_64-w64-mingw32-gcc "${WIN_C_FLAGS[@]}" lib/libXESS/internal/confinement/runner/runner_windows.c -o "${DIST_DIR}/xess-runner-windows-amd64.exe"; then
+        echo -e "${GREEN}✓ NATIVE WIN32 C (22KB)${NC}"
+        gzip -c -9 "${DIST_DIR}/xess-runner-windows-amd64.exe" > "${DIST_DIR}/xess-runner-windows-amd64.exe.gz"
+        if [ -d "../../bin" ]; then
+            cp -f "${DIST_DIR}/xess-runner-windows-amd64.exe" "../../bin/xess-runner-windows-amd64.exe" 2>/dev/null || true
+        fi
+    else
+        echo -e "${YELLOW}⨯ FAILED (mingw32-gcc)${NC}"
+    fi
+fi
+
 # Purge uncompressed raw binaries from dist (retaining strictly .gz distribution assets)
 echo -e "\n ${CYAN}🧹 Purging raw uncompressed binaries from ./${DIST_DIR} (retaining strictly .gz assets)...${NC}"
 find "${DIST_DIR}" -maxdepth 1 -type f \( -name "${BINARY_NAME}-*" -o -name "xess-runner*" \) ! -name "*.gz" -delete

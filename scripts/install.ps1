@@ -45,13 +45,16 @@ param(
 Set-StrictMode -Version Latest
 $ErrorActionPreference = "Stop"
 
-# ─────────────────────────────────────────────────────────────
-# Constants
-# ─────────────────────────────────────────────────────────────
+# -------------------------------------------------------------
+# Constants & Common Paths
+# -------------------------------------------------------------
 $REPO        = "Nehonix-Team/XFPM"
 $BRIDGE_URL  = "https://dll.nehonix.com/repo/xypriss/xfpm/scripts/bridge.js"
 $TOOL_NAME   = "xfpm"
 $DISPLAY     = "XFPM"
+
+$XfpmRoot    = if ($env:XFPM_INSTALL) { $env:XFPM_INSTALL } else { Join-Path $HOME ".xfpm" }
+$XfpmBin     = Join-Path $XfpmRoot "bin"
 
 $C_RESET  = [char]27 + "[0m"
 $C_GREEN  = [char]27 + "[1;32m"
@@ -61,9 +64,9 @@ $C_YELLOW = [char]27 + "[1;33m"
 $C_BOLD   = [char]27 + "[1m"
 $C_DIM    = [char]27 + "[2m"
 
-# ─────────────────────────────────────────────────────────────
+# -------------------------------------------------------------
 # Display helpers
-# ─────────────────────────────────────────────────────────────
+# -------------------------------------------------------------
 function Write-Info  ([string]$msg) { Write-Host "${C_CYAN}info${C_RESET}  $msg" }
 function Write-Ok    ([string]$msg) { Write-Host "${C_GREEN}ok${C_RESET}    $msg" }
 function Write-Warn  ([string]$msg) { Write-Warning $msg }
@@ -73,9 +76,9 @@ function Write-Fatal ([string]$msg) {
   exit 1
 }
 
-# ─────────────────────────────────────────────────────────────
+# -------------------------------------------------------------
 # PATH / registry helpers (no variable expansion side-effects)
-# ─────────────────────────────────────────────────────────────
+# -------------------------------------------------------------
 function Publish-Env {
   if (-not ("Win32.NativeMethods" -as [Type])) {
     Add-Type -Namespace Win32 -Name NativeMethods -MemberDefinition @"
@@ -119,11 +122,20 @@ function Get-Env {
   $regEnv.GetValue($Key, $null, [Microsoft.Win32.RegistryValueOptions]::DoNotExpandEnvironmentNames)
 }
 
-# ─────────────────────────────────────────────────────────────
+# -------------------------------------------------------------
 # Pre-flight system checks
-# ─────────────────────────────────────────────────────────────
+# -------------------------------------------------------------
+function Ensure-Directories {
+  param([string[]]$Paths)
+  foreach ($p in $Paths) {
+    if (-not (Test-Path $p)) {
+      New-Item -ItemType Directory -Path $p -Force | Out-Null
+    }
+  }
+}
+
 function Assert-SystemRequirements {
-  # CPU arch — via registry, reliable even under WoW64 emulation
+  # CPU arch -- via registry, reliable even under WoW64 emulation
   $Arch = (Get-ItemProperty 'HKLM:\SYSTEM\CurrentControlSet\Control\Session Manager\Environment').PROCESSOR_ARCHITECTURE
   if ($Arch -notin @("AMD64", "ARM64")) {
     Write-Fatal "$DISPLAY is only available for x86 64-bit and ARM64 Windows. (Detected: $Arch)"
@@ -154,11 +166,16 @@ function Assert-SystemRequirements {
   return $Arch
 }
 
-# ─────────────────────────────────────────────────────────────
-# Detect available JS runtime (node → deno → bun)
-# ─────────────────────────────────────────────────────────────
+function Get-TargetArch {
+  param([Switch]$ForceBaseline = $false)
+  return Assert-SystemRequirements
+}
+
+# -------------------------------------------------------------
+# Detect available JS runtime (node -> deno -> bun)
+# -------------------------------------------------------------
 function Get-JsRuntime {
-  # Node.js — must be v14+
+  # Node.js -- must be v14+
   try {
     $nodePath = (Get-Command node -ErrorAction Stop).Source
     $nodeVer  = & node -e "process.stdout.write(process.versions.node)" 2>$null
@@ -184,9 +201,9 @@ function Get-JsRuntime {
   return $null
 }
 
-# ─────────────────────────────────────────────────────────────
-# Download with fallback (curl.exe → Invoke-RestMethod)
-# ─────────────────────────────────────────────────────────────
+# -------------------------------------------------------------
+# Download with fallback (curl.exe -> Invoke-RestMethod)
+# -------------------------------------------------------------
 function Invoke-Download {
   param([string]$URL, [string]$DestPath, [bool]$WithoutCurl, [int]$MaxRetries = 3)
 
@@ -239,9 +256,9 @@ function Invoke-Download {
   Write-Fatal "Download failed after $MaxRetries attempts.`n  URL: $URL`n  Last error: $lastError"
 }
 
-# ─────────────────────────────────────────────────────────────
+# -------------------------------------------------------------
 # Execute bridge.js via a JS runtime
-# ─────────────────────────────────────────────────────────────
+# -------------------------------------------------------------
 function Invoke-Bridge {
   param(
     [string]$BridgePath,
@@ -277,9 +294,35 @@ function Invoke-Bridge {
   }
 }
 
-# ─────────────────────────────────────────────────────────────
+# -------------------------------------------------------------
+# Decompress a .gz archive using built-in .NET GZipStream
+# -------------------------------------------------------------
+function Expand-GzipFile {
+  param([string]$GzPath, [string]$OutPath)
+  $inStream = [System.IO.File]::OpenRead($GzPath)
+  try {
+    $outStream = [System.IO.File]::Create($OutPath)
+    try {
+      $gzipStream = New-Object System.IO.Compression.GZipStream(
+        $inStream,
+        [System.IO.Compression.CompressionMode]::Decompress
+      )
+      try {
+        $gzipStream.CopyTo($outStream)
+      } finally {
+        $gzipStream.Dispose()
+      }
+    } finally {
+      $outStream.Dispose()
+    }
+  } finally {
+    $inStream.Dispose()
+  }
+}
+
+# -------------------------------------------------------------
 # Fallback: direct binary download without bridge (no JS runtime)
-# ─────────────────────────────────────────────────────────────
+# -------------------------------------------------------------
 function Invoke-DirectDownload {
   param([string]$Arch, [string]$OutPath)
 
@@ -309,10 +352,31 @@ function Invoke-DirectDownload {
 
   $segment = if ($ver -eq "latest") { "latest/download" } else { "download/$ver" }
   $url     = "https://github.com/$REPO/releases/$segment/$BinaryName"
+  $gzUrl   = "$url.gz"
+  $tmpGz   = "$OutPath.tmp.gz"
   $tmp     = "$OutPath.tmp"
 
-  Write-Info "Downloading: $url"
-  Invoke-Download -URL $url -DestPath $tmp -WithoutCurl $DownloadWithoutCurl
+  $extracted = $false
+  Write-Info "Downloading compressed binary (.gz): $gzUrl"
+  try {
+    if (Test-Path $tmpGz) { Remove-Item $tmpGz -Force -ErrorAction SilentlyContinue }
+    if (Test-Path $tmp)   { Remove-Item $tmp -Force -ErrorAction SilentlyContinue }
+    Invoke-Download -URL $gzUrl -DestPath $tmpGz -WithoutCurl $DownloadWithoutCurl -MaxRetries 2
+    Expand-GzipFile -GzPath $tmpGz -OutPath $tmp
+    Remove-Item $tmpGz -Force -ErrorAction SilentlyContinue
+    if ((Test-Path $tmp) -and ((Get-Item $tmp).Length -gt 0)) {
+      $extracted = $true
+    }
+  } catch {
+    Remove-Item $tmpGz -Force -ErrorAction SilentlyContinue
+    Remove-Item $tmp -Force -ErrorAction SilentlyContinue
+    Write-Warn "Compressed archive unavailable, falling back to raw binary: $url"
+  }
+
+  if (-not $extracted) {
+    Write-Info "Downloading: $url"
+    Invoke-Download -URL $url -DestPath $tmp -WithoutCurl $DownloadWithoutCurl
+  }
 
   try {
     if (Test-Path $OutPath) { Remove-Item $OutPath -Force }
@@ -323,9 +387,9 @@ function Invoke-DirectDownload {
   }
 }
 
-# ─────────────────────────────────────────────────────────────
+# -------------------------------------------------------------
 # Verify the installed binary runs
-# ─────────────────────────────────────────────────────────────
+# -------------------------------------------------------------
 function Assert-BinaryWorks {
   param([string]$BinPath)
 
@@ -333,7 +397,21 @@ function Assert-BinaryWorks {
     Write-Fatal "Binary not found at '$BinPath' after installation."
   }
 
-  $revision = & "$BinPath" --version 2>&1
+  try {
+    $revision = & "$BinPath" --version 2>&1
+  } catch {
+    $errStr = $_.ToString()
+    if ($errStr -match "virus" -or $_.FullyQualifiedErrorId -match "NativeCommandFailed|ResourceUnavailable") {
+      Write-Host ""
+      Write-Warn "Windows Defender SmartScreen blocked execution of $DISPLAY."
+      Write-Info "This is a false positive caused by heuristic analysis on freshly released obfuscated binaries."
+      Write-Info "To allow XFPM in Windows Defender, open an elevated (Administrator) PowerShell and run:"
+      Write-Host "   Add-MpPreference -ExclusionPath `"$XfpmRoot`"" -ForegroundColor Yellow
+      Write-Host ""
+      Write-Fatal "Execution blocked by Windows Defender."
+    }
+    Write-Fatal "Failed to execute '$BinPath --version': $_"
+  }
   $exitCode = $LASTEXITCODE
 
   switch ($exitCode) {
@@ -354,9 +432,9 @@ function Assert-BinaryWorks {
   }
 }
 
-# ─────────────────────────────────────────────────────────────
+# -------------------------------------------------------------
 # Remove existing binary cleanly
-# ─────────────────────────────────────────────────────────────
+# -------------------------------------------------------------
 function Remove-ExistingBinary {
   param([string]$BinPath)
   if (-not (Test-Path $BinPath)) { return }
@@ -408,9 +486,9 @@ function Remove-ExistingBinary {
   }
 }
 
-# ─────────────────────────────────────────────────────────────
-# Install symlink aliases (xfpmc → create, xfpmx → exec, dev -> xfpm dev)
-# ─────────────────────────────────────────────────────────────
+# -------------------------------------------------------------
+# Install symlink aliases (xfpmc -> create, xfpmx -> exec, dev -> xfpm dev)
+# -------------------------------------------------------------
 function Install-Aliases {
   param([string]$XfpmBin, [string]$BinPath)
 
@@ -432,9 +510,9 @@ function Install-Aliases {
   }
 }
 
-# ─────────────────────────────────────────────────────────────
+# -------------------------------------------------------------
 # Install PowerShell completions
-# ─────────────────────────────────────────────────────────────
+# -------------------------------------------------------------
 function Install-Completions {
   $profilePaths = @(
     $PROFILE.CurrentUserCurrentHost,
@@ -453,7 +531,7 @@ function Install-Completions {
 
   $block = @"
 
-# XFPM completions — added automatically by the installer
+# XFPM completions -- added automatically by the installer
 if (Get-Command $TOOL_NAME -ErrorAction SilentlyContinue) {
     $TOOL_NAME completion powershell | Out-String | Invoke-Expression
 }
@@ -477,9 +555,9 @@ if (Get-Command $TOOL_NAME -ErrorAction SilentlyContinue) {
   }
 }
 
-# ─────────────────────────────────────────────────────────────
+# -------------------------------------------------------------
 # Register in Add/Remove Programs
-# ─────────────────────────────────────────────────────────────
+# -------------------------------------------------------------
 function Register-Installation {
   param([string]$XfpmRoot, [string]$BinPath, [string]$DisplayVersion)
   $regKey          = "HKCU:\Software\Microsoft\Windows\CurrentVersion\Uninstall\XFPM"
@@ -521,10 +599,10 @@ Write-Host 'XFPM uninstalled successfully.'
   }
 }
 
-# ─────────────────────────────────────────────────────────────
-# ─────────────────────────────────────────────────────────────
+# -------------------------------------------------------------
+# -------------------------------------------------------------
 # Update user PATH
-# ─────────────────────────────────────────────────────────────
+# -------------------------------------------------------------
 function Update-UserPath {
   param([string]$XfpmBin)
 
@@ -540,13 +618,13 @@ function Update-UserPath {
   Write-Ok "Added $XfpmBin to user PATH."
 }
 
-# ─────────────────────────────────────────────────────────────
+# -------------------------------------------------------------
 # Main install flow
-# ─────────────────────────────────────────────────────────────
+# -------------------------------------------------------------
 function Install-Xfpm {
   Write-Host ""
   Write-Host "${C_CYAN}${C_BOLD}XFPM Installer (Windows)${C_RESET}"
-  Write-Host "${C_CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${C_RESET}"
+  Write-Host "${C_CYAN}========================================${C_RESET}"
 
   # 1. Detect platform
   $Arch = Get-TargetArch -ForceBaseline $ForceBaseline
@@ -588,7 +666,7 @@ function Install-Xfpm {
       Remove-Item $TmpDir -Recurse -Force -ErrorAction SilentlyContinue
     }
   } else {
-    # 5c. No JS runtime — fall back to direct download
+    # 5c. No JS runtime -- fall back to direct download
     Invoke-DirectDownload -Arch $Arch -OutPath $BinPath
   }
 
@@ -625,7 +703,7 @@ function Install-Xfpm {
   # 12. Deploy native XRU engine & stdlib by default
   Install-Xru -Standalone $false
 
-  # ─── Success ──────────────────────────────────────────────
+  # --- Success ----------------------------------------------
   Write-Host ""
   Write-Host "${C_GREEN}${C_BOLD}${DISPLAY} ${InstalledVersion} was installed successfully!${C_RESET}"
   Write-Host "  The binary is located at ${C_CYAN}$BinPath${C_RESET}"
@@ -640,16 +718,16 @@ function Install-Xfpm {
   $global:LASTEXITCODE = 0
 }
  
-# ─────────────────────────────────────────────────────────────
+# -------------------------------------------------------------
 # XRU (XyPriss Rule Unit) & Stdlib installer flow
-# ─────────────────────────────────────────────────────────────
+# -------------------------------------------------------------
 function Install-Xru {
   param([bool]$Standalone = $true)
 
   if ($Standalone) {
     Write-Host ""
     Write-Host "${C_CYAN}${C_BOLD}XRU Standalone Installer (Windows)${C_RESET}"
-    Write-Host "${C_CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${C_RESET}"
+    Write-Host "${C_CYAN}========================================${C_RESET}"
   } else {
     Write-Info "Deploying native XRU engine & standard library..."
   }
@@ -694,6 +772,13 @@ function Install-Xru {
   if ($downloadSuccess) {
     $extractedExe = Join-Path $tmpExtract "bin\xru.exe"
     if (Test-Path $extractedExe) {
+      if (Test-Path $destExe) {
+        $oldExe = $destExe + ".old." + [System.IO.Path]::GetRandomFileName()
+        try {
+          Move-Item -LiteralPath $destExe -Destination $oldExe -Force -ErrorAction Stop
+          Remove-Item -LiteralPath $oldExe -Force -ErrorAction SilentlyContinue
+        } catch {}
+      }
       Copy-Item $extractedExe $destExe -Force
     }
     $extractedStd = Join-Path $tmpExtract "std"
@@ -715,8 +800,8 @@ function Install-Xru {
     (Join-Path $env:USERPROFILE "bin\xru.exe")
   )
   foreach ($leg in $legacyExes) {
-    if (Test-Path $leg -and $leg -ne $destExe) {
-      Remove-Item $leg -Force -ErrorAction SilentlyContinue
+    if ((Test-Path -LiteralPath $leg) -and ($leg -ne $destExe)) {
+      Remove-Item -LiteralPath $leg -Force -ErrorAction SilentlyContinue
     }
   }
 
@@ -725,19 +810,19 @@ function Install-Xru {
       Update-UserPath -XfpmBin $XfpmBin
     }
     Write-Host ""
-    Write-Host "${C_GREEN}${C_BOLD}✓ XRU installed successfully!${C_RESET}"
+    Write-Host "${C_GREEN}${C_BOLD}[OK] XRU installed successfully!${C_RESET}"
     Write-Host "  Binary : ${C_CYAN}$destExe${C_RESET}"
     Write-Host "  Stdlib : ${C_CYAN}$stdDest${C_RESET}"
-    Write-Host "  Usage  : ${C_YELLOW}xru <script.xru>${C_RESET}"
+    Write-Host ("  Usage  : " + $C_YELLOW + "xru [script.xru]" + $C_RESET)
     Write-Host ""
   } else {
-    Write-Ok "XRU engine & standard library installed at: ${C_CYAN}$stdDest${C_RESET}"
+    Write-Ok ("XRU engine and standard library installed at: " + $C_CYAN + $stdDest + $C_RESET)
   }
 }
 
-# ─────────────────────────────────────────────────────────────
+# -------------------------------------------------------------
 # Uninstall
-# ─────────────────────────────────────────────────────────────
+# -------------------------------------------------------------
 function Uninstall-Xfpm {
   Write-Info "Uninstalling XFPM..."
 
@@ -767,9 +852,9 @@ function Uninstall-Xfpm {
   Write-Host ""
 }
 
-# ─────────────────────────────────────────────────────────────
+# -------------------------------------------------------------
 # Entry point
-# ─────────────────────────────────────────────────────────────
+# -------------------------------------------------------------
 if ($Action -eq "uninstall") {
   Uninstall-Xfpm
 } elseif ($Action -eq "xru" -or $Xru) {

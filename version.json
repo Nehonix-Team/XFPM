@@ -2,10 +2,10 @@
   "name": "XFPM (XyPriss Fast Package Manager)",
   "description": "The Fast Package Manager for the XyPriss ecosystem.",
   "warning": "CRITICAL: Public modifications to this file are strictly forbidden. Internal Nehonix metadata ONLY.",
-  "latest": "vG0.3.14",
-  "message": "Zero-Trust lifecycle sandbox for postinstall scripts, xess-runner decoy canaries & strict environment whitelisting",
+  "latest": "vG0.3.15",
+  "message": "Native Windows xess-runner.exe confinement (Job Objects, DEBUG_PROCESS & NT API hooks), case-insensitive env sanitization & Windows installer support",
   "metadata": {
-    "releaseDate": "2026-11-10",
+    "releaseDate": "2026-11-13",
     "channel": "stable"
   }
 }

@@ -47,8 +47,9 @@ func GetShellCommandRaw(command string) *exec.Cmd {
 func FormatPathEnv(env []string, newPath string) []string {
 	found := false
 	for i, e := range env {
-		if strings.HasPrefix(strings.ToUpper(e), "PATH=") {
-			// Persist the original casing of the "PATH=" key part (e.g., "Path=" or "PATH=")
+		upper := strings.ToUpper(e)
+		if strings.HasPrefix(upper, "PATH=") {
+			// e[:5] is "Path=" or "PATH="
 			env[i] = e[:5] + newPath
 			found = true
 			break

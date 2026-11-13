@@ -1,3 +1,10 @@
+## [G0.3.15] - 2026-11-13
+
+### Native Windows Confinement Engine (`xess-runner.exe`) & Cross-Platform Parity
+- **Native Win32 C Runner (`runner_windows.c`)**: Added `xess-runner-windows-amd64.exe` compiled via MinGW-w64 with hardened Job Objects (`JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE`), `DEBUG_PROCESS` multi-process supervision, environment scrubbing, and `.xesshk` NT API trampoline hooks (`NtCreateFile`, `NtOpenFile`, `NtQueryAttributesFile`, `NtQueryFullAttributesFile`) to enforce `.env` canary honeypot redirection on Windows.
+- **Case-Insensitive Windows Env Sanitization**: Updated `IsRuntimeAllowed()` and `SanitizeEnv()` in `libXESS` (`v4.0.3`) to match Windows environment variable keys case-insensitively (preserving `Path` and runtime variables under strict confinement).
+- **Windows Release Packaging & Installer Support**: Updated `build.sh` to cross-compile and package `xess-runner-windows-amd64.exe.gz`, and updated the Windows installer (`install.ps1`) to deploy `xess-runner.exe` alongside `xfpm.exe`.
+
 ## [G0.3.14] - 2026-11-10
 
 ### Zero-Trust Lifecycle Sandbox & Postinstall Isolation
