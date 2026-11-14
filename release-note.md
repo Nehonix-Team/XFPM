@@ -1,3 +1,9 @@
+## [G0.3.16] - 2026-11-14
+
+### libXESS IPC Hardening & Zero-Leak Credential Protection
+- **Phase 2 IPC Server Sanitization (XSA-XESS-027 Axe 2)**: Removed sensitive session key (`SessionKey`) and credential reflection from Phase 2 IPC server error responses (`server.go`). Unknown probe actions now return sanitized `{ "action": "UNKNOWN", "err": "..." }` payloads without echoing active session keys or capability tokens.
+- **Process Lifecycle & Confinement Supervision**: Fortified multi-process supervision and session verification across Linux and Windows NT environments.
+
 ## [G0.3.15] - 2026-11-13
 
 ### Native Windows Confinement Engine (`xess-runner.exe`) & Cross-Platform Parity
