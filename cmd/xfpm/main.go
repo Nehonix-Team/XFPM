@@ -13,6 +13,9 @@ import (
 )
 
 func main() {
+	// Harden process against ambient secret leakage via /proc/<pid>/environ
+	hardenProcessDumpability()
+
 	// Register OS signal handler at the very first moment.
 	// This ensures SIGINT/SIGTERM are captured before any Cobra command
 	// or runtime default handler can intercept them.

@@ -1,3 +1,9 @@
+## [G0.3.17] - 2026-11-16
+
+### Enhanced Runtime Runner Script Extension Support & Anti-Dumpable Security
+- **Multi-Extension Script Execution Support (`xfpm run`)**: Extended runtime runner recognition in `cmd/xfpm/cmd/run.go` to natively handle `.mjs`, `.cjs`, `.mts`, `.cts`, `.jsx`, and `.tsx` script targets. Prevents modern ES module or JSX scripts from mistakenly falling back to host system shells (`cmd.exe` on Windows).
+- **Anti-Dumpable Memory Protection (XSA-XESS-027 Axe 1)**: Integrated Linux kernel `PR_SET_DUMPABLE=0` enforcement via `hardenProcessDumpability()` to restrict `/proc/<pid>/environ`, `/proc/<pid>/mem`, and `/proc/<pid>/maps` permissions (0400 root:root). Proactively shields supervisor memory from same-UID ambient environment secret scraping.
+
 ## [G0.3.16] - 2026-11-14
 
 ### libXESS IPC Hardening & Zero-Leak Credential Protection

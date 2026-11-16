@@ -98,7 +98,7 @@ var runCmd = &cobra.Command{
 				runScript = rel
 			}
 
-			if ext == ".ts" || ext == ".js" {
+			if ext == ".ts" || ext == ".js" || ext == ".mjs" || ext == ".cjs" || ext == ".mts" || ext == ".cts" || ext == ".jsx" || ext == ".tsx" {
 				runErr = executeCommandWithOptions("bun", []string{"run", runScript}, targetProjectDir, targetProjectDir, opts)
 			} else {
 				runErr = executeShellWithOptions(runScript, targetProjectDir, targetProjectDir, opts)
