@@ -1,3 +1,10 @@
+## [G0.3.18] - 2026-11-19
+
+### Zero-Trust IPC Performance & Authentication Hardening
+- **Ultra-Low Latency Vault IPC**: Significantly improved environment vault read/write throughput and tail latency stability under high concurrency while preserving full Zero-Trust process isolation.
+- **Atomic Batch Environment Lookups**: Added support for retrieving multiple environment variables in a single authenticated round-trip.
+- **Strict IPC Connection Authentication**: Enforced strict authentication and immediate rejection of unauthenticated or unrecognized IPC connection attempts.
+
 ## [G0.3.17] - 2026-11-16
 
 ### Enhanced Runtime Runner Script Extension Support & Anti-Dumpable Security
