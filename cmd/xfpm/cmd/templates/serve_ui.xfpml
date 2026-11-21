@@ -2206,21 +2206,32 @@ function renderBreadcrumbs() {
    ============================================================ */
 function renderFiles(list) {
     fileList.innerHTML = '';
-    if (!list || list.length === 0) {
+    if (!list || !Array.isArray(list) || list.length === 0) {
         emptyState.classList.add('visible');
         setIcon(document.getElementById('iconEmptyWrap'), 'folder-search', 38);
         return;
     }
     emptyState.classList.remove('visible');
     list.sort((a, b) => {
-        if (a.IsDir && !b.IsDir) return -1;
-        if (!a.IsDir && b.IsDir) return 1;
-        return a.Name.localeCompare(b.Name);
+        if (!a && !b) return 0;
+        if (!a) return 1;
+        if (!b) return -1;
+        const isDirA = (a.IsDir !== undefined) ? a.IsDir : (a.isDir !== undefined ? a.isDir : false);
+        const isDirB = (b.IsDir !== undefined) ? b.IsDir : (b.isDir !== undefined ? b.isDir : false);
+        if (isDirA && !isDirB) return -1;
+        if (!isDirA && isDirB) return 1;
+        const nameA = String((a.Name !== undefined) ? a.Name : (a.name !== undefined ? a.name : ''));
+        const nameB = String((b.Name !== undefined) ? b.Name : (b.name !== undefined ? b.name : ''));
+        return nameA.localeCompare(nameB);
     });
     list.forEach(f => {
-        const iconName = getIconForFile(f.Name, f.IsDir);
-        const colorVar = getIconColor(f.Name, f.IsDir);
-        const sizeStr = f.IsDir ? '—' : formatBytes(f.Size);
+        const fName = f.Name || f.name || '';
+        const fIsDir = (f.IsDir !== undefined) ? f.IsDir : (f.isDir !== undefined ? f.isDir : false);
+        const fPath = f.Path || f.path || '';
+        const fSize = (f.Size !== undefined) ? f.Size : (f.size !== undefined ? f.size : 0);
+        const iconName = getIconForFile(fName, fIsDir);
+        const colorVar = getIconColor(fName, fIsDir);
+        const sizeStr = fIsDir ? '—' : formatBytes(fSize);
         const tr = document.createElement('tr');
         // Name cell
         const tdName = document.createElement('td');
@@ -2234,8 +2245,8 @@ function renderFiles(list) {
         inner.appendChild(iconWrap);
         const nameDiv = document.createElement('div');
         // Show path prefix for search results
-        if (f.Path && f.Path !== f.Name && f.Path !== currentDir + '/' + f.Name) {
-            const prefix = f.Path.substring(0, f.Path.lastIndexOf('/'));
+        if (fPath && fPath !== fName && fPath !== currentDir + '/' + fName) {
+            const prefix = fPath.substring(0, fPath.lastIndexOf('/'));
             if (prefix) {
                 const prefixSpan = document.createElement('span');
                 prefixSpan.className = 'file-path-prefix';
@@ -2245,7 +2256,7 @@ function renderFiles(list) {
         }
         const nameSpan = document.createElement('span');
         nameSpan.className = 'file-name';
-        nameSpan.textContent = f.Name;
+        nameSpan.textContent = fName;
         nameDiv.appendChild(nameSpan);
         inner.appendChild(nameDiv);
         tdName.appendChild(inner);
@@ -2255,7 +2266,7 @@ function renderFiles(list) {
         tdSize.textContent = sizeStr;
         tr.appendChild(tdName);
         tr.appendChild(tdSize);
-        tr.onclick = () => f.IsDir ? navigateTo(f.Path) : openViewer(f.Name, f.Path);
+        tr.onclick = () => fIsDir ? navigateTo(fPath) : openViewer(fName, fPath);
         fileList.appendChild(tr);
     });
 }

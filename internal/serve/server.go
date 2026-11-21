@@ -14,10 +14,10 @@ import (
 )
 
 type FileItem struct {
-	Name  string
-	Path  string
-	IsDir bool
-	Size  int64
+	Name  string `json:"Name"`
+	Path  string `json:"Path"`
+	IsDir bool   `json:"IsDir"`
+	Size  int64  `json:"Size"`
 }
 
 func StartServer(port int, dir string, tmplContent string) error {

@@ -417,14 +417,14 @@ func generateHtmlReport(projectName string, allPackages []*core.ResolvedPackage,
 		return "", fmt.Errorf("failed to parse template: %w", err)
 	}
 
-	data := auditReportData{
-		ProjectName:   projectName,
-		GeneratedAt:   time.Now().Format("Jan 02, 2006 15:04"),
-		VulnCount:     len(vulns),
-		TotalPackages: len(allPackages),
-		VulnRate:      fmt.Sprintf("%.1f", float64(len(vulns))*100/float64(maxInt(len(allPackages), 1))),
-		VulnsJSON:     template.JS(vulnJSON),
-		GraphJSON:     template.JS(graphDataJSON),
+	data := map[string]interface{}{
+		"ProjectName":   projectName,
+		"GeneratedAt":   time.Now().Format("Jan 02, 2006 15:04"),
+		"VulnCount":     len(vulns),
+		"TotalPackages": len(allPackages),
+		"VulnRate":      fmt.Sprintf("%.1f", float64(len(vulns))*100/float64(maxInt(len(allPackages), 1))),
+		"VulnsJSON":     template.JS(vulnJSON),
+		"GraphJSON":     template.JS(graphDataJSON),
 	}
 
 	var buf bytes.Buffer

@@ -402,7 +402,7 @@
       <div class="plugin-card{{if ne .Status "authorized"}} pending-card{{end}}" id="card-{{.Name}}">
         <div class="card-top">
           <input type="checkbox" class="xchk plugin-select w-5 h-5 accent-cyan" data-name="{{.Name}}" data-version="{{.Version}}" data-status="{{.Status}}" onchange="onSelectionChange()">
-          <div class="avatar">{{slice .Name 0 1}}</div>
+          <div class="avatar">{{if .Initial}}{{.Initial}}{{else if .Name}}{{slice .Name 0 1}}{{else}}P{{end}}</div>
           <div style="flex:1;min-width:0;">
             <div style="font-size:18px;font-weight:700;color:#fff;" class="truncate">
               {{.Name}}

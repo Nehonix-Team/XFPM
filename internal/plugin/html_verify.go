@@ -38,11 +38,42 @@ func fetchMasterPermissions() {
 	if masterPermissions != nil {
 		return
 	}
-	resp, err := http.Get("https://dll.nehonix.com/proxy/xypriss/data/permissions")
+	client := &http.Client{Timeout: 2 * time.Second}
+	resp, err := client.Get("https://dll.nehonix.com/proxy/xypriss/data/permissions")
 	if err == nil {
 		defer resp.Body.Close()
 		json.NewDecoder(resp.Body).Decode(&masterPermissions)
 	}
+}
+
+func webPluginsToMaps(wps []WebPlugin) []map[string]interface{} {
+	var res []map[string]interface{}
+	for _, p := range wps {
+		var reqPrivs []map[string]interface{}
+		for _, rp := range p.RequestedPrivileges {
+			reqPrivs = append(reqPrivs, map[string]interface{}{
+				"ID":          rp.ID,
+				"Name":        rp.Name,
+				"Action":      rp.Action,
+				"Description": rp.Description,
+				"Approved":    rp.Approved,
+			})
+		}
+		initial := "P"
+		if len(p.Name) > 0 {
+			initial = string([]rune(p.Name)[0:1])
+		}
+		res = append(res, map[string]interface{}{
+			"Name":                p.Name,
+			"Initial":             initial,
+			"Version":             p.Version,
+			"Identity":            p.Identity,
+			"Privileges":          p.Privileges,
+			"RequestedPrivileges": reqPrivs,
+			"Status":              p.Status,
+		})
+	}
+	return res
 }
 
 func buildWebPlugins(projectRoot string, pending []PendingReq, config map[string]interface{}, isReview bool) []WebPlugin {
@@ -180,14 +211,19 @@ func HandleHtmlVerify(projectRoot string, pending []PendingReq, config map[strin
 	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 		mu.Lock()
 		defer mu.Unlock()
-		tmpl, _ := template.New("verify").Parse(pluginVerifyTmpl)
-		tmpl.Execute(w, struct {
-			Plugins  []WebPlugin
-			IsReview bool
-		}{
-			Plugins:  plugins,
-			IsReview: isReview,
-		})
+		tmpl, err := template.New("verify").Parse(pluginVerifyTmpl)
+		if err != nil {
+			http.Error(w, fmt.Sprintf("Template parse error: %v", err), 500)
+			return
+		}
+		w.Header().Set("Content-Type", "text/html; charset=utf-8")
+		data := map[string]interface{}{
+			"Plugins":  webPluginsToMaps(plugins),
+			"IsReview": isReview,
+		}
+		if err := tmpl.Execute(w, data); err != nil {
+			pterm.Error.Printf("Failed to render plugin verify template: %v\n", err)
+		}
 	})
 
 	http.HandleFunc("/restart", func(w http.ResponseWriter, r *http.Request) {

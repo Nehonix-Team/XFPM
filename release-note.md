@@ -1,3 +1,10 @@
+## [G0.3.19] - 2026-11-21
+
+### Web Command UI Stabilization & Template Field Obfuscation Fixes
+- **Obfuscation Field Tagging (`FileItem`)**: Added explicit `json:"Name"`, `json:"Path"`, `json:"IsDir"`, and `json:"Size"` tags to `FileItem` struct in `internal/serve/server.go`, ensuring serialized API payloads remain intact and un-mangled when compiled with `garble`.
+- **Web UI Defensive Property Access**: Hardened client-side JavaScript across `serve_ui.xfpml`, `plugin_verify.xfpml`, and `audit.go` to safely handle case sensitivity (`Name` / `name`), defensive null checks, and avoid `TypeError: Cannot read properties of undefined (reading 'localeCompare')`.
+- **Template Data Injection & Server Timing**: Fixed Go template pipeline data passing in `audit.go` and `plugin_verify.xfpml` (`Execute(w, data)` vs `Execute(w, nil)`), and added a 2-second timeout safeguard to the plugin permissions proxy server.
+
 ## [G0.3.18] - 2026-11-19
 
 ### Zero-Trust IPC Performance & Authentication Hardening
