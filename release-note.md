@@ -1,3 +1,11 @@
+## [G0.3.20] - 2026-11-21
+
+### Cross-Platform Confinement Hardening & Discrete Package Sandboxing
+- **Granular Package Confinement**: Reinforced environment isolation policies to strictly preserve local configuration boundaries within third-party packages, preventing unauthorized ambient discovery across parent application boundaries.
+- **Cross-Platform Security Parity**: Unified sandboxing semantics and confinement enforcement across Linux and Windows environments for consistent cross-platform protection.
+- **Adaptive Defense & Anti-Enumeration Protections**: Hardened defense mechanisms against reconnaissance attempts, neutralizing side-channel secret enumeration and environment probing.
+- **Runtime Stability & Lifecycle Reliability**: Optimized supervision continuity and execution performance during package execution and dependency resolution cycles.
+
 ## [G0.3.19] - 2026-11-21
 
 ### Web Command UI Stabilization & Template Field Obfuscation Fixes
