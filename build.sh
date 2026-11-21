@@ -199,7 +199,7 @@ for TARGET in "${TARGETS[@]}"; do
     fi
 done
 
-# Build native libXESS Seccomp Guard runner for Linux
+# Build native libXESS Guard runner for Linux
 if command -v gcc >/dev/null 2>&1 && [ -f "lib/libXESS/internal/confinement/runner/runner.c" ]; then
     printf "  ${CYAN}%-20s${NC} ${DIM}»${NC} " "Creating xess-runner"
     C_HARDEN_FLAGS=(-O3 -s -fvisibility=hidden -fno-ident -fno-asynchronous-unwind-tables -fno-unwind-tables -fomit-frame-pointer -fno-stack-protector -fmerge-all-constants -fdata-sections -ffunction-sections -Wl,--gc-sections,-z,relro,-z,now)
@@ -224,7 +224,7 @@ if command -v gcc >/dev/null 2>&1 && [ -f "lib/libXESS/internal/confinement/runn
     fi
 fi
 
-# Build native libXESS NT Syscall Guard runner for Windows (x86_64)
+# Build native libXESS Guard runner for Windows (x86_64)
 if command -v x86_64-w64-mingw32-gcc >/dev/null 2>&1 && [ -f "lib/libXESS/internal/confinement/runner/runner_windows.c" ]; then
     printf "  ${CYAN}%-20s${NC} ${DIM}»${NC} " "Creating xess-runner.exe"
     WIN_C_FLAGS=(-O2 -s -municode -fno-jump-tables -fno-asynchronous-unwind-tables)
